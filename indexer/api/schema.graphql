@@ -1,0 +1,876 @@
+# Game Components Indexer GraphQL Schema
+# Provides queries and real-time subscriptions for indexed game token data
+
+# =============================================================================
+# SCALARS
+# =============================================================================
+
+"""
+Token ID scalar - represents felt252 as a decimal string.
+Due to the large size of felt252/u256 values, these are encoded as strings.
+"""
+scalar TokenID
+
+"""
+Starknet address - hex string with 0x prefix
+"""
+scalar Address
+
+"""
+ISO 8601 date-time string
+"""
+scalar DateTime
+
+"""
+Arbitrary JSON data
+"""
+scalar JSON
+
+# =============================================================================
+# QUERY ROOT
+# =============================================================================
+
+type Query {
+  """
+  Get detailed information about a specific token
+  """
+  token(
+    "Token identifier (felt252 as decimal string)"
+    id: TokenID!
+    "Include historical score entries"
+    includeScoreHistory: Boolean = false
+    "Maximum number of score history entries"
+    scoreHistoryLimit: Int = 100
+  ): Token
+
+  """
+  Get multiple tokens by ID in a single query
+  """
+  tokens(
+    "List of token IDs"
+    ids: [TokenID!]!
+    "Include score history for each token"
+    includeScoreHistory: Boolean = false
+  ): TokenBatchResult!
+
+  """
+  Search and filter tokens
+  """
+  searchTokens(
+    "Filter criteria"
+    filter: TokenFilter
+    "Pagination options"
+    pagination: PaginationInput = { limit: 20, offset: 0 }
+    "Sort options"
+    orderBy: TokenOrderBy = { field: MINTED_AT, direction: DESC }
+  ): TokenConnection!
+
+  """
+  Get leaderboard for a specific game
+  """
+  leaderboard(
+    "Game identifier"
+    gameId: Int!
+    "Maximum entries to return"
+    limit: Int = 100
+    "Offset for pagination"
+    offset: Int = 0
+    "Cursor for cursor-based pagination"
+    cursor: String
+    "Filter options"
+    filter: LeaderboardFilter = { status: COMPLETED }
+    "Time range filter"
+    timeRange: TimeRange = ALL
+  ): Leaderboard!
+
+  """
+  Get a token's position in a game's leaderboard
+  """
+  leaderboardPosition(
+    gameId: Int!
+    tokenId: TokenID!
+    "Number of entries to include above and below for context"
+    contextSize: Int = 5
+  ): LeaderboardPosition
+
+  """
+  Get player information and statistics
+  """
+  player(address: Address!): Player
+
+  """
+  Get all tokens owned by a player
+  """
+  playerTokens(
+    address: Address!
+    filter: PlayerTokensFilter
+    pagination: PaginationInput = { limit: 20, offset: 0 }
+    orderBy: TokenOrderBy = { field: LAST_UPDATED_AT, direction: DESC }
+  ): TokenConnection!
+
+  """
+  Get game metadata
+  """
+  game(id: Int!): Game
+
+  """
+  List all registered games
+  """
+  games(
+    pagination: PaginationInput = { limit: 20, offset: 0 }
+  ): GameConnection!
+
+  """
+  Get statistics for a specific game
+  """
+  gameStats(gameId: Int!): GameStats
+
+  """
+  Get minter information
+  """
+  minter(id: Int!): Minter
+
+  """
+  List all registered minters
+  """
+  minters: [Minter!]!
+
+  """
+  Service health status
+  """
+  health: Health!
+
+  """
+  Get indexer synchronization status
+  """
+  indexerStatus: IndexerStatus!
+}
+
+# =============================================================================
+# MUTATION ROOT
+# =============================================================================
+
+type Mutation {
+  """
+  Refresh materialized views (admin only)
+  Triggers recalculation of leaderboards and statistics
+  """
+  refreshMaterializedViews: RefreshResult!
+
+  """
+  Force re-index a specific token (admin only)
+  """
+  reindexToken(tokenId: TokenID!): Token
+}
+
+# =============================================================================
+# SUBSCRIPTION ROOT
+# =============================================================================
+
+type Subscription {
+  """
+  Subscribe to updates for a specific token.
+  Receives score updates, game over events, ownership changes, etc.
+  """
+  tokenUpdated(
+    "Token ID to subscribe to"
+    tokenId: TokenID!
+  ): TokenUpdateEvent!
+
+  """
+  Subscribe to updates for multiple tokens
+  """
+  tokensUpdated(
+    "Token IDs to subscribe to"
+    tokenIds: [TokenID!]!
+    "Filter by event types"
+    eventTypes: [TokenEventType!]
+  ): TokenUpdateEvent!
+
+  """
+  Subscribe to leaderboard changes for a game.
+  Streams rank changes, new entries, and removals.
+  """
+  leaderboardChanged(
+    "Game ID to subscribe to"
+    gameId: Int!
+    "Only stream changes in top N positions"
+    topN: Int
+    "Minimum rank change to trigger update"
+    minRankChange: Int = 1
+  ): LeaderboardChangeEvent!
+
+  """
+  Subscribe to new high scores for a game
+  """
+  newHighScore(gameId: Int!): HighScoreEvent!
+
+  """
+  Subscribe to all activity for a specific player.
+  Includes mints, score updates, game completions, transfers.
+  """
+  playerActivity(
+    "Player address to subscribe to"
+    address: Address!
+    "Filter by event types"
+    eventTypes: [PlayerEventType!]
+    "Filter by specific games"
+    gameIds: [Int!]
+  ): PlayerActivityEvent!
+
+  """
+  Subscribe to events for specific games
+  """
+  gameEvents(
+    "Game IDs to subscribe to (empty = all games)"
+    gameIds: [Int!]
+    "Filter by event types"
+    eventTypes: [GameEventType!]
+  ): GameEvent!
+
+  """
+  Subscribe to new token mints
+  """
+  tokenMinted(
+    "Filter by game IDs"
+    gameIds: [Int!]
+    "Filter by minter IDs"
+    minterIds: [Int!]
+  ): MintEvent!
+
+  """
+  Subscribe to game over events
+  """
+  gameOver(
+    "Filter by game IDs"
+    gameIds: [Int!]
+  ): GameOverEvent!
+}
+
+# =============================================================================
+# TOKEN TYPES
+# =============================================================================
+
+"""
+Full token information with decoded packed metadata
+"""
+type Token {
+  "Unique token identifier (felt252 as decimal string)"
+  id: TokenID!
+
+  "Game this token belongs to"
+  game: Game!
+
+  "Game identifier (decoded from packed token ID)"
+  gameId: Int!
+
+  "Current owner address"
+  owner: Address!
+
+  "Player display name"
+  playerName: String
+
+  "Current game score"
+  currentScore: Int!
+
+  "Current leaderboard rank (null if not on leaderboard)"
+  rank: Int
+
+  "Whether the game has ended"
+  gameOver: Boolean!
+
+  "Whether all objectives were completed"
+  completedAllObjectives: Boolean!
+
+  "Whether the token is non-transferable"
+  soulbound: Boolean!
+
+  "Token mint timestamp"
+  mintedAt: DateTime!
+
+  "Minter that created this token"
+  minter: Minter!
+
+  "Minter ID (decoded from packed token ID)"
+  mintedBy: Int!
+
+  "Game settings ID"
+  settingsId: Int!
+
+  "Game lifecycle start time"
+  lifecycleStart: DateTime
+
+  "Game lifecycle end time"
+  lifecycleEnd: DateTime
+
+  "Number of objectives for this game"
+  objectivesCount: Int!
+
+  "Whether this token has context data"
+  hasContext: Boolean!
+
+  "Unique sequence number within the game"
+  sequenceNumber: Int!
+
+  "Historical score entries"
+  scoreHistory(limit: Int = 100): [ScoreEntry!]!
+
+  "Block number when token was indexed"
+  createdAtBlock: Int!
+
+  "Last update timestamp"
+  lastUpdatedAt: DateTime!
+}
+
+"""
+Abbreviated token information for lists
+"""
+type TokenSummary {
+  id: TokenID!
+  gameId: Int!
+  game: Game!
+  owner: Address!
+  playerName: String
+  currentScore: Int!
+  gameOver: Boolean!
+  soulbound: Boolean!
+  mintedAt: DateTime!
+}
+
+"""
+Historical score entry
+"""
+type ScoreEntry {
+  score: Int!
+  blockNumber: Int!
+  blockTimestamp: DateTime!
+}
+
+"""
+Paginated token list
+"""
+type TokenConnection {
+  edges: [TokenEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type TokenEdge {
+  node: TokenSummary!
+  cursor: String!
+}
+
+"""
+Result of batch token query
+"""
+type TokenBatchResult {
+  "Successfully fetched tokens"
+  tokens: [Token!]!
+  "Token IDs that were not found"
+  notFound: [TokenID!]!
+}
+
+# =============================================================================
+# LEADERBOARD TYPES
+# =============================================================================
+
+"""
+Game leaderboard with ranked entries
+"""
+type Leaderboard {
+  gameId: Int!
+  game: Game!
+  entries: [LeaderboardEntry!]!
+  totalCount: Int!
+  lastUpdated: DateTime!
+  pageInfo: PageInfo!
+}
+
+"""
+Single leaderboard entry
+"""
+type LeaderboardEntry {
+  "Position in leaderboard (1-indexed)"
+  rank: Int!
+  "Token identifier"
+  tokenId: TokenID!
+  "Full token data"
+  token: Token!
+  "Owner address"
+  owner: Address!
+  "Player display name"
+  playerName: String
+  "Score value"
+  score: Int!
+}
+
+"""
+Token's position in leaderboard with surrounding context
+"""
+type LeaderboardPosition {
+  tokenId: TokenID!
+  rank: Int!
+  score: Int!
+  "Surrounding entries for context"
+  entries: [LeaderboardEntry!]!
+  totalCount: Int!
+}
+
+# =============================================================================
+# PLAYER TYPES
+# =============================================================================
+
+"""
+Player profile with aggregated data
+"""
+type Player {
+  address: Address!
+  tokens(
+    filter: PlayerTokensFilter
+    pagination: PaginationInput
+    orderBy: TokenOrderBy
+  ): TokenConnection!
+  stats: PlayerStats!
+}
+
+"""
+Aggregated player statistics
+"""
+type PlayerStats {
+  address: Address!
+  totalTokens: Int!
+  gamesPlayed: Int!
+  completedGames: Int!
+  activeGames: Int!
+  highestRank: Int
+  totalScore: Int!
+
+  "Best ranks per game"
+  bestRanksByGame: [GameRank!]!
+}
+
+type GameRank {
+  gameId: Int!
+  game: Game!
+  bestRank: Int!
+  bestScore: Int!
+  tokenId: TokenID!
+}
+
+# =============================================================================
+# GAME TYPES
+# =============================================================================
+
+"""
+Game metadata
+"""
+type Game {
+  id: Int!
+  contractAddress: Address!
+  name: String
+  description: String
+  imageUrl: String
+  createdAt: DateTime!
+
+  "Quick access to leaderboard"
+  leaderboard(limit: Int = 10): [LeaderboardEntry!]!
+
+  "Game statistics"
+  stats: GameStats!
+}
+
+"""
+Paginated game list
+"""
+type GameConnection {
+  edges: [GameEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type GameEdge {
+  node: Game!
+  cursor: String!
+}
+
+"""
+Game statistics (from materialized view)
+"""
+type GameStats {
+  gameId: Int!
+  game: Game!
+  totalTokens: Int!
+  completedGames: Int!
+  activeGames: Int!
+  avgScore: Float
+  highScore: Int!
+  uniquePlayers: Int!
+  lastUpdated: DateTime!
+
+  "Score distribution for histogram"
+  scoreDistribution(buckets: Int = 10): [ScoreBucket!]!
+}
+
+type ScoreBucket {
+  minScore: Int!
+  maxScore: Int!
+  count: Int!
+}
+
+# =============================================================================
+# MINTER TYPES
+# =============================================================================
+
+"""
+Token minter information
+"""
+type Minter {
+  id: Int!
+  contractAddress: Address!
+  name: String
+  createdAt: DateTime!
+
+  "Tokens minted by this minter"
+  totalMinted: Int!
+}
+
+# =============================================================================
+# EVENT TYPES (for subscriptions)
+# =============================================================================
+
+"""
+Token update event
+"""
+type TokenUpdateEvent {
+  tokenId: TokenID!
+  eventType: TokenEventType!
+  timestamp: DateTime!
+  blockNumber: Int!
+  transactionHash: String!
+
+  "Updated token data"
+  token: Token!
+
+  "Event-specific payload"
+  payload: TokenUpdatePayload!
+}
+
+union TokenUpdatePayload =
+    ScoreUpdatePayload
+  | GameOverPayload
+  | OwnerUpdatePayload
+  | ObjectiveCompletedPayload
+  | PlayerNameUpdatePayload
+
+type ScoreUpdatePayload {
+  previousScore: Int!
+  newScore: Int!
+  newRank: Int
+  previousRank: Int
+}
+
+type GameOverPayload {
+  finalScore: Int!
+  completedAllObjectives: Boolean!
+  finalRank: Int
+}
+
+type OwnerUpdatePayload {
+  previousOwner: Address!
+  newOwner: Address!
+}
+
+type ObjectiveCompletedPayload {
+  objectiveIndex: Int!
+  objectivesCompleted: Int!
+  totalObjectives: Int!
+}
+
+type PlayerNameUpdatePayload {
+  previousName: String
+  newName: String!
+}
+
+"""
+Leaderboard change event
+"""
+type LeaderboardChangeEvent {
+  gameId: Int!
+  timestamp: DateTime!
+  blockNumber: Int!
+
+  changes: [LeaderboardChange!]!
+  newLeader: LeaderboardEntry
+}
+
+type LeaderboardChange {
+  tokenId: TokenID!
+  changeType: LeaderboardChangeType!
+  oldRank: Int
+  newRank: Int
+  score: Int!
+  playerName: String
+  owner: Address!
+}
+
+enum LeaderboardChangeType {
+  "New entry on leaderboard"
+  ENTERED
+  "Improved rank"
+  MOVED_UP
+  "Dropped rank"
+  MOVED_DOWN
+  "Fell off leaderboard"
+  REMOVED
+  "Score changed but rank unchanged"
+  SCORE_ONLY
+}
+
+"""
+High score event
+"""
+type HighScoreEvent {
+  gameId: Int!
+  tokenId: TokenID!
+  score: Int!
+  previousHighScore: Int!
+  player: Address!
+  playerName: String
+  timestamp: DateTime!
+}
+
+"""
+Player activity event
+"""
+type PlayerActivityEvent {
+  playerAddress: Address!
+  tokenId: TokenID!
+  gameId: Int!
+  eventType: PlayerEventType!
+  timestamp: DateTime!
+  blockNumber: Int!
+  transactionHash: String!
+
+  "Event-specific data"
+  data: PlayerActivityData!
+}
+
+union PlayerActivityData =
+    MintActivityData
+  | ScoreActivityData
+  | GameOverActivityData
+  | TransferActivityData
+  | ObjectiveActivityData
+
+type MintActivityData {
+  settingsId: Int!
+  minterId: Int!
+  soulbound: Boolean!
+}
+
+type ScoreActivityData {
+  previousScore: Int!
+  newScore: Int!
+}
+
+type GameOverActivityData {
+  finalScore: Int!
+  completedAllObjectives: Boolean!
+}
+
+type TransferActivityData {
+  fromAddress: Address!
+  toAddress: Address!
+}
+
+type ObjectiveActivityData {
+  objectiveIndex: Int!
+  objectivesCompleted: Int!
+  totalObjectives: Int!
+}
+
+"""
+General game event
+"""
+type GameEvent {
+  gameId: Int!
+  eventType: GameEventType!
+  tokenId: TokenID
+  timestamp: DateTime!
+  blockNumber: Int!
+  transactionHash: String!
+
+  "Event data as JSON"
+  data: JSON!
+
+  "Full token if available"
+  token: Token
+}
+
+"""
+Token mint event
+"""
+type MintEvent {
+  tokenId: TokenID!
+  gameId: Int!
+  owner: Address!
+  minterId: Int!
+  settingsId: Int!
+  soulbound: Boolean!
+  timestamp: DateTime!
+  blockNumber: Int!
+  transactionHash: String!
+
+  "Full token data"
+  token: Token!
+}
+
+"""
+Game over event
+"""
+type GameOverEvent {
+  tokenId: TokenID!
+  gameId: Int!
+  owner: Address!
+  playerName: String
+  finalScore: Int!
+  completedAllObjectives: Boolean!
+  finalRank: Int
+  timestamp: DateTime!
+  blockNumber: Int!
+}
+
+# =============================================================================
+# INPUT TYPES
+# =============================================================================
+
+input TokenFilter {
+  gameId: Int
+  owner: Address
+  status: TokenStatus
+  minScore: Int
+  maxScore: Int
+  soulbound: Boolean
+  mintedAfter: DateTime
+  mintedBefore: DateTime
+}
+
+input PlayerTokensFilter {
+  gameId: Int
+  status: TokenStatus
+}
+
+input LeaderboardFilter {
+  status: TokenStatus
+}
+
+input PaginationInput {
+  limit: Int = 20
+  offset: Int = 0
+  cursor: String
+}
+
+input TokenOrderBy {
+  field: TokenOrderField!
+  direction: OrderDirection!
+}
+
+# =============================================================================
+# ENUMS
+# =============================================================================
+
+enum TokenStatus {
+  ACTIVE
+  COMPLETED
+  ALL
+}
+
+enum TokenEventType {
+  SCORE_UPDATE
+  GAME_OVER
+  TRANSFER
+  OBJECTIVE_COMPLETED
+  ALL_OBJECTIVES_COMPLETED
+  PLAYER_NAME_UPDATE
+}
+
+enum PlayerEventType {
+  MINT
+  SCORE_UPDATE
+  GAME_OVER
+  TRANSFER_IN
+  TRANSFER_OUT
+  OBJECTIVE_COMPLETED
+}
+
+enum GameEventType {
+  MINT
+  SCORE_UPDATE
+  GAME_OVER
+  LEADERBOARD_CHANGE
+  NEW_HIGH_SCORE
+}
+
+enum TokenOrderField {
+  MINTED_AT
+  CURRENT_SCORE
+  LAST_UPDATED_AT
+}
+
+enum OrderDirection {
+  ASC
+  DESC
+}
+
+enum TimeRange {
+  ALL
+  DAY
+  WEEK
+  MONTH
+}
+
+# =============================================================================
+# UTILITY TYPES
+# =============================================================================
+
+type PageInfo {
+  hasNextPage: Boolean!
+  hasPreviousPage: Boolean!
+  startCursor: String
+  endCursor: String
+}
+
+type Health {
+  status: ServiceStatus!
+  timestamp: DateTime!
+  version: String!
+  indexer: IndexerStatus!
+  database: DatabaseStatus!
+}
+
+type IndexerStatus {
+  status: ServiceStatus!
+  lastBlock: Int!
+  behindBy: Int!
+  lastSyncedAt: DateTime!
+}
+
+type DatabaseStatus {
+  status: ServiceStatus!
+  latencyMs: Float!
+  connectionPoolSize: Int!
+  activeConnections: Int!
+}
+
+enum ServiceStatus {
+  HEALTHY
+  DEGRADED
+  UNHEALTHY
+}
+
+type RefreshResult {
+  success: Boolean!
+  message: String!
+  duration_ms: Int!
+  tablesRefreshed: [String!]!
+}

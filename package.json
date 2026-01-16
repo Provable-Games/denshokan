@@ -1,0 +1,35 @@
+{
+  "name": "denshokan",
+  "version": "0.1.0",
+  "description": "Game token contracts and indexer for Starknet",
+  "private": true,
+  "workspaces": [
+    "indexer"
+  ],
+  "scripts": {
+    "build:contracts": "cd contracts && scarb build",
+    "test:contracts": "cd contracts && snforge test",
+    "coverage:contracts": "cd contracts && snforge test --coverage",
+    "fmt:contracts": "cd contracts && scarb fmt -w",
+    "build:indexer": "cd indexer && npm run build",
+    "dev:indexer": "cd indexer && npm run dev",
+    "db:migrate": "cd indexer && npm run db:migrate",
+    "db:generate": "cd indexer && npm run db:generate",
+    "test": "npm run test:contracts",
+    "build": "npm run build:contracts && npm run build:indexer",
+    "fmt": "npm run fmt:contracts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Provable-Games/denshokan.git"
+  },
+  "keywords": [
+    "starknet",
+    "cairo",
+    "nft",
+    "gaming",
+    "indexer"
+  ],
+  "author": "Provable Games",
+  "license": "MIT"
+}

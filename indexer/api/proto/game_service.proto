@@ -1,0 +1,746 @@
+// Game Components Indexer gRPC Service
+// Provides both unary RPCs and streaming subscriptions for real-time updates
+
+syntax = "proto3";
+
+package game.v1;
+
+option go_package = "github.com/provable-games/game-components/api/game/v1;gamev1";
+option java_package = "io.gamecomponents.api.game.v1";
+option java_multiple_files = true;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/empty.proto";
+
+// =============================================================================
+// MAIN SERVICE DEFINITION
+// =============================================================================
+
+// GameService provides access to indexed game token data
+// Supports both request/response RPCs and server-streaming for real-time updates
+service GameService {
+  // -------------------------------------------------------------------------
+  // Unary RPCs - Request/Response
+  // -------------------------------------------------------------------------
+
+  // Get detailed information about a specific token
+  rpc GetToken(GetTokenRequest) returns (Token);
+
+  // Get multiple tokens by ID in a single request
+  rpc GetTokens(GetTokensRequest) returns (GetTokensResponse);
+
+  // List tokens with filtering and pagination
+  rpc ListTokens(ListTokensRequest) returns (ListTokensResponse);
+
+  // Get leaderboard for a specific game
+  rpc GetLeaderboard(GetLeaderboardRequest) returns (LeaderboardResponse);
+
+  // Get a token's position in a leaderboard with surrounding context
+  rpc GetLeaderboardPosition(GetLeaderboardPositionRequest) returns (LeaderboardPositionResponse);
+
+  // Get all tokens owned by a player
+  rpc GetPlayerTokens(GetPlayerTokensRequest) returns (PlayerTokensResponse);
+
+  // Get aggregated player statistics
+  rpc GetPlayerStats(GetPlayerStatsRequest) returns (PlayerStats);
+
+  // Get game metadata
+  rpc GetGame(GetGameRequest) returns (Game);
+
+  // List all registered games
+  rpc ListGames(ListGamesRequest) returns (ListGamesResponse);
+
+  // Get game statistics
+  rpc GetGameStats(GetGameStatsRequest) returns (GameStats);
+
+  // Get minter details
+  rpc GetMinter(GetMinterRequest) returns (Minter);
+
+  // Service health check
+  rpc GetHealth(google.protobuf.Empty) returns (HealthResponse);
+
+  // -------------------------------------------------------------------------
+  // Streaming RPCs - Real-time Subscriptions
+  // -------------------------------------------------------------------------
+
+  // Subscribe to updates for specific tokens
+  // Streams score updates, game over events, and ownership changes
+  rpc SubscribeTokenUpdates(TokenSubscription) returns (stream TokenUpdateEvent);
+
+  // Subscribe to leaderboard changes for a game
+  // Streams rank changes, new entries, and removals
+  rpc SubscribeLeaderboard(LeaderboardSubscription) returns (stream LeaderboardUpdateEvent);
+
+  // Subscribe to all activity for a specific player
+  // Streams mints, score updates, game completions, and transfers
+  rpc SubscribePlayerActivity(PlayerSubscription) returns (stream PlayerActivityEvent);
+
+  // Subscribe to all events for specific games
+  // Configurable event type filtering
+  rpc SubscribeGameEvents(GameSubscription) returns (stream GameEvent);
+
+  // Subscribe to new token mints across all or specific games
+  rpc SubscribeMints(MintSubscription) returns (stream MintEvent);
+
+  // Bidirectional streaming for custom queries with real-time updates
+  // Client sends queries, server responds with results and subsequent updates
+  rpc StreamQuery(stream QueryRequest) returns (stream QueryResponse);
+}
+
+// =============================================================================
+// REQUEST MESSAGES
+// =============================================================================
+
+message GetTokenRequest {
+  // Token identifier (felt252 as decimal string)
+  string token_id = 1;
+
+  // Include historical score entries
+  bool include_score_history = 2;
+
+  // Maximum number of score history entries
+  int32 score_history_limit = 3;
+}
+
+message GetTokensRequest {
+  // List of token IDs to fetch
+  repeated string token_ids = 1;
+
+  // Include score history for each token
+  bool include_score_history = 2;
+}
+
+message GetTokensResponse {
+  repeated Token tokens = 1;
+
+  // Token IDs that were not found
+  repeated string not_found = 2;
+}
+
+message ListTokensRequest {
+  // Filter by game ID
+  google.protobuf.Int32Value game_id = 1;
+
+  // Filter by owner address
+  google.protobuf.StringValue owner = 2;
+
+  // Filter by game status
+  TokenStatus status = 3;
+
+  // Minimum score filter
+  google.protobuf.Int32Value min_score = 4;
+
+  // Maximum score filter
+  google.protobuf.Int32Value max_score = 5;
+
+  // Filter by soulbound status
+  google.protobuf.BoolValue soulbound = 6;
+
+  // Pagination
+  PaginationRequest pagination = 10;
+}
+
+message ListTokensResponse {
+  repeated TokenSummary tokens = 1;
+  int32 total_count = 2;
+  PaginationResponse pagination = 3;
+}
+
+message GetLeaderboardRequest {
+  // Game identifier
+  int32 game_id = 1;
+
+  // Pagination
+  int32 limit = 2;
+  int32 offset = 3;
+
+  // Alternative: cursor-based pagination
+  string cursor = 4;
+
+  // Filter by completion status
+  LeaderboardFilter filter = 5;
+
+  // Time range filter
+  TimeRange time_range = 6;
+}
+
+message GetLeaderboardPositionRequest {
+  int32 game_id = 1;
+  string token_id = 2;
+
+  // Number of entries to include above and below
+  int32 context_size = 3;
+}
+
+message GetPlayerTokensRequest {
+  // Player address (hex format)
+  string address = 1;
+
+  // Filter by game ID
+  google.protobuf.Int32Value game_id = 2;
+
+  // Filter by game status
+  TokenStatus status = 3;
+
+  // Pagination
+  PaginationRequest pagination = 10;
+}
+
+message GetPlayerStatsRequest {
+  string address = 1;
+}
+
+message GetGameRequest {
+  int32 game_id = 1;
+}
+
+message ListGamesRequest {
+  PaginationRequest pagination = 1;
+}
+
+message ListGamesResponse {
+  repeated Game games = 1;
+  int32 total_count = 2;
+  PaginationResponse pagination = 3;
+}
+
+message GetGameStatsRequest {
+  int32 game_id = 1;
+}
+
+message GetMinterRequest {
+  int32 minter_id = 1;
+}
+
+// =============================================================================
+// SUBSCRIPTION MESSAGES
+// =============================================================================
+
+message TokenSubscription {
+  // Subscribe to updates for specific tokens
+  // Empty list subscribes to all tokens (requires elevated permissions)
+  repeated string token_ids = 1;
+
+  // Filter by event types
+  repeated TokenEventType event_types = 2;
+
+  // Include initial state in first message
+  bool include_initial_state = 3;
+}
+
+message LeaderboardSubscription {
+  // Game to subscribe to
+  int32 game_id = 1;
+
+  // Only stream changes affecting top N positions
+  // 0 = all changes
+  int32 top_n = 2;
+
+  // Minimum rank change to trigger update
+  // Useful for reducing noise on large leaderboards
+  int32 min_rank_change = 3;
+
+  // Include initial leaderboard snapshot
+  bool include_initial_state = 4;
+}
+
+message PlayerSubscription {
+  // Player address to subscribe to
+  string player_address = 1;
+
+  // Filter by event types
+  repeated PlayerEventType event_types = 2;
+
+  // Filter by specific games
+  repeated int32 game_ids = 3;
+
+  // Include initial state (current tokens)
+  bool include_initial_state = 4;
+}
+
+message GameSubscription {
+  // Games to subscribe to
+  // Empty list subscribes to all games
+  repeated int32 game_ids = 1;
+
+  // Filter by event types
+  repeated GameEventType event_types = 2;
+
+  // Include game metadata in events
+  bool include_game_metadata = 3;
+}
+
+message MintSubscription {
+  // Filter by specific games
+  repeated int32 game_ids = 1;
+
+  // Filter by minters
+  repeated int32 minter_ids = 2;
+
+  // Include full token data or just ID
+  bool include_token_data = 3;
+}
+
+message QueryRequest {
+  // Unique query ID for correlation
+  string query_id = 1;
+
+  oneof query {
+    GetTokenRequest get_token = 2;
+    ListTokensRequest list_tokens = 3;
+    GetLeaderboardRequest get_leaderboard = 4;
+    GetPlayerTokensRequest get_player_tokens = 5;
+  }
+
+  // Subscribe to updates for query results
+  bool subscribe = 10;
+}
+
+message QueryResponse {
+  // Correlation ID from request
+  string query_id = 1;
+
+  // Is this the initial response or an update
+  bool is_update = 2;
+
+  oneof result {
+    Token token = 3;
+    ListTokensResponse tokens = 4;
+    LeaderboardResponse leaderboard = 5;
+    PlayerTokensResponse player_tokens = 6;
+    Error error = 10;
+  }
+
+  google.protobuf.Timestamp timestamp = 20;
+}
+
+// =============================================================================
+// EVENT MESSAGES (for streaming)
+// =============================================================================
+
+message TokenUpdateEvent {
+  string token_id = 1;
+
+  oneof update {
+    ScoreUpdate score_update = 2;
+    GameOverUpdate game_over = 3;
+    OwnerUpdate owner_update = 4;
+    ObjectiveCompletedUpdate objective_completed = 5;
+    AllObjectivesCompletedUpdate all_objectives_completed = 6;
+    PlayerNameUpdate player_name_update = 7;
+  }
+
+  // Block information
+  int64 block_number = 10;
+  string transaction_hash = 11;
+  google.protobuf.Timestamp timestamp = 12;
+}
+
+message ScoreUpdate {
+  int32 previous_score = 1;
+  int32 new_score = 2;
+
+  // Optional: new rank if on leaderboard
+  google.protobuf.Int32Value new_rank = 3;
+  google.protobuf.Int32Value previous_rank = 4;
+}
+
+message GameOverUpdate {
+  int32 final_score = 1;
+  bool completed_all_objectives = 2;
+
+  // Final rank on leaderboard (if qualified)
+  google.protobuf.Int32Value final_rank = 3;
+}
+
+message OwnerUpdate {
+  string previous_owner = 1;
+  string new_owner = 2;
+}
+
+message ObjectiveCompletedUpdate {
+  int32 objective_index = 1;
+  int32 objectives_completed = 2;
+  int32 total_objectives = 3;
+}
+
+message AllObjectivesCompletedUpdate {
+  int32 total_objectives = 1;
+}
+
+message PlayerNameUpdate {
+  string previous_name = 1;
+  string new_name = 2;
+}
+
+message LeaderboardUpdateEvent {
+  int32 game_id = 1;
+
+  // Changes in this update
+  repeated LeaderboardChange changes = 2;
+
+  // New top entry (if changed)
+  LeaderboardEntry new_leader = 3;
+
+  google.protobuf.Timestamp timestamp = 10;
+  int64 block_number = 11;
+}
+
+message LeaderboardChange {
+  string token_id = 1;
+  ChangeType change_type = 2;
+
+  // Position before change (0 if new entry)
+  int32 old_rank = 3;
+
+  // Position after change (0 if removed)
+  int32 new_rank = 4;
+
+  int32 score = 5;
+  string player_name = 6;
+  string owner = 7;
+
+  enum ChangeType {
+    CHANGE_TYPE_UNSPECIFIED = 0;
+    ENTERED = 1;      // New entry on leaderboard
+    MOVED_UP = 2;     // Improved rank
+    MOVED_DOWN = 3;   // Dropped rank
+    REMOVED = 4;      // Fell off leaderboard
+    SCORE_ONLY = 5;   // Score changed but rank unchanged
+  }
+}
+
+message PlayerActivityEvent {
+  string player_address = 1;
+  string token_id = 2;
+  int32 game_id = 3;
+
+  PlayerEventType event_type = 4;
+
+  // Event-specific data
+  oneof event_data {
+    MintEventData mint = 10;
+    ScoreUpdate score = 11;
+    GameOverUpdate game_over = 12;
+    TransferEventData transfer = 13;
+    ObjectiveCompletedUpdate objective = 14;
+  }
+
+  google.protobuf.Timestamp timestamp = 20;
+  int64 block_number = 21;
+  string transaction_hash = 22;
+}
+
+message MintEventData {
+  int32 settings_id = 1;
+  int32 minter_id = 2;
+  bool soulbound = 3;
+}
+
+message TransferEventData {
+  string from_address = 1;
+  string to_address = 2;
+}
+
+message GameEvent {
+  int32 game_id = 1;
+  GameEventType event_type = 2;
+
+  // Associated token (if applicable)
+  string token_id = 3;
+
+  // Event-specific data as JSON
+  bytes event_data = 4;
+
+  // Full token if requested in subscription
+  Token token = 5;
+
+  google.protobuf.Timestamp timestamp = 10;
+  int64 block_number = 11;
+  string transaction_hash = 12;
+}
+
+message MintEvent {
+  string token_id = 1;
+  int32 game_id = 2;
+  string owner = 3;
+  int32 minter_id = 4;
+  int32 settings_id = 5;
+  bool soulbound = 6;
+
+  // Full token data if requested
+  Token token = 10;
+
+  google.protobuf.Timestamp timestamp = 20;
+  int64 block_number = 21;
+  string transaction_hash = 22;
+}
+
+// =============================================================================
+// DOMAIN MESSAGES
+// =============================================================================
+
+message Token {
+  // Token identifier (felt252 as decimal string)
+  string token_id = 1;
+
+  // Decoded from packed token ID
+  int32 game_id = 2;
+  int64 minted_by = 3;
+  int32 settings_id = 4;
+  google.protobuf.Timestamp minted_at = 5;
+  google.protobuf.Timestamp lifecycle_start = 6;
+  google.protobuf.Timestamp lifecycle_end = 7;
+  int32 objectives_count = 8;
+  bool soulbound = 9;
+  bool has_context = 10;
+  int64 sequence_number = 11;
+
+  // Mutable state
+  bool game_over = 20;
+  bool completed_all_objectives = 21;
+
+  // Current state
+  string owner_address = 30;
+  string player_name = 31;
+  int32 current_score = 32;
+
+  // Leaderboard position (if on leaderboard)
+  google.protobuf.Int32Value rank = 33;
+
+  // Related entities
+  Game game = 40;
+  Minter minter = 41;
+
+  // Score history (if requested)
+  repeated ScoreEntry score_history = 50;
+
+  // Indexer metadata
+  int64 created_at_block = 60;
+  int64 last_updated_block = 61;
+  google.protobuf.Timestamp last_updated_at = 62;
+}
+
+message TokenSummary {
+  string token_id = 1;
+  int32 game_id = 2;
+  string owner = 3;
+  string player_name = 4;
+  int32 current_score = 5;
+  bool game_over = 6;
+  bool soulbound = 7;
+  google.protobuf.Timestamp minted_at = 8;
+}
+
+message ScoreEntry {
+  int32 score = 1;
+  int64 block_number = 2;
+  google.protobuf.Timestamp block_timestamp = 3;
+}
+
+message LeaderboardResponse {
+  int32 game_id = 1;
+  Game game = 2;
+
+  repeated LeaderboardEntry entries = 3;
+  int32 total_count = 4;
+
+  google.protobuf.Timestamp last_updated = 5;
+  PaginationResponse pagination = 6;
+}
+
+message LeaderboardPositionResponse {
+  string token_id = 1;
+  int32 rank = 2;
+  int32 score = 3;
+
+  // Surrounding entries for context
+  repeated LeaderboardEntry entries = 4;
+  int32 total_count = 5;
+}
+
+message LeaderboardEntry {
+  int32 rank = 1;
+  string token_id = 2;
+  string owner = 3;
+  string player_name = 4;
+  int32 score = 5;
+}
+
+message PlayerTokensResponse {
+  string address = 1;
+  repeated TokenSummary tokens = 2;
+  int32 total_count = 3;
+  PaginationResponse pagination = 4;
+}
+
+message PlayerStats {
+  string address = 1;
+  int32 total_tokens = 2;
+  int32 games_played = 3;
+  int32 completed_games = 4;
+  int32 active_games = 5;
+  google.protobuf.Int32Value highest_rank = 6;
+  int64 total_score = 7;
+}
+
+message Game {
+  int32 id = 1;
+  string contract_address = 2;
+  string name = 3;
+  string description = 4;
+  string image_url = 5;
+  google.protobuf.Timestamp created_at = 6;
+}
+
+message GameStats {
+  int32 game_id = 1;
+  Game game = 2;
+
+  int32 total_tokens = 3;
+  int32 completed_games = 4;
+  int32 active_games = 5;
+  google.protobuf.DoubleValue avg_score = 6;
+  int32 high_score = 7;
+  int32 unique_players = 8;
+
+  google.protobuf.Timestamp last_updated = 10;
+}
+
+message Minter {
+  int32 id = 1;
+  string contract_address = 2;
+  string name = 3;
+  google.protobuf.Timestamp created_at = 4;
+}
+
+// =============================================================================
+// COMMON MESSAGES
+// =============================================================================
+
+message PaginationRequest {
+  int32 limit = 1;
+  int32 offset = 2;
+
+  // For cursor-based pagination
+  string cursor = 3;
+
+  // Sort options
+  string order_by = 4;
+  SortDirection order_dir = 5;
+}
+
+message PaginationResponse {
+  int32 limit = 1;
+  int32 offset = 2;
+  bool has_more = 3;
+  string next_cursor = 4;
+}
+
+message HealthResponse {
+  ServiceStatus status = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  string version = 3;
+
+  IndexerStatus indexer = 4;
+  DatabaseStatus database = 5;
+}
+
+message IndexerStatus {
+  ServiceStatus status = 1;
+  int64 last_block = 2;
+  int32 behind_by = 3;
+}
+
+message DatabaseStatus {
+  ServiceStatus status = 1;
+  double latency_ms = 2;
+}
+
+message Error {
+  ErrorCode code = 1;
+  string message = 2;
+  map<string, string> details = 3;
+  string request_id = 4;
+}
+
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+enum TokenStatus {
+  TOKEN_STATUS_UNSPECIFIED = 0;
+  TOKEN_STATUS_ACTIVE = 1;
+  TOKEN_STATUS_COMPLETED = 2;
+  TOKEN_STATUS_ALL = 3;
+}
+
+enum TokenEventType {
+  TOKEN_EVENT_TYPE_UNSPECIFIED = 0;
+  TOKEN_EVENT_SCORE_UPDATE = 1;
+  TOKEN_EVENT_GAME_OVER = 2;
+  TOKEN_EVENT_TRANSFER = 3;
+  TOKEN_EVENT_OBJECTIVE_COMPLETED = 4;
+  TOKEN_EVENT_ALL_OBJECTIVES_COMPLETED = 5;
+  TOKEN_EVENT_PLAYER_NAME_UPDATE = 6;
+}
+
+enum PlayerEventType {
+  PLAYER_EVENT_TYPE_UNSPECIFIED = 0;
+  PLAYER_EVENT_MINT = 1;
+  PLAYER_EVENT_SCORE_UPDATE = 2;
+  PLAYER_EVENT_GAME_OVER = 3;
+  PLAYER_EVENT_TRANSFER_IN = 4;
+  PLAYER_EVENT_TRANSFER_OUT = 5;
+  PLAYER_EVENT_OBJECTIVE_COMPLETED = 6;
+}
+
+enum GameEventType {
+  GAME_EVENT_TYPE_UNSPECIFIED = 0;
+  GAME_EVENT_MINT = 1;
+  GAME_EVENT_SCORE_UPDATE = 2;
+  GAME_EVENT_GAME_OVER = 3;
+  GAME_EVENT_LEADERBOARD_CHANGE = 4;
+  GAME_EVENT_NEW_HIGH_SCORE = 5;
+}
+
+enum LeaderboardFilter {
+  LEADERBOARD_FILTER_UNSPECIFIED = 0;
+  LEADERBOARD_FILTER_COMPLETED = 1;
+  LEADERBOARD_FILTER_ACTIVE = 2;
+  LEADERBOARD_FILTER_ALL = 3;
+}
+
+enum TimeRange {
+  TIME_RANGE_UNSPECIFIED = 0;
+  TIME_RANGE_ALL = 1;
+  TIME_RANGE_DAY = 2;
+  TIME_RANGE_WEEK = 3;
+  TIME_RANGE_MONTH = 4;
+}
+
+enum SortDirection {
+  SORT_DIRECTION_UNSPECIFIED = 0;
+  SORT_DIRECTION_ASC = 1;
+  SORT_DIRECTION_DESC = 2;
+}
+
+enum ServiceStatus {
+  SERVICE_STATUS_UNSPECIFIED = 0;
+  SERVICE_STATUS_HEALTHY = 1;
+  SERVICE_STATUS_DEGRADED = 2;
+  SERVICE_STATUS_UNHEALTHY = 3;
+}
+
+enum ErrorCode {
+  ERROR_CODE_UNSPECIFIED = 0;
+  ERROR_CODE_INVALID_REQUEST = 1;
+  ERROR_CODE_NOT_FOUND = 2;
+  ERROR_CODE_VALIDATION_ERROR = 3;
+  ERROR_CODE_RATE_LIMITED = 4;
+  ERROR_CODE_INTERNAL_ERROR = 5;
+  ERROR_CODE_SERVICE_UNAVAILABLE = 6;
+  ERROR_CODE_UNAUTHORIZED = 7;
+  ERROR_CODE_SUBSCRIPTION_ERROR = 8;
+}

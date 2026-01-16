@@ -1,0 +1,1202 @@
+openapi: 3.1.0
+info:
+  title: Game Components Indexer API
+  version: 1.0.0
+  description: |
+    REST API for querying indexed game token data from the Game Components protocol.
+
+    This API provides access to:
+    - Token details with decoded packed metadata
+    - Game leaderboards with rankings
+    - Player portfolios and activity
+    - Game statistics and analytics
+
+    All token IDs are represented as strings due to their large size (felt252/u256).
+  contact:
+    name: Game Components Team
+    url: https://github.com/Provable-Games/game-components
+  license:
+    name: BUSL-1.1
+    url: https://github.com/Provable-Games/game-components/blob/main/LICENSE
+
+servers:
+  - url: https://api.gamecomponents.io/v1
+    description: Production server
+  - url: https://api.staging.gamecomponents.io/v1
+    description: Staging server
+  - url: http://localhost:3000/v1
+    description: Local development
+
+tags:
+  - name: Tokens
+    description: Token metadata and state operations
+  - name: Leaderboards
+    description: Game leaderboard queries
+  - name: Players
+    description: Player portfolio and activity
+  - name: Games
+    description: Game metadata and statistics
+  - name: Health
+    description: Service health and status
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check endpoint
+      description: Returns the health status of the API and its dependencies
+      operationId: getHealth
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+        "503":
+          description: Service is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /tokens/{tokenId}:
+    get:
+      tags:
+        - Tokens
+      summary: Get token details
+      description: |
+        Retrieves detailed information about a specific token, including:
+        - Decoded packed token ID fields (immutable metadata)
+        - Current mutable state (game_over, completed_all_objectives)
+        - Owner and player information
+        - Optional score history
+
+        The token ID encodes immutable metadata directly (game_id, minted_by, etc.)
+        which is decoded and returned in the response.
+      operationId: getToken
+      parameters:
+        - name: tokenId
+          in: path
+          required: true
+          description: The unique token identifier (felt252 as decimal string)
+          schema:
+            type: string
+            pattern: "^[0-9]+$"
+            example: "1234567890123456789012345678901234567890"
+        - name: includeScoreHistory
+          in: query
+          description: Include historical score entries
+          schema:
+            type: boolean
+            default: false
+        - name: scoreHistoryLimit
+          in: query
+          description: Maximum number of score history entries to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+      responses:
+        "200":
+          description: Token details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenDetail"
+              examples:
+                activeGame:
+                  summary: Active game token
+                  value:
+                    tokenId: "1234567890123456789012345678901234567890"
+                    gameId: 1
+                    game:
+                      id: 1
+                      name: "Loot Survivor"
+                      contractAddress: "0x0123..."
+                    owner: "0xabc123..."
+                    playerName: "Player1"
+                    currentScore: 4500
+                    rank: 15
+                    gameOver: false
+                    completedAllObjectives: false
+                    soulbound: false
+                    mintedAt: "2024-01-15T10:30:00Z"
+                    mintedBy:
+                      id: 1
+                      name: "Official Minter"
+                    settingsId: 1
+                    lifecycleStart: "2024-01-15T10:30:00Z"
+                    lifecycleEnd: "2024-01-22T10:30:00Z"
+                    objectivesCount: 5
+                    hasContext: true
+                    sequenceNumber: 12345
+                completedGame:
+                  summary: Completed game token
+                  value:
+                    tokenId: "9876543210987654321098765432109876543210"
+                    gameId: 1
+                    owner: "0xdef456..."
+                    playerName: "Champion"
+                    currentScore: 15000
+                    rank: 1
+                    gameOver: true
+                    completedAllObjectives: true
+                    soulbound: true
+                    mintedAt: "2024-01-10T08:00:00Z"
+        "404":
+          description: Token not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "400":
+          description: Invalid token ID format
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /tokens:
+    get:
+      tags:
+        - Tokens
+      summary: List tokens with filtering
+      description: |
+        Query tokens with optional filters for game, owner, status, and score range.
+        Results are paginated and can be sorted by various fields.
+      operationId: listTokens
+      parameters:
+        - name: gameId
+          in: query
+          description: Filter by game ID
+          schema:
+            type: integer
+        - name: owner
+          in: query
+          description: Filter by owner address
+          schema:
+            type: string
+        - name: status
+          in: query
+          description: Filter by game status
+          schema:
+            type: string
+            enum: [active, completed, all]
+            default: all
+        - name: minScore
+          in: query
+          description: Minimum score filter
+          schema:
+            type: integer
+            minimum: 0
+        - name: maxScore
+          in: query
+          description: Maximum score filter
+          schema:
+            type: integer
+            minimum: 0
+        - name: soulbound
+          in: query
+          description: Filter by soulbound status
+          schema:
+            type: boolean
+        - name: limit
+          in: query
+          description: Maximum number of results
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          description: Number of results to skip
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: orderBy
+          in: query
+          description: Field to sort by
+          schema:
+            type: string
+            enum: [mintedAt, currentScore, lastUpdatedAt]
+            default: mintedAt
+        - name: orderDir
+          in: query
+          description: Sort direction
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+      responses:
+        "200":
+          description: List of tokens
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenListResponse"
+
+  /games/{gameId}/leaderboard:
+    get:
+      tags:
+        - Leaderboards
+      summary: Get game leaderboard
+      description: |
+        Retrieves the leaderboard for a specific game with pagination support.
+
+        Leaderboards are pre-computed and cached for optimal performance.
+        The response includes rank, score, token, and player information.
+
+        Use cursor-based pagination for large leaderboards to ensure consistent results.
+      operationId: getLeaderboard
+      parameters:
+        - name: gameId
+          in: path
+          required: true
+          description: The game identifier
+          schema:
+            type: integer
+            minimum: 0
+        - name: limit
+          in: query
+          description: Maximum number of entries to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+        - name: offset
+          in: query
+          description: Number of entries to skip (for offset pagination)
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: cursor
+          in: query
+          description: Cursor for pagination (preferred over offset for large lists)
+          schema:
+            type: string
+        - name: status
+          in: query
+          description: Filter by game completion status
+          schema:
+            type: string
+            enum: [completed, active, all]
+            default: completed
+        - name: timeRange
+          in: query
+          description: Filter by time period
+          schema:
+            type: string
+            enum: [all, day, week, month]
+            default: all
+      responses:
+        "200":
+          description: Leaderboard entries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeaderboardResponse"
+              examples:
+                topPlayers:
+                  summary: Top 10 leaderboard
+                  value:
+                    gameId: 1
+                    game:
+                      id: 1
+                      name: "Loot Survivor"
+                    entries:
+                      - rank: 1
+                        tokenId: "123..."
+                        owner: "0xabc..."
+                        playerName: "Champion"
+                        score: 15000
+                      - rank: 2
+                        tokenId: "456..."
+                        owner: "0xdef..."
+                        playerName: "Runner-up"
+                        score: 14500
+                    totalCount: 5000
+                    lastUpdated: "2024-01-15T12:00:00Z"
+                    pagination:
+                      hasMore: true
+                      nextCursor: "eyJyYW5rIjoxMX0="
+        "404":
+          description: Game not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /games/{gameId}/leaderboard/position/{tokenId}:
+    get:
+      tags:
+        - Leaderboards
+      summary: Get token position in leaderboard
+      description: Returns the rank and surrounding entries for a specific token
+      operationId: getLeaderboardPosition
+      parameters:
+        - name: gameId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: tokenId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: context
+          in: query
+          description: Number of entries to include above and below
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 50
+            default: 5
+      responses:
+        "200":
+          description: Token position with context
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeaderboardPositionResponse"
+        "404":
+          description: Token not found in leaderboard
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /players/{address}/tokens:
+    get:
+      tags:
+        - Players
+      summary: Get player's tokens
+      description: |
+        Retrieves all tokens owned by a specific player address.
+        Supports filtering by game and game status.
+      operationId: getPlayerTokens
+      parameters:
+        - name: address
+          in: path
+          required: true
+          description: Player wallet address (hex format with 0x prefix)
+          schema:
+            type: string
+            pattern: "^0x[a-fA-F0-9]+$"
+        - name: gameId
+          in: query
+          description: Filter by game ID
+          schema:
+            type: integer
+        - name: status
+          in: query
+          description: Filter by game status
+          schema:
+            type: string
+            enum: [active, completed, all]
+            default: all
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: orderBy
+          in: query
+          schema:
+            type: string
+            enum: [mintedAt, currentScore, lastUpdatedAt]
+            default: lastUpdatedAt
+        - name: orderDir
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+      responses:
+        "200":
+          description: Player's tokens
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlayerTokensResponse"
+        "400":
+          description: Invalid address format
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /players/{address}/stats:
+    get:
+      tags:
+        - Players
+      summary: Get player statistics
+      description: Returns aggregated statistics for a player across all games
+      operationId: getPlayerStats
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^0x[a-fA-F0-9]+$"
+      responses:
+        "200":
+          description: Player statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlayerStats"
+
+  /games:
+    get:
+      tags:
+        - Games
+      summary: List all games
+      description: Returns a list of all registered games with basic metadata
+      operationId: listGames
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: List of games
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameListResponse"
+
+  /games/{gameId}:
+    get:
+      tags:
+        - Games
+      summary: Get game details
+      description: Returns detailed information about a specific game
+      operationId: getGame
+      parameters:
+        - name: gameId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Game details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Game"
+        "404":
+          description: Game not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /games/{gameId}/stats:
+    get:
+      tags:
+        - Games
+      summary: Get game statistics
+      description: |
+        Returns comprehensive statistics for a specific game including:
+        - Total tokens minted
+        - Active vs completed games
+        - Score distribution
+        - Unique player count
+
+        Statistics are computed from materialized views and refresh periodically.
+      operationId: getGameStats
+      parameters:
+        - name: gameId
+          in: path
+          required: true
+          description: The game identifier
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: Game statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameStats"
+              examples:
+                popularGame:
+                  summary: Statistics for a popular game
+                  value:
+                    gameId: 1
+                    game:
+                      id: 1
+                      name: "Loot Survivor"
+                    totalTokens: 50000
+                    completedGames: 35000
+                    activeGames: 15000
+                    avgScore: 2500.5
+                    highScore: 15000
+                    uniquePlayers: 12000
+                    lastUpdated: "2024-01-15T12:00:00Z"
+        "404":
+          description: Game not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /minters:
+    get:
+      tags:
+        - Games
+      summary: List all minters
+      description: Returns a list of all registered minters
+      operationId: listMinters
+      responses:
+        "200":
+          description: List of minters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MinterListResponse"
+
+  /minters/{minterId}:
+    get:
+      tags:
+        - Games
+      summary: Get minter details
+      description: Returns detailed information about a specific minter
+      operationId: getMinter
+      parameters:
+        - name: minterId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Minter details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Minter"
+        "404":
+          description: Minter not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+components:
+  schemas:
+    # Core Domain Objects
+    TokenDetail:
+      type: object
+      required:
+        - tokenId
+        - gameId
+        - owner
+        - currentScore
+        - gameOver
+        - completedAllObjectives
+        - soulbound
+        - mintedAt
+        - objectivesCount
+        - hasContext
+        - sequenceNumber
+      properties:
+        tokenId:
+          type: string
+          description: Unique token identifier (felt252 as decimal string)
+        gameId:
+          type: integer
+          description: Game identifier (decoded from packed token ID)
+        game:
+          $ref: "#/components/schemas/GameSummary"
+        owner:
+          type: string
+          description: Current owner address
+        playerName:
+          type: string
+          nullable: true
+          description: Player display name
+        currentScore:
+          type: integer
+          description: Current game score
+        rank:
+          type: integer
+          nullable: true
+          description: Current leaderboard rank (null if not on leaderboard)
+        gameOver:
+          type: boolean
+          description: Whether the game has ended
+        completedAllObjectives:
+          type: boolean
+          description: Whether all objectives were completed
+        soulbound:
+          type: boolean
+          description: Whether the token is non-transferable
+        mintedAt:
+          type: string
+          format: date-time
+          description: Token mint timestamp
+        mintedBy:
+          $ref: "#/components/schemas/MinterSummary"
+        settingsId:
+          type: integer
+          description: Game settings ID used for this token
+        lifecycleStart:
+          type: string
+          format: date-time
+          nullable: true
+          description: Game lifecycle start time
+        lifecycleEnd:
+          type: string
+          format: date-time
+          nullable: true
+          description: Game lifecycle end time
+        objectivesCount:
+          type: integer
+          description: Number of objectives for this game
+        hasContext:
+          type: boolean
+          description: Whether this token has context data
+        sequenceNumber:
+          type: integer
+          description: Unique sequence number within the game
+        scoreHistory:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScoreEntry"
+          description: Historical score entries (if requested)
+        createdAtBlock:
+          type: integer
+          description: Block number when token was indexed
+        lastUpdatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+
+    TokenSummary:
+      type: object
+      required:
+        - tokenId
+        - gameId
+        - owner
+        - currentScore
+        - gameOver
+      properties:
+        tokenId:
+          type: string
+        gameId:
+          type: integer
+        owner:
+          type: string
+        playerName:
+          type: string
+          nullable: true
+        currentScore:
+          type: integer
+        gameOver:
+          type: boolean
+        soulbound:
+          type: boolean
+        mintedAt:
+          type: string
+          format: date-time
+
+    ScoreEntry:
+      type: object
+      required:
+        - score
+        - blockNumber
+        - blockTimestamp
+      properties:
+        score:
+          type: integer
+          description: Score value at this point
+        blockNumber:
+          type: integer
+          description: Block number when score was recorded
+        blockTimestamp:
+          type: string
+          format: date-time
+          description: Timestamp when score was recorded
+
+    LeaderboardEntry:
+      type: object
+      required:
+        - rank
+        - tokenId
+        - owner
+        - score
+      properties:
+        rank:
+          type: integer
+          description: Position in leaderboard (1-indexed)
+        tokenId:
+          type: string
+          description: Token identifier
+        owner:
+          type: string
+          description: Owner address
+        playerName:
+          type: string
+          nullable: true
+          description: Player display name
+        score:
+          type: integer
+          description: Final score
+
+    Game:
+      type: object
+      required:
+        - id
+        - contractAddress
+      properties:
+        id:
+          type: integer
+          description: Game identifier
+        contractAddress:
+          type: string
+          description: Minigame contract address
+        name:
+          type: string
+          nullable: true
+          description: Game display name
+        description:
+          type: string
+          nullable: true
+          description: Game description
+        imageUrl:
+          type: string
+          nullable: true
+          description: Game image URL
+        createdAt:
+          type: string
+          format: date-time
+          description: Registration timestamp
+
+    GameSummary:
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+          nullable: true
+        contractAddress:
+          type: string
+
+    GameStats:
+      type: object
+      required:
+        - gameId
+        - totalTokens
+        - completedGames
+        - activeGames
+        - highScore
+        - uniquePlayers
+      properties:
+        gameId:
+          type: integer
+          description: Game identifier
+        game:
+          $ref: "#/components/schemas/GameSummary"
+        totalTokens:
+          type: integer
+          description: Total number of tokens minted
+        completedGames:
+          type: integer
+          description: Number of completed games
+        activeGames:
+          type: integer
+          description: Number of active games
+        avgScore:
+          type: number
+          format: float
+          nullable: true
+          description: Average score of completed games
+        highScore:
+          type: integer
+          description: Highest score achieved
+        uniquePlayers:
+          type: integer
+          description: Number of unique players
+        lastUpdated:
+          type: string
+          format: date-time
+          description: When stats were last computed
+
+    Minter:
+      type: object
+      required:
+        - id
+        - contractAddress
+      properties:
+        id:
+          type: integer
+          description: Minter identifier
+        contractAddress:
+          type: string
+          description: Minter contract address
+        name:
+          type: string
+          nullable: true
+          description: Minter display name
+        createdAt:
+          type: string
+          format: date-time
+
+    MinterSummary:
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+          nullable: true
+        contractAddress:
+          type: string
+
+    PlayerStats:
+      type: object
+      required:
+        - address
+        - totalTokens
+        - gamesPlayed
+        - completedGames
+      properties:
+        address:
+          type: string
+        totalTokens:
+          type: integer
+        gamesPlayed:
+          type: integer
+          description: Number of unique games played
+        completedGames:
+          type: integer
+        activeGames:
+          type: integer
+        highestRank:
+          type: integer
+          nullable: true
+          description: Best leaderboard position achieved
+        totalScore:
+          type: integer
+          description: Sum of all scores
+
+    # Response Wrappers
+    TokenListResponse:
+      type: object
+      required:
+        - tokens
+        - totalCount
+        - pagination
+      properties:
+        tokens:
+          type: array
+          items:
+            $ref: "#/components/schemas/TokenSummary"
+        totalCount:
+          type: integer
+        pagination:
+          $ref: "#/components/schemas/PaginationInfo"
+
+    LeaderboardResponse:
+      type: object
+      required:
+        - gameId
+        - entries
+        - totalCount
+        - lastUpdated
+      properties:
+        gameId:
+          type: integer
+        game:
+          $ref: "#/components/schemas/GameSummary"
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/LeaderboardEntry"
+        totalCount:
+          type: integer
+          description: Total number of entries in leaderboard
+        lastUpdated:
+          type: string
+          format: date-time
+          description: When leaderboard was last refreshed
+        pagination:
+          $ref: "#/components/schemas/PaginationInfo"
+
+    LeaderboardPositionResponse:
+      type: object
+      required:
+        - tokenId
+        - rank
+        - score
+        - entries
+      properties:
+        tokenId:
+          type: string
+        rank:
+          type: integer
+        score:
+          type: integer
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/LeaderboardEntry"
+          description: Surrounding entries for context
+        totalCount:
+          type: integer
+
+    PlayerTokensResponse:
+      type: object
+      required:
+        - address
+        - tokens
+        - totalCount
+      properties:
+        address:
+          type: string
+        tokens:
+          type: array
+          items:
+            $ref: "#/components/schemas/TokenSummary"
+        totalCount:
+          type: integer
+        pagination:
+          $ref: "#/components/schemas/PaginationInfo"
+
+    GameListResponse:
+      type: object
+      required:
+        - games
+        - totalCount
+      properties:
+        games:
+          type: array
+          items:
+            $ref: "#/components/schemas/Game"
+        totalCount:
+          type: integer
+        pagination:
+          $ref: "#/components/schemas/PaginationInfo"
+
+    MinterListResponse:
+      type: object
+      required:
+        - minters
+        - totalCount
+      properties:
+        minters:
+          type: array
+          items:
+            $ref: "#/components/schemas/Minter"
+        totalCount:
+          type: integer
+
+    PaginationInfo:
+      type: object
+      properties:
+        limit:
+          type: integer
+        offset:
+          type: integer
+        hasMore:
+          type: boolean
+        nextCursor:
+          type: string
+          nullable: true
+          description: Cursor for next page (if using cursor pagination)
+
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - timestamp
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        timestamp:
+          type: string
+          format: date-time
+        version:
+          type: string
+        indexer:
+          type: object
+          properties:
+            status:
+              type: string
+              enum: [syncing, synced, error]
+            lastBlock:
+              type: integer
+            behindBy:
+              type: integer
+              description: Number of blocks behind head
+        database:
+          type: object
+          properties:
+            status:
+              type: string
+              enum: [connected, disconnected]
+            latencyMs:
+              type: number
+
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code
+          enum:
+            - INVALID_REQUEST
+            - NOT_FOUND
+            - VALIDATION_ERROR
+            - RATE_LIMITED
+            - INTERNAL_ERROR
+            - SERVICE_UNAVAILABLE
+        message:
+          type: string
+          description: Human-readable error message
+        details:
+          type: object
+          description: Additional error details
+          additionalProperties: true
+        requestId:
+          type: string
+          description: Request ID for support reference
+
+  parameters:
+    TokenIdPath:
+      name: tokenId
+      in: path
+      required: true
+      description: Token identifier (felt252 as decimal string)
+      schema:
+        type: string
+        pattern: "^[0-9]+$"
+
+    GameIdPath:
+      name: gameId
+      in: path
+      required: true
+      description: Game identifier
+      schema:
+        type: integer
+        minimum: 0
+
+    AddressPath:
+      name: address
+      in: path
+      required: true
+      description: Starknet address (hex format)
+      schema:
+        type: string
+        pattern: "^0x[a-fA-F0-9]+$"
+
+    LimitQuery:
+      name: limit
+      in: query
+      description: Maximum number of results
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+    OffsetQuery:
+      name: offset
+      in: query
+      description: Number of results to skip
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+    BadRequest:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+    RateLimited:
+      description: Rate limit exceeded
+      headers:
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+          description: Request limit per window
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+          description: Remaining requests in window
+        X-RateLimit-Reset:
+          schema:
+            type: integer
+          description: Unix timestamp when limit resets
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for rate limit tracking and analytics
+
+security:
+  - ApiKeyAuth: []
+  - {}  # Also allow unauthenticated access with stricter rate limits
