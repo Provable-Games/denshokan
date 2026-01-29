@@ -2,25 +2,25 @@
 name = "denshokan"
 version = "0.1.0"
 edition = "2024_07"
-cairo-version = "2.13.1"
-scarb-version = "2.14.0"
+cairo-version = "2.15.0"
 authors = ["Provable Games"]
 license = "MIT"
 repository = "https://github.com/Provable-Games/denshokan"
 
 [dependencies]
-starknet = "2.13.1"
-game_components_registry = { path = "../../gc-cairo-dev/packages/registry" }
-game_components_token = { path = "../../gc-cairo-dev/packages/token" }
-game_components_metagame = { path = "../../gc-cairo-dev/packages/metagame" }
-game_components_minigame = { path = "../../gc-cairo-dev/packages/minigame" }
-game_components_utils = { path = "../../gc-cairo-dev/packages/utils" }
-openzeppelin_token = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0-alpha.3" }
-openzeppelin_introspection = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0-alpha.3" }
-openzeppelin_interfaces = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0-alpha.3" }
+starknet = "2.15.1"
+game_components_registry = { git = "https://github.com/Provable-Games/game-components.git", branch = "next" }
+game_components_token = { git = "https://github.com/Provable-Games/game-components.git", branch = "next" }
+game_components_metagame = { git = "https://github.com/Provable-Games/game-components.git", branch = "next" }
+game_components_minigame = { git = "https://github.com/Provable-Games/game-components.git", branch = "next" }
+game_components_utils = { git = "https://github.com/Provable-Games/game-components.git", branch = "next" }
+game_components_test_common = { git = "https://github.com/Provable-Games/game-components.git", branch = "next" }
+openzeppelin_token = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0" }
+openzeppelin_introspection = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0" }
+openzeppelin_interfaces = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0" }
 
 [dev-dependencies]
-snforge_std = { git = "https://github.com/foundry-rs/starknet-foundry", tag = "v0.53.0" }
+snforge_std = { git = "https://github.com/foundry-rs/starknet-foundry", tag = "v0.55.0" }
 
 [tool.fmt]
 sort-module-level-items = true
@@ -28,3 +28,18 @@ sort-module-level-items = true
 [[target.starknet-contract]]
 sierra = true
 casm = true
+
+[lib]
+name = "denshokan"
+
+[[target.starknet-contract]]
+name = "denshokan_tests"
+test = true
+build-external-contracts = [
+    "denshokan::denshokan::Denshokan",
+    "denshokan::minigame_registry::MinigameRegistry",
+    "game_components_test_common::mocks::minigame_starknet_mock::minigame_starknet_mock",
+]
+
+[tool.snforge]
+exit_first = false

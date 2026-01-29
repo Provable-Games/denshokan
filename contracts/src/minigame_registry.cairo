@@ -80,8 +80,7 @@ pub mod MinigameRegistry {
             ref self: ContractState,
             caller_address: ContractAddress,
             creator_address: ContractAddress,
-        ) {
-            // No additional validation needed for this contract
+        ) { // No additional validation needed for this contract
         }
 
         fn after_register_game(

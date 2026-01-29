@@ -1,0 +1,37 @@
+# Starknet Foundry Configuration
+# https://foundry-rs.github.io/starknet-foundry/appendix/snfoundry-toml.html
+
+[snforge]
+fuzzer_runs = 256
+
+[[tool.snforge.fork]]
+name = "MAINNET_LATEST"
+url = "https://api.cartridge.gg/x/starknet/mainnet/rpc/v0_10"
+block_id.tag = "latest"
+
+[[tool.snforge.fork]]
+name = "SEPOLIA_LATEST"
+url = "https://api.cartridge.gg/x/starknet/sepolia/rpc/v0_10"
+block_id.tag = "latest"
+
+# Default profile for local development
+[sncast.default]
+url = "http://127.0.0.1:5050/"
+account = "devnet"
+wait-params = { timeout = 300, retry-interval = 10 }
+block-explorer = "StarkScan"
+show-explorer-links = true
+
+# Sepolia testnet profile
+[sncast.sepolia]
+url = "https://api.cartridge.gg/x/starknet/sepolia"
+wait-params = { timeout = 300, retry-interval = 10 }
+block-explorer = "StarkScan"
+show-explorer-links = true
+
+# Mainnet profile
+[sncast.mainnet]
+url = "https://api.cartridge.gg/x/starknet/mainnet"
+wait-params = { timeout = 500, retry-interval = 10 }
+block-explorer = "StarkScan"
+show-explorer-links = true

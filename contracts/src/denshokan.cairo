@@ -2,6 +2,7 @@
 // This contract imports from the game-components library and composes
 // a full token implementation using the modular component system.
 
+use core::num::traits::Zero;
 use game_components_metagame::extensions::context::structs::GameContextDetails;
 use game_components_minigame::extensions::settings::structs::GameSettingDetails;
 use game_components_minigame::interface::{IMinigameDispatcher, IMinigameDispatcherTrait};
@@ -19,7 +20,8 @@ use game_components_token::extensions::renderer::renderer::RendererComponent;
 use game_components_token::extensions::settings::settings::SettingsComponent;
 use game_components_token::structs::TokenMetadata;
 use game_components_utils::renderer::{create_custom_metadata, create_default_svg};
-use openzeppelin_interfaces::erc721::IERC721Metadata;
+use openzeppelin_interfaces::erc2981::{IERC2981, IERC2981_ID};
+use openzeppelin_interfaces::erc721::{IERC721Dispatcher, IERC721DispatcherTrait, IERC721Metadata};
 use openzeppelin_introspection::src5::SRC5Component;
 use openzeppelin_token::common::erc2981::erc2981::{DefaultConfig, ERC2981Component};
 
@@ -29,6 +31,9 @@ use starknet::ContractAddress;
 use starknet::storage::StoragePointerReadAccess;
 use starknet::syscalls::call_contract_syscall;
 
+// ================================================================================================
+// CONTRACT
+// ================================================================================================
 
 #[starknet::contract]
 pub mod Denshokan {
@@ -113,10 +118,6 @@ pub mod Denshokan {
     // Core implementations (always included)
     #[abi(embed_v0)]
     impl ERC721Impl = ERC721Component::ERC721Impl<ContractState>;
-    #[abi(embed_v0)]
-    impl ERC2981Impl = ERC2981Component::ERC2981Impl<ContractState>;
-    #[abi(embed_v0)]
-    impl ERC2981InfoImpl = ERC2981Component::ERC2981InfoImpl<ContractState>;
     #[abi(embed_v0)]
     impl SRC5Impl = SRC5Component::SRC5Impl<ContractState>;
     #[abi(embed_v0)]
@@ -354,6 +355,42 @@ pub mod Denshokan {
         }
     }
 
+    // Custom ERC2981 implementation with dynamic royalty receiver
+    // For multi-game tokens: queries registry for royalty_fraction and current game creator token
+    // owner
+    #[abi(embed_v0)]
+    impl ERC2981Impl of IERC2981<ContractState> {
+        fn royalty_info(
+            self: @ContractState, token_id: u256, sale_price: u256,
+        ) -> (ContractAddress, u256) {
+            let token_id_u64: u64 = token_id.try_into().unwrap();
+            let metadata = self.core_token.get_token_metadata(token_id_u64);
+            let game_registry_address = self.core_token.game_registry_address();
+
+            // Multi-game token: get royalty info from registry with dynamic receiver
+            let registry = IMinigameRegistryDispatcher { contract_address: game_registry_address };
+            let game_metadata = registry.game_metadata(metadata.game_id.into());
+
+            // Get royalty fraction from registry
+            let royalty_fraction = game_metadata.royalty_fraction;
+
+            // Query current owner of game_id token in registry (game creator token holder)
+            // This makes royalty receiver DYNAMIC - follows token ownership
+            let registry_erc721 = IERC721Dispatcher { contract_address: game_registry_address };
+            let game_id_u256: u256 = metadata.game_id.into();
+            let receiver = registry_erc721.owner_of(game_id_u256);
+
+            // Calculate royalty amount: (sale_price * royalty_fraction) / 10000
+            // royalty_fraction is in basis points (e.g., 500 = 5%)
+            let royalty_amount = if royalty_fraction > 0 && !receiver.is_zero() {
+                (sale_price * royalty_fraction.into()) / 10000
+            } else {
+                0
+            };
+
+            (receiver, royalty_amount)
+        }
+    }
 
     // ================================================================================================
     // ERC721 HOOKS
@@ -383,7 +420,7 @@ pub mod Denshokan {
             to: ContractAddress,
             token_id: u256,
             auth: ContractAddress,
-        ) {// No-op: event relayer pattern removed for gas efficiency
+        ) { // No-op: event relayer pattern removed for gas efficiency
         // Transfer events are already emitted by ERC721 component
         }
     }
@@ -398,14 +435,18 @@ pub mod Denshokan {
         name: ByteArray,
         symbol: ByteArray,
         base_uri: ByteArray,
-        royalty_receiver: ContractAddress,
-        royalty_fraction: u128,
-        game_registry_address: Option<ContractAddress>,
+        game_registry_address: ContractAddress,
     ) {
         // Initialize core components
         self.erc721.initializer(name, symbol, base_uri);
-        self.erc2981.initializer(royalty_receiver, royalty_fraction);
-        self.core_token.initializer(Option::None, Option::None, game_registry_address);
+        // Register erc2981 interface as not storing default royalties
+        self.src5.register_interface(IERC2981_ID);
+        assert!(
+            !game_registry_address.is_zero(), "Denshokan: Game registry address cannot be zero",
+        );
+        self
+            .core_token
+            .initializer(Option::None, Option::None, Option::Some(game_registry_address));
 
         self.minter.initializer();
         self.objectives.initializer();

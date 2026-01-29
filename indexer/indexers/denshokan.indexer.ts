@@ -125,7 +125,9 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
       const blockTimestamp = header.timestamp ?? new Date();
 
       if (events.length > 0) {
-        logger.info(`Processing ${events.length} events at block ${blockNumber}`);
+        logger.info(
+          `Processing ${events.length} events at block ${blockNumber}`
+        );
       }
 
       for (const event of events) {
@@ -168,45 +170,52 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                 // New token - insert with all fields from event
                 // Note: owner_address needs to come from Transfer event
                 // For now, use zero address as placeholder
-                await db.insert(schema.tokens).values({
-                  tokenId: decoded.id,
-                  gameId: Number(decoded.gameId),
-                  mintedBy: decoded.mintedBy,
-                  settingsId: decoded.settingsId,
-                  mintedAt: new Date(Number(decoded.mintedAt) * 1000),
-                  lifecycleStart: Number(decoded.lifecycleStart),
-                  lifecycleEnd: Number(decoded.lifecycleEnd),
-                  objectivesCount: decoded.objectivesCount,
-                  soulbound: decoded.soulbound,
-                  hasContext: decoded.hasContext,
-                  sequenceNumber: decoded.id, // Use token ID as sequence for now
-                  gameOver: decoded.gameOver,
-                  completedAllObjectives: decoded.completedAllObjectives,
-                  ownerAddress: "0x0", // Will be updated by Transfer event
-                  createdAtBlock: blockNumber,
-                  lastUpdatedBlock: blockNumber,
-                  lastUpdatedAt: blockTimestamp,
-                }).onConflictDoUpdate({
-                  target: schema.tokens.tokenId,
-                  set: {
+                // TODO: u64 version of the tokenID, just do a database counter
+                await db
+                  .insert(schema.tokens)
+                  .values({
+                    tokenId: decoded.id,
+                    gameId: Number(decoded.gameId),
+                    mintedBy: decoded.mintedBy,
+                    settingsId: decoded.settingsId,
+                    mintedAt: new Date(Number(decoded.mintedAt) * 1000),
+                    lifecycleStart: Number(decoded.lifecycleStart),
+                    lifecycleEnd: Number(decoded.lifecycleEnd),
+                    objectivesCount: decoded.objectivesCount,
+                    soulbound: decoded.soulbound,
+                    hasContext: decoded.hasContext,
+                    sequenceNumber: decoded.id, // Use token ID as sequence for now
                     gameOver: decoded.gameOver,
                     completedAllObjectives: decoded.completedAllObjectives,
+                    ownerAddress: "0x0", // Will be updated by Transfer event
+                    createdAtBlock: blockNumber,
                     lastUpdatedBlock: blockNumber,
                     lastUpdatedAt: blockTimestamp,
-                  },
-                });
+                  })
+                  .onConflictDoUpdate({
+                    target: schema.tokens.tokenId,
+                    set: {
+                      gameOver: decoded.gameOver,
+                      completedAllObjectives: decoded.completedAllObjectives,
+                      lastUpdatedBlock: blockNumber,
+                      lastUpdatedAt: blockTimestamp,
+                    },
+                  });
               }
 
               // Log event for audit trail
-              await db.insert(schema.tokenEvents).values({
-                tokenId: decoded.id,
-                eventType: "metadata_update",
-                eventData: stringifyWithBigInt(decoded),
-                blockNumber,
-                blockTimestamp,
-                transactionHash,
-                eventIndex,
-              }).onConflictDoNothing();
+              await db
+                .insert(schema.tokenEvents)
+                .values({
+                  tokenId: decoded.id,
+                  eventType: "metadata_update",
+                  eventData: stringifyWithBigInt(decoded),
+                  blockNumber,
+                  blockTimestamp,
+                  transactionHash,
+                  eventIndex,
+                })
+                .onConflictDoNothing();
 
               break;
             }
@@ -228,25 +237,31 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                 .where(eq(schema.tokens.tokenId, decoded.tokenId));
 
               // Insert score history record
-              await db.insert(schema.scoreHistory).values({
-                tokenId: decoded.tokenId,
-                score: decoded.score,
-                blockNumber,
-                blockTimestamp,
-                transactionHash,
-                eventIndex,
-              }).onConflictDoNothing();
+              await db
+                .insert(schema.scoreHistory)
+                .values({
+                  tokenId: decoded.tokenId,
+                  score: decoded.score,
+                  blockNumber,
+                  blockTimestamp,
+                  transactionHash,
+                  eventIndex,
+                })
+                .onConflictDoNothing();
 
               // Log event for audit trail
-              await db.insert(schema.tokenEvents).values({
-                tokenId: decoded.tokenId,
-                eventType: "score_update",
-                eventData: stringifyWithBigInt(decoded),
-                blockNumber,
-                blockTimestamp,
-                transactionHash,
-                eventIndex,
-              }).onConflictDoNothing();
+              await db
+                .insert(schema.tokenEvents)
+                .values({
+                  tokenId: decoded.tokenId,
+                  eventType: "score_update",
+                  eventData: stringifyWithBigInt(decoded),
+                  blockNumber,
+                  blockTimestamp,
+                  transactionHash,
+                  eventIndex,
+                })
+                .onConflictDoNothing();
 
               break;
             }
@@ -268,15 +283,18 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                 .where(eq(schema.tokens.tokenId, decoded.id));
 
               // Log event for audit trail
-              await db.insert(schema.tokenEvents).values({
-                tokenId: decoded.id,
-                eventType: "player_name",
-                eventData: stringifyWithBigInt(decoded),
-                blockNumber,
-                blockTimestamp,
-                transactionHash,
-                eventIndex,
-              }).onConflictDoNothing();
+              await db
+                .insert(schema.tokenEvents)
+                .values({
+                  tokenId: decoded.id,
+                  eventType: "player_name",
+                  eventData: stringifyWithBigInt(decoded),
+                  blockNumber,
+                  blockTimestamp,
+                  transactionHash,
+                  eventIndex,
+                })
+                .onConflictDoNothing();
 
               break;
             }
@@ -298,15 +316,18 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                 .where(eq(schema.tokens.tokenId, decoded.id));
 
               // Log event for audit trail
-              await db.insert(schema.tokenEvents).values({
-                tokenId: decoded.id,
-                eventType: "client_url",
-                eventData: stringifyWithBigInt(decoded),
-                blockNumber,
-                blockTimestamp,
-                transactionHash,
-                eventIndex,
-              }).onConflictDoNothing();
+              await db
+                .insert(schema.tokenEvents)
+                .values({
+                  tokenId: decoded.id,
+                  eventType: "client_url",
+                  eventData: stringifyWithBigInt(decoded),
+                  blockNumber,
+                  blockTimestamp,
+                  transactionHash,
+                  eventIndex,
+                })
+                .onConflictDoNothing();
 
               break;
             }

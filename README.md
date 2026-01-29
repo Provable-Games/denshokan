@@ -6,18 +6,20 @@ Game token contracts and indexer for Starknet. Denshokan (伝承館) means "Hall
 
 ```
 denshokan/
-├── contracts/           # Cairo smart contracts (imports game-components)
-│   ├── Scarb.toml           # Package config with game-components deps
+├── contracts/               # Cairo smart contracts (imports game-components)
+│   ├── Scarb.toml               # Package config with game-components deps
+│   ├── snfoundry.toml           # Starknet Foundry config (profiles, fork testing)
+│   ├── deploy_denshokan.sh      # Deployment script using sncast
 │   └── src/
-│       ├── lib.cairo        # Module exports
-│       └── denshokan.cairo  # Main token contract
-├── indexer/             # Apibara indexer (TypeScript)
-│   ├── indexers/            # Indexer definitions
-│   ├── src/lib/             # Schema and decoders
-│   ├── migrations/          # PostgreSQL migrations
-│   └── api/                 # API specifications
-├── scripts/             # Deployment and utility scripts
-└── docs/                # Documentation
+│       ├── lib.cairo            # Module exports
+│       ├── denshokan.cairo      # Main token contract
+│       └── minigame_registry.cairo  # Game registry contract
+├── indexer/                 # Apibara indexer (TypeScript)
+│   ├── indexers/                # Indexer definitions
+│   ├── src/lib/                 # Schema and decoders
+│   ├── migrations/              # PostgreSQL migrations
+│   └── api/                     # API specifications
+└── docs/                    # Documentation
 ```
 
 ## Dependencies
@@ -27,27 +29,6 @@ The contracts import from the [game-components](https://github.com/Provable-Game
 - `game_components_metagame` - High-level game management
 - `game_components_minigame` - Game logic interfaces
 - `game_components_utils` - Shared utilities (renderer, etc.)
-
-## Token ID Packing
-
-Denshokan uses a gas-optimized packed token ID that embeds immutable metadata directly in the token_id (felt252):
-
-| Bits      | Field            | Size     | Max Value                |
-|-----------|------------------|----------|--------------------------|
-| 0-29      | game_id          | 30 bits  | ~1 billion games         |
-| 30-69     | minted_by        | 40 bits  | ~1 trillion minters      |
-| 70-101    | settings_id      | 32 bits  | ~4 billion settings      |
-| 102-136   | minted_at        | 35 bits  | Unix timestamp (~1000yr) |
-| 137-162   | lifecycle_start  | 26 bits  | Relative timestamp       |
-| 163-188   | lifecycle_end    | 26 bits  | Relative timestamp       |
-| 189-196   | objectives_count | 8 bits   | 255 objectives           |
-| 197       | soulbound        | 1 bit    | bool                     |
-| 198       | has_context      | 1 bit    | bool                     |
-| 199-238   | sequence_number  | 40 bits  | ~1 trillion tokens       |
-
-**Total: 239 bits** (fits in felt252's ~252 bits)
-
-This eliminates storage reads for immutable metadata - just decode from the token_id!
 
 ## Prerequisites
 
@@ -73,6 +54,32 @@ snforge test --coverage
 # Format code
 scarb fmt -w
 ```
+
+### Deployment
+
+Deploy contracts using `sncast` (Starknet Foundry):
+
+```bash
+cd contracts
+
+# Copy and configure .env from template
+cp .env.example .env
+# Edit .env with your values:
+#   PROFILE=sepolia           # Profile from snfoundry.toml (default, sepolia, mainnet)
+#   ROYALTY_RECEIVER=0x123... # Required: address to receive royalties
+
+# Configure your account in snfoundry.toml (add account name to the profile)
+# See: https://foundry-rs.github.io/starknet-foundry/starknet/account.html
+
+# Run deployment
+./deploy_denshokan.sh
+```
+
+The script will:
+1. Build contracts with `scarb build`
+2. Declare and deploy MinigameRegistry (unless `GAME_REGISTRY_ADDRESS` is set)
+3. Declare and deploy Denshokan token contract
+4. Save deployment info to `contracts/deployments/`
 
 ### Indexer
 
