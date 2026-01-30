@@ -50,7 +50,10 @@ fn test_royalty_info_with_dynamic_receiver() {
             Option::None, // extra_data
             Option::None, // extra_data_uri
             ALICE(),
-            false // is_soulbound
+            false, // is_soulbound
+            false,
+            0,
+            0,
         );
 
     // Verify token metadata has correct game_id
@@ -98,6 +101,9 @@ fn test_royalty_receiver_follows_game_creator_token_transfer() {
             Option::None,
             ALICE(),
             false,
+            false,
+            0,
+            0,
         );
 
     // Initial royalty receiver should be GAME_CREATOR
@@ -151,6 +157,9 @@ fn test_royalty_amount_calculation() {
             Option::None,
             ALICE(),
             false,
+            false,
+            0,
+            0,
         );
 
     // Test with different sale prices
@@ -205,6 +214,9 @@ fn test_royalty_with_multiple_games() {
             Option::None,
             ALICE(),
             false,
+            false,
+            0,
+            0,
         );
 
     let game_2_metadata = tc.registry.game_metadata(game_id_2);
@@ -223,6 +235,9 @@ fn test_royalty_with_multiple_games() {
             Option::None,
             ALICE(),
             false,
+            false,
+            0,
+            0,
         );
 
     let game_3_metadata = tc.registry.game_metadata(game_id_3);
@@ -241,6 +256,9 @@ fn test_royalty_with_multiple_games() {
             Option::None,
             ALICE(),
             false,
+            false,
+            0,
+            0,
         );
 
     // Verify each token has correct royalty receiver and amount
@@ -292,6 +310,9 @@ fn test_royalty_info_with_zero_sale_price() {
             Option::None,
             ALICE(),
             false,
+            false,
+            0,
+            0,
         );
 
     let (receiver, royalty_amount) = tc.erc2981.royalty_info(token_id.into(), 0);
