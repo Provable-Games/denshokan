@@ -13,26 +13,35 @@
  * - u256: 2 field elements (low, high)
  * - ContractAddress: 1 field element
  *
- * Packed Token ID Layout (239 bits in felt252):
- * | Bits      | Field            | Size     | Max Value                |
- * |-----------|------------------|----------|--------------------------|
- * | 0-29      | game_id          | 30 bits  | ~1 billion games         |
- * | 30-69     | minted_by        | 40 bits  | ~1 trillion minters      |
- * | 70-101    | settings_id      | 32 bits  | ~4 billion settings      |
- * | 102-136   | minted_at        | 35 bits  | Unix timestamp (~1000 years) |
- * | 137-162   | lifecycle_start  | 26 bits  | Relative timestamp       |
- * | 163-188   | lifecycle_end    | 26 bits  | Relative timestamp       |
- * | 189-196   | objectives_count | 8 bits   | 255 objectives           |
- * | 197       | soulbound        | 1 bit    | bool                     |
- * | 198       | has_context      | 1 bit    | bool                     |
- * | 199-238   | sequence_number  | 40 bits  | ~1 trillion tokens       |
+ * Packed Token ID Layout (251 bits in felt252):
+ * | Bits      | Field          | Size     | Max Value                    |
+ * |-----------|----------------|----------|------------------------------|
+ * | 0-29      | game_id        | 30 bits  | ~1 billion games             |
+ * | 30-69     | minted_by      | 40 bits  | ~1 trillion minters          |
+ * | 70-99     | settings_id    | 30 bits  | ~1 billion settings          |
+ * | 100-134   | minted_at      | 35 bits  | Unix timestamp (~1000 years) |
+ * | 135-159   | start_delay    | 25 bits  | Relative offset              |
+ * | 160-184   | end_delay      | 25 bits  | Relative offset              |
+ * | 185-214   | objective_id   | 30 bits  | ~1 billion objectives        |
+ * | 215       | soulbound      | 1 bit    | bool                         |
+ * | 216       | has_context    | 1 bit    | bool                         |
+ * | 217       | paymaster      | 1 bit    | bool                         |
+ * | 218-227   | tx_hash        | 10 bits  | Hash fragment                |
+ * | 228-237   | salt           | 10 bits  | Salt value                   |
+ * | 238-250   | metadata       | 13 bits  | Metadata flags               |
  *
  * Events indexed:
+ * - Transfer: ERC721 mint/transfer
  * - ScoreUpdate: Emitted when token score changes
- * - TokenMetadataUpdate: Emitted on mint or metadata change
  * - TokenPlayerNameUpdate: Emitted when player name is set
  * - TokenClientUrlUpdate: Emitted when client URL is set
- * - MetadataUpdate: ERC721 standard metadata refresh event
+ * - GameOver: Emitted when game ends for a token
+ * - CompletedObjective: Emitted when token completes all objectives
+ * - MinterRegistryUpdate: Emitted when minter is registered/updated
+ * - TokenContextUpdate: Emitted when token context data is set
+ * - ObjectiveCreated: Emitted when a game objective is created
+ * - SettingsCreated: Emitted when game settings are created
+ * - TokenRendererUpdate: Emitted when token renderer is updated
  */
 
 import { hash } from "starknet";
@@ -51,11 +60,17 @@ export function stringifyWithBigInt(obj: unknown): string {
  * Event selectors (starknet_keccak of event name)
  */
 export const EVENT_SELECTORS = {
+  Transfer: hash.getSelectorFromName("Transfer"),
   ScoreUpdate: hash.getSelectorFromName("ScoreUpdate"),
-  TokenMetadataUpdate: hash.getSelectorFromName("TokenMetadataUpdate"),
   TokenPlayerNameUpdate: hash.getSelectorFromName("TokenPlayerNameUpdate"),
   TokenClientUrlUpdate: hash.getSelectorFromName("TokenClientUrlUpdate"),
-  MetadataUpdate: hash.getSelectorFromName("MetadataUpdate"),
+  GameOver: hash.getSelectorFromName("GameOver"),
+  CompletedObjective: hash.getSelectorFromName("CompletedObjective"),
+  MinterRegistryUpdate: hash.getSelectorFromName("MinterRegistryUpdate"),
+  TokenContextUpdate: hash.getSelectorFromName("TokenContextUpdate"),
+  ObjectiveCreated: hash.getSelectorFromName("ObjectiveCreated"),
+  SettingsCreated: hash.getSelectorFromName("SettingsCreated"),
+  TokenRendererUpdate: hash.getSelectorFromName("TokenRendererUpdate"),
 } as const;
 
 /**
@@ -118,14 +133,17 @@ export function feltToString(felt: string | undefined | null): string {
 const PACKED_TOKEN_ID_MASKS = {
   GAME_ID_MASK: 0x3FFFFFFFn, // 30 bits
   MINTED_BY_MASK: 0xFFFFFFFFFFn, // 40 bits
-  SETTINGS_ID_MASK: 0xFFFFFFFFn, // 32 bits
+  SETTINGS_ID_MASK: 0x3FFFFFFFn, // 30 bits
   MINTED_AT_MASK: 0x7FFFFFFFFn, // 35 bits
-  LIFECYCLE_START_MASK: 0x3FFFFFFn, // 26 bits
-  LIFECYCLE_END_MASK: 0x3FFFFFFn, // 26 bits
-  OBJECTIVES_COUNT_MASK: 0xFFn, // 8 bits
+  START_DELAY_MASK: 0x1FFFFFFn, // 25 bits
+  END_DELAY_MASK: 0x1FFFFFFn, // 25 bits
+  OBJECTIVE_ID_MASK: 0x3FFFFFFFn, // 30 bits
   SOULBOUND_MASK: 0x1n, // 1 bit
   HAS_CONTEXT_MASK: 0x1n, // 1 bit
-  SEQUENCE_NUMBER_MASK: 0xFFFFFFFFFFn, // 40 bits
+  PAYMASTER_MASK: 0x1n, // 1 bit
+  TX_HASH_MASK: 0x3FFn, // 10 bits
+  SALT_MASK: 0x3FFn, // 10 bits
+  METADATA_MASK: 0x1FFFn, // 13 bits
 } as const;
 
 /**
@@ -135,13 +153,16 @@ const PACKED_TOKEN_ID_OFFSETS = {
   GAME_ID: 0n,
   MINTED_BY: 30n,
   SETTINGS_ID: 70n,
-  MINTED_AT: 102n,
-  LIFECYCLE_START: 137n,
-  LIFECYCLE_END: 163n,
-  OBJECTIVES_COUNT: 189n,
-  SOULBOUND: 197n,
-  HAS_CONTEXT: 198n,
-  SEQUENCE_NUMBER: 199n,
+  MINTED_AT: 100n,
+  START_DELAY: 135n,
+  END_DELAY: 160n,
+  OBJECTIVE_ID: 185n,
+  SOULBOUND: 215n,
+  HAS_CONTEXT: 216n,
+  PAYMASTER: 217n,
+  TX_HASH: 218n,
+  SALT: 228n,
+  METADATA: 238n,
 } as const;
 
 /**
@@ -154,29 +175,34 @@ export interface PackedTokenId {
   gameId: number;
   /** Minter ID (40 bits, u64) */
   mintedBy: bigint;
-  /** Settings ID (32 bits, u32) */
+  /** Settings ID (30 bits, u32) */
   settingsId: number;
   /** Mint timestamp as Date (35 bits Unix timestamp) */
   mintedAt: Date;
-  /** Lifecycle start as relative offset (26 bits) */
-  lifecycleStart: number;
-  /** Lifecycle end as relative offset (26 bits) */
-  lifecycleEnd: number;
-  /** Number of objectives (8 bits, u8) */
-  objectivesCount: number;
+  /** Start delay as relative offset (25 bits) */
+  startDelay: number;
+  /** End delay as relative offset (25 bits) */
+  endDelay: number;
+  /** Objective ID (30 bits) */
+  objectiveId: number;
   /** Soulbound flag (1 bit) */
   soulbound: boolean;
   /** Has context flag (1 bit) */
   hasContext: boolean;
-  /** Sequence number for uniqueness (40 bits, u64) */
-  sequenceNumber: bigint;
+  /** Paymaster flag (1 bit) */
+  paymaster: boolean;
+  /** TX hash fragment (10 bits) */
+  txHash: number;
+  /** Salt value (10 bits) */
+  salt: number;
+  /** Metadata flags (13 bits) */
+  metadata: number;
 }
 
 /**
  * Decode packed token ID from a single felt252
  *
  * The token_id is a felt252 (not u256), so we decode from a single value.
- * This is different from kandoswap which uses u256 (low/high).
  */
 export function decodePackedTokenId(tokenIdFelt: string | bigint): PackedTokenId {
   const packed = typeof tokenIdFelt === "string" ? hexToBigInt(tokenIdFelt) : tokenIdFelt;
@@ -185,12 +211,15 @@ export function decodePackedTokenId(tokenIdFelt: string | bigint): PackedTokenId
   const mintedBy = (packed >> PACKED_TOKEN_ID_OFFSETS.MINTED_BY) & PACKED_TOKEN_ID_MASKS.MINTED_BY_MASK;
   const settingsId = Number((packed >> PACKED_TOKEN_ID_OFFSETS.SETTINGS_ID) & PACKED_TOKEN_ID_MASKS.SETTINGS_ID_MASK);
   const mintedAtRaw = Number((packed >> PACKED_TOKEN_ID_OFFSETS.MINTED_AT) & PACKED_TOKEN_ID_MASKS.MINTED_AT_MASK);
-  const lifecycleStart = Number((packed >> PACKED_TOKEN_ID_OFFSETS.LIFECYCLE_START) & PACKED_TOKEN_ID_MASKS.LIFECYCLE_START_MASK);
-  const lifecycleEnd = Number((packed >> PACKED_TOKEN_ID_OFFSETS.LIFECYCLE_END) & PACKED_TOKEN_ID_MASKS.LIFECYCLE_END_MASK);
-  const objectivesCount = Number((packed >> PACKED_TOKEN_ID_OFFSETS.OBJECTIVES_COUNT) & PACKED_TOKEN_ID_MASKS.OBJECTIVES_COUNT_MASK);
+  const startDelay = Number((packed >> PACKED_TOKEN_ID_OFFSETS.START_DELAY) & PACKED_TOKEN_ID_MASKS.START_DELAY_MASK);
+  const endDelay = Number((packed >> PACKED_TOKEN_ID_OFFSETS.END_DELAY) & PACKED_TOKEN_ID_MASKS.END_DELAY_MASK);
+  const objectiveId = Number((packed >> PACKED_TOKEN_ID_OFFSETS.OBJECTIVE_ID) & PACKED_TOKEN_ID_MASKS.OBJECTIVE_ID_MASK);
   const soulbound = ((packed >> PACKED_TOKEN_ID_OFFSETS.SOULBOUND) & PACKED_TOKEN_ID_MASKS.SOULBOUND_MASK) === 1n;
   const hasContext = ((packed >> PACKED_TOKEN_ID_OFFSETS.HAS_CONTEXT) & PACKED_TOKEN_ID_MASKS.HAS_CONTEXT_MASK) === 1n;
-  const sequenceNumber = (packed >> PACKED_TOKEN_ID_OFFSETS.SEQUENCE_NUMBER) & PACKED_TOKEN_ID_MASKS.SEQUENCE_NUMBER_MASK;
+  const paymaster = ((packed >> PACKED_TOKEN_ID_OFFSETS.PAYMASTER) & PACKED_TOKEN_ID_MASKS.PAYMASTER_MASK) === 1n;
+  const txHash = Number((packed >> PACKED_TOKEN_ID_OFFSETS.TX_HASH) & PACKED_TOKEN_ID_MASKS.TX_HASH_MASK);
+  const salt = Number((packed >> PACKED_TOKEN_ID_OFFSETS.SALT) & PACKED_TOKEN_ID_MASKS.SALT_MASK);
+  const metadata = Number((packed >> PACKED_TOKEN_ID_OFFSETS.METADATA) & PACKED_TOKEN_ID_MASKS.METADATA_MASK);
 
   return {
     tokenId: packed,
@@ -198,16 +227,30 @@ export function decodePackedTokenId(tokenIdFelt: string | bigint): PackedTokenId
     mintedBy,
     settingsId,
     mintedAt: new Date(mintedAtRaw * 1000),
-    lifecycleStart,
-    lifecycleEnd,
-    objectivesCount,
+    startDelay,
+    endDelay,
+    objectiveId,
     soulbound,
     hasContext,
-    sequenceNumber,
+    paymaster,
+    txHash,
+    salt,
+    metadata,
   };
 }
 
 // ============ Event Data Interfaces ============
+
+/**
+ * Transfer event (ERC721)
+ * Keys: [selector, from, to]
+ * Data: [token_id_low, token_id_high]
+ */
+export interface TransferEvent {
+  from: string;
+  to: string;
+  tokenId: bigint;
+}
 
 /**
  * ScoreUpdate event
@@ -217,28 +260,6 @@ export function decodePackedTokenId(tokenIdFelt: string | bigint): PackedTokenId
 export interface ScoreUpdateEvent {
   tokenId: bigint;
   score: bigint;
-}
-
-/**
- * TokenMetadataUpdate event
- * Keys: [selector, id]
- * Data: [game_id, minted_at, settings_id, lifecycle_start, lifecycle_end,
- *        minted_by, soulbound, game_over, completed_all_objectives,
- *        has_context, objectives_count]
- */
-export interface TokenMetadataUpdateEvent {
-  id: bigint;
-  gameId: bigint;
-  mintedAt: bigint;
-  settingsId: number;
-  lifecycleStart: bigint;
-  lifecycleEnd: bigint;
-  mintedBy: bigint;
-  soulbound: boolean;
-  gameOver: boolean;
-  completedAllObjectives: boolean;
-  hasContext: boolean;
-  objectivesCount: number;
 }
 
 /**
@@ -255,9 +276,6 @@ export interface TokenPlayerNameUpdateEvent {
  * TokenClientUrlUpdate event
  * Keys: [selector, id]
  * Data: [client_url (ByteArray)]
- *
- * ByteArray format: [data_len, pending_word, pending_word_len]
- * For short strings: data_len=0, pending_word=string, pending_word_len
  */
 export interface TokenClientUrlUpdateEvent {
   id: bigint;
@@ -265,15 +283,91 @@ export interface TokenClientUrlUpdateEvent {
 }
 
 /**
- * MetadataUpdate event (ERC721 standard)
- * Keys: [selector, token_id_low, token_id_high]
+ * GameOver event
+ * Keys: [selector, token_id(u64)]
  * Data: []
  */
-export interface MetadataUpdateEvent {
+export interface GameOverEvent {
   tokenId: bigint;
 }
 
+/**
+ * CompletedObjective event
+ * Keys: [selector, token_id(u64)]
+ * Data: []
+ */
+export interface CompletedObjectiveEvent {
+  tokenId: bigint;
+}
+
+/**
+ * MinterRegistryUpdate event
+ * Keys: [selector, minter_id(u64)]
+ * Data: [minter_address]
+ */
+export interface MinterRegistryUpdateEvent {
+  minterId: bigint;
+  minterAddress: string;
+}
+
+/**
+ * TokenContextUpdate event
+ * Keys: [selector, token_id(u64)]
+ * Data: [data(ByteArray)]
+ */
+export interface TokenContextUpdateEvent {
+  tokenId: bigint;
+  data: string;
+}
+
+/**
+ * ObjectiveCreated event
+ * Keys: [selector, game_address, objective_id(u32)]
+ * Data: [creator_address, objective_data(ByteArray)]
+ */
+export interface ObjectiveCreatedEvent {
+  gameAddress: string;
+  objectiveId: number;
+  creatorAddress: string;
+  objectiveData: string;
+}
+
+/**
+ * SettingsCreated event
+ * Keys: [selector, game_address, settings_id(u32)]
+ * Data: [creator_address, settings_data(ByteArray)]
+ */
+export interface SettingsCreatedEvent {
+  gameAddress: string;
+  settingsId: number;
+  creatorAddress: string;
+  settingsData: string;
+}
+
+/**
+ * TokenRendererUpdate event
+ * Keys: [selector, token_id(u64)]
+ * Data: [renderer(ContractAddress)]
+ */
+export interface TokenRendererUpdateEvent {
+  tokenId: bigint;
+  renderer: string;
+}
+
 // ============ Event Decoders ============
+
+/**
+ * Decode Transfer event (ERC721)
+ * Keys: [selector, from, to]
+ * Data: [token_id_low, token_id_high]
+ */
+export function decodeTransfer(keys: readonly string[], data: readonly string[]): TransferEvent {
+  return {
+    from: feltToHex(keys[1]),
+    to: feltToHex(keys[2]),
+    tokenId: decodeU256(data[0], data[1]),
+  };
+}
 
 /**
  * Decode ScoreUpdate event
@@ -284,30 +378,6 @@ export function decodeScoreUpdate(keys: readonly string[], data: readonly string
   return {
     tokenId: hexToBigInt(keys[1]),
     score: hexToBigInt(data[0]),
-  };
-}
-
-/**
- * Decode TokenMetadataUpdate event
- * Keys: [selector, id]
- * Data: [game_id, minted_at, settings_id, lifecycle_start, lifecycle_end,
- *        minted_by, soulbound, game_over, completed_all_objectives,
- *        has_context, objectives_count]
- */
-export function decodeTokenMetadataUpdate(keys: readonly string[], data: readonly string[]): TokenMetadataUpdateEvent {
-  return {
-    id: hexToBigInt(keys[1]),
-    gameId: hexToBigInt(data[0]),
-    mintedAt: hexToBigInt(data[1]),
-    settingsId: Number(hexToBigInt(data[2])),
-    lifecycleStart: hexToBigInt(data[3]),
-    lifecycleEnd: hexToBigInt(data[4]),
-    mintedBy: hexToBigInt(data[5]),
-    soulbound: decodeBool(data[6]),
-    gameOver: decodeBool(data[7]),
-    completedAllObjectives: decodeBool(data[8]),
-    hasContext: decodeBool(data[9]),
-    objectivesCount: Number(hexToBigInt(data[10])),
   };
 }
 
@@ -332,7 +402,7 @@ export function decodeTokenPlayerNameUpdate(keys: readonly string[], data: reado
  *
  * Serialized format: [data_len, ...data_chunks, pending_word, pending_word_len]
  */
-function decodeByteArray(data: readonly string[], startIndex: number): { value: string; consumed: number } {
+export function decodeByteArray(data: readonly string[], startIndex: number): { value: string; consumed: number } {
   const dataLen = Number(hexToBigInt(data[startIndex]));
   let result = "";
   let idx = startIndex + 1;
@@ -341,7 +411,6 @@ function decodeByteArray(data: readonly string[], startIndex: number): { value: 
   for (let i = 0; i < dataLen; i++) {
     const chunk = hexToBigInt(data[idx]);
     // Each chunk is 31 bytes (248 bits), but stored in felt252
-    // Decode as hex, then convert to string
     const hex = chunk.toString(16).padStart(62, "0"); // 31 bytes = 62 hex chars
     for (let j = 0; j < 62; j += 2) {
       const charCode = parseInt(hex.substr(j, 2), 16);
@@ -379,12 +448,90 @@ export function decodeTokenClientUrlUpdate(keys: readonly string[], data: readon
 }
 
 /**
- * Decode MetadataUpdate event (ERC721 standard)
- * Keys: [selector, token_id_low, token_id_high]
+ * Decode GameOver event
+ * Keys: [selector, token_id(u64)]
  * Data: []
  */
-export function decodeMetadataUpdate(keys: readonly string[]): MetadataUpdateEvent {
+export function decodeGameOver(keys: readonly string[]): GameOverEvent {
   return {
-    tokenId: decodeU256(keys[1], keys[2]),
+    tokenId: hexToBigInt(keys[1]),
+  };
+}
+
+/**
+ * Decode CompletedObjective event
+ * Keys: [selector, token_id(u64)]
+ * Data: []
+ */
+export function decodeCompletedObjective(keys: readonly string[]): CompletedObjectiveEvent {
+  return {
+    tokenId: hexToBigInt(keys[1]),
+  };
+}
+
+/**
+ * Decode MinterRegistryUpdate event
+ * Keys: [selector, minter_id(u64)]
+ * Data: [minter_address]
+ */
+export function decodeMinterRegistryUpdate(keys: readonly string[], data: readonly string[]): MinterRegistryUpdateEvent {
+  return {
+    minterId: hexToBigInt(keys[1]),
+    minterAddress: feltToHex(data[0]),
+  };
+}
+
+/**
+ * Decode TokenContextUpdate event
+ * Keys: [selector, token_id(u64)]
+ * Data: [data(ByteArray)]
+ */
+export function decodeTokenContextUpdate(keys: readonly string[], data: readonly string[]): TokenContextUpdateEvent {
+  const { value } = decodeByteArray(data, 0);
+  return {
+    tokenId: hexToBigInt(keys[1]),
+    data: value,
+  };
+}
+
+/**
+ * Decode ObjectiveCreated event
+ * Keys: [selector, game_address, objective_id(u32)]
+ * Data: [creator_address, objective_data(ByteArray)]
+ */
+export function decodeObjectiveCreated(keys: readonly string[], data: readonly string[]): ObjectiveCreatedEvent {
+  const { value: objectiveData } = decodeByteArray(data, 1);
+  return {
+    gameAddress: feltToHex(keys[1]),
+    objectiveId: Number(hexToBigInt(keys[2])),
+    creatorAddress: feltToHex(data[0]),
+    objectiveData,
+  };
+}
+
+/**
+ * Decode SettingsCreated event
+ * Keys: [selector, game_address, settings_id(u32)]
+ * Data: [creator_address, settings_data(ByteArray)]
+ */
+export function decodeSettingsCreated(keys: readonly string[], data: readonly string[]): SettingsCreatedEvent {
+  const { value: settingsData } = decodeByteArray(data, 1);
+  return {
+    gameAddress: feltToHex(keys[1]),
+    settingsId: Number(hexToBigInt(keys[2])),
+    creatorAddress: feltToHex(data[0]),
+    settingsData,
+  };
+}
+
+/**
+ * Decode TokenRendererUpdate event
+ * Keys: [selector, token_id(u64)]
+ * Data: [renderer(ContractAddress)]
+ */
+export function decodeTokenRendererUpdate(keys: readonly string[], data: readonly string[]): TokenRendererUpdateEvent {
+  return {
+    tokenId: hexToBigInt(keys[1]),
+    renderer: feltToHex(data[0]),
   };
 }

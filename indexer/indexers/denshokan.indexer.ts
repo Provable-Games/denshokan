@@ -5,15 +5,22 @@
  * Uses the Apibara SDK with Drizzle ORM for storage.
  *
  * Events indexed:
+ * - Transfer: ERC721 mint/transfer for ownership tracking
  * - ScoreUpdate: Score changes for tokens
- * - TokenMetadataUpdate: Token mints and state changes
  * - TokenPlayerNameUpdate: Player name assignments
  * - TokenClientUrlUpdate: Client URL assignments
- * - MetadataUpdate: ERC721 standard metadata refresh
+ * - GameOver: Game completion for tokens
+ * - CompletedObjective: Objective completion for tokens
+ * - MinterRegistryUpdate: Minter registration/updates
+ * - TokenContextUpdate: Token context data updates
+ * - ObjectiveCreated: New game objective definitions
+ * - SettingsCreated: New game settings definitions
+ * - TokenRendererUpdate: Token renderer contract updates
  *
  * Architecture Notes:
  * - Uses high-level defineIndexer API for simplicity
  * - Token IDs are felt252 (not u256) with packed immutable data
+ * - On mint (Transfer from 0x0), packed token ID is decoded for immutable fields
  * - Mutable state tracked separately via events
  * - Idempotent writes for safe re-indexing
  */
@@ -32,11 +39,17 @@ import type { ApibaraRuntimeConfig } from "apibara/types";
 import * as schema from "../src/lib/schema.js";
 import {
   EVENT_SELECTORS,
+  decodeTransfer,
   decodeScoreUpdate,
-  decodeTokenMetadataUpdate,
   decodeTokenPlayerNameUpdate,
   decodeTokenClientUrlUpdate,
-  decodeMetadataUpdate,
+  decodeGameOver,
+  decodeCompletedObjective,
+  decodeMinterRegistryUpdate,
+  decodeTokenContextUpdate,
+  decodeObjectiveCreated,
+  decodeSettingsCreated,
+  decodeTokenRendererUpdate,
   decodePackedTokenId,
   feltToHex,
   stringifyWithBigInt,
@@ -104,7 +117,6 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
       },
       "connect:before": ({ request }) => {
         // Keep connection alive with periodic heartbeats (30 seconds)
-        // This prevents the stream from appearing "done" during quiet periods
         request.heartbeatInterval = { seconds: 30n, nanos: 0 };
       },
       "connect:after": () => {
@@ -142,80 +154,70 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
 
         try {
           switch (selector) {
-            case EVENT_SELECTORS.TokenMetadataUpdate: {
-              const decoded = decodeTokenMetadataUpdate(keys, data);
-              logger.info(
-                `TokenMetadataUpdate: id=${decoded.id}, game_id=${decoded.gameId}, game_over=${decoded.gameOver}`
-              );
+            case EVENT_SELECTORS.Transfer: {
+              const decoded = decodeTransfer(keys, data);
+              const isMint = decoded.from === "0x0";
 
-              // Check if token exists (update) or needs to be created (mint)
-              const existingToken = await db
-                .select()
-                .from(schema.tokens)
-                .where(eq(schema.tokens.tokenId, decoded.id))
-                .limit(1);
+              if (isMint) {
+                // Mint: decode packed token ID for immutable fields
+                const packed = decodePackedTokenId(decoded.tokenId);
+                logger.info(
+                  `Transfer (mint): token_id=${decoded.tokenId}, to=${decoded.to}, game_id=${packed.gameId}`
+                );
 
-              if (existingToken.length > 0) {
-                // Update existing token with mutable state
+                await db.insert(schema.tokens).values({
+                  tokenId: decoded.tokenId,
+                  gameId: packed.gameId,
+                  mintedBy: packed.mintedBy,
+                  settingsId: packed.settingsId,
+                  mintedAt: packed.mintedAt,
+                  startDelay: packed.startDelay,
+                  endDelay: packed.endDelay,
+                  objectiveId: packed.objectiveId,
+                  soulbound: packed.soulbound,
+                  hasContext: packed.hasContext,
+                  paymaster: packed.paymaster,
+                  txHash: packed.txHash,
+                  salt: packed.salt,
+                  metadata: packed.metadata,
+                  ownerAddress: decoded.to,
+                  createdAtBlock: blockNumber,
+                  lastUpdatedBlock: blockNumber,
+                  lastUpdatedAt: blockTimestamp,
+                }).onConflictDoUpdate({
+                  target: schema.tokens.tokenId,
+                  set: {
+                    ownerAddress: decoded.to,
+                    lastUpdatedBlock: blockNumber,
+                    lastUpdatedAt: blockTimestamp,
+                  },
+                });
+              } else {
+                // Regular transfer: update owner
+                logger.info(
+                  `Transfer: token_id=${decoded.tokenId}, from=${decoded.from}, to=${decoded.to}`
+                );
+
                 await db
                   .update(schema.tokens)
                   .set({
-                    gameOver: decoded.gameOver,
-                    completedAllObjectives: decoded.completedAllObjectives,
+                    ownerAddress: decoded.to,
                     lastUpdatedBlock: blockNumber,
                     lastUpdatedAt: blockTimestamp,
                   })
-                  .where(eq(schema.tokens.tokenId, decoded.id));
-              } else {
-                // New token - insert with all fields from event
-                // Note: owner_address needs to come from Transfer event
-                // For now, use zero address as placeholder
-                // TODO: u64 version of the tokenID, just do a database counter
-                await db
-                  .insert(schema.tokens)
-                  .values({
-                    tokenId: decoded.id,
-                    gameId: Number(decoded.gameId),
-                    mintedBy: decoded.mintedBy,
-                    settingsId: decoded.settingsId,
-                    mintedAt: new Date(Number(decoded.mintedAt) * 1000),
-                    lifecycleStart: Number(decoded.lifecycleStart),
-                    lifecycleEnd: Number(decoded.lifecycleEnd),
-                    objectivesCount: decoded.objectivesCount,
-                    soulbound: decoded.soulbound,
-                    hasContext: decoded.hasContext,
-                    sequenceNumber: decoded.id, // Use token ID as sequence for now
-                    gameOver: decoded.gameOver,
-                    completedAllObjectives: decoded.completedAllObjectives,
-                    ownerAddress: "0x0", // Will be updated by Transfer event
-                    createdAtBlock: blockNumber,
-                    lastUpdatedBlock: blockNumber,
-                    lastUpdatedAt: blockTimestamp,
-                  })
-                  .onConflictDoUpdate({
-                    target: schema.tokens.tokenId,
-                    set: {
-                      gameOver: decoded.gameOver,
-                      completedAllObjectives: decoded.completedAllObjectives,
-                      lastUpdatedBlock: blockNumber,
-                      lastUpdatedAt: blockTimestamp,
-                    },
-                  });
+                  .where(eq(schema.tokens.tokenId, decoded.tokenId));
               }
 
               // Log event for audit trail
-              await db
-                .insert(schema.tokenEvents)
-                .values({
-                  tokenId: decoded.id,
-                  eventType: "metadata_update",
-                  eventData: stringifyWithBigInt(decoded),
-                  blockNumber,
-                  blockTimestamp,
-                  transactionHash,
-                  eventIndex,
-                })
-                .onConflictDoNothing();
+              await db.insert(schema.tokenEvents).values({
+                tokenId: decoded.tokenId,
+                eventType: isMint ? "mint" : "transfer",
+                eventData: stringifyWithBigInt(decoded),
+                blockNumber,
+                blockTimestamp,
+                transactionHash,
+                eventIndex,
+              }).onConflictDoNothing();
 
               break;
             }
@@ -332,27 +334,189 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
               break;
             }
 
-            case EVENT_SELECTORS.MetadataUpdate: {
-              // ERC721 standard metadata refresh event
-              // This is informational - clients should refetch token metadata
-              const decoded = decodeMetadataUpdate(keys);
-              logger.debug(`MetadataUpdate: token_id=${decoded.tokenId}`);
+            case EVENT_SELECTORS.GameOver: {
+              const decoded = decodeGameOver(keys);
+              logger.info(`GameOver: token_id=${decoded.tokenId}`);
 
-              // Update last_updated timestamp
               await db
                 .update(schema.tokens)
                 .set({
+                  gameOver: true,
                   lastUpdatedBlock: blockNumber,
                   lastUpdatedAt: blockTimestamp,
                 })
                 .where(eq(schema.tokens.tokenId, decoded.tokenId));
 
+              // Log event for audit trail
+              await db.insert(schema.tokenEvents).values({
+                tokenId: decoded.tokenId,
+                eventType: "game_over",
+                eventData: stringifyWithBigInt(decoded),
+                blockNumber,
+                blockTimestamp,
+                transactionHash,
+                eventIndex,
+              }).onConflictDoNothing();
+
+              break;
+            }
+
+            case EVENT_SELECTORS.CompletedObjective: {
+              const decoded = decodeCompletedObjective(keys);
+              logger.info(`CompletedObjective: token_id=${decoded.tokenId}`);
+
+              await db
+                .update(schema.tokens)
+                .set({
+                  completedAllObjectives: true,
+                  lastUpdatedBlock: blockNumber,
+                  lastUpdatedAt: blockTimestamp,
+                })
+                .where(eq(schema.tokens.tokenId, decoded.tokenId));
+
+              // Log event for audit trail
+              await db.insert(schema.tokenEvents).values({
+                tokenId: decoded.tokenId,
+                eventType: "completed_objective",
+                eventData: stringifyWithBigInt(decoded),
+                blockNumber,
+                blockTimestamp,
+                transactionHash,
+                eventIndex,
+              }).onConflictDoNothing();
+
+              break;
+            }
+
+            case EVENT_SELECTORS.MinterRegistryUpdate: {
+              const decoded = decodeMinterRegistryUpdate(keys, data);
+              logger.info(
+                `MinterRegistryUpdate: minter_id=${decoded.minterId}, address=${decoded.minterAddress}`
+              );
+
+              await db.insert(schema.minters).values({
+                minterId: decoded.minterId,
+                contractAddress: decoded.minterAddress,
+                blockNumber,
+              }).onConflictDoUpdate({
+                target: schema.minters.minterId,
+                set: {
+                  contractAddress: decoded.minterAddress,
+                  blockNumber,
+                },
+              });
+
+              break;
+            }
+
+            case EVENT_SELECTORS.TokenContextUpdate: {
+              const decoded = decodeTokenContextUpdate(keys, data);
+              logger.info(
+                `TokenContextUpdate: token_id=${decoded.tokenId}, data_len=${decoded.data.length}`
+              );
+
+              await db
+                .update(schema.tokens)
+                .set({
+                  contextData: decoded.data,
+                  lastUpdatedBlock: blockNumber,
+                  lastUpdatedAt: blockTimestamp,
+                })
+                .where(eq(schema.tokens.tokenId, decoded.tokenId));
+
+              // Log event for audit trail
+              await db.insert(schema.tokenEvents).values({
+                tokenId: decoded.tokenId,
+                eventType: "context_update",
+                eventData: stringifyWithBigInt(decoded),
+                blockNumber,
+                blockTimestamp,
+                transactionHash,
+                eventIndex,
+              }).onConflictDoNothing();
+
+              break;
+            }
+
+            case EVENT_SELECTORS.ObjectiveCreated: {
+              const decoded = decodeObjectiveCreated(keys, data);
+              logger.info(
+                `ObjectiveCreated: game=${decoded.gameAddress}, objective_id=${decoded.objectiveId}`
+              );
+
+              await db.insert(schema.objectives).values({
+                gameAddress: decoded.gameAddress,
+                objectiveId: decoded.objectiveId,
+                creatorAddress: decoded.creatorAddress,
+                objectiveData: decoded.objectiveData,
+                blockNumber,
+              }).onConflictDoUpdate({
+                target: [schema.objectives.gameAddress, schema.objectives.objectiveId],
+                set: {
+                  creatorAddress: decoded.creatorAddress,
+                  objectiveData: decoded.objectiveData,
+                  blockNumber,
+                },
+              });
+
+              break;
+            }
+
+            case EVENT_SELECTORS.SettingsCreated: {
+              const decoded = decodeSettingsCreated(keys, data);
+              logger.info(
+                `SettingsCreated: game=${decoded.gameAddress}, settings_id=${decoded.settingsId}`
+              );
+
+              await db.insert(schema.settings).values({
+                gameAddress: decoded.gameAddress,
+                settingsId: decoded.settingsId,
+                creatorAddress: decoded.creatorAddress,
+                settingsData: decoded.settingsData,
+                blockNumber,
+              }).onConflictDoUpdate({
+                target: [schema.settings.gameAddress, schema.settings.settingsId],
+                set: {
+                  creatorAddress: decoded.creatorAddress,
+                  settingsData: decoded.settingsData,
+                  blockNumber,
+                },
+              });
+
+              break;
+            }
+
+            case EVENT_SELECTORS.TokenRendererUpdate: {
+              const decoded = decodeTokenRendererUpdate(keys, data);
+              logger.info(
+                `TokenRendererUpdate: token_id=${decoded.tokenId}, renderer=${decoded.renderer}`
+              );
+
+              await db
+                .update(schema.tokens)
+                .set({
+                  rendererAddress: decoded.renderer,
+                  lastUpdatedBlock: blockNumber,
+                  lastUpdatedAt: blockTimestamp,
+                })
+                .where(eq(schema.tokens.tokenId, decoded.tokenId));
+
+              // Log event for audit trail
+              await db.insert(schema.tokenEvents).values({
+                tokenId: decoded.tokenId,
+                eventType: "renderer_update",
+                eventData: stringifyWithBigInt(decoded),
+                blockNumber,
+                blockTimestamp,
+                transactionHash,
+                eventIndex,
+              }).onConflictDoNothing();
+
               break;
             }
 
             default:
-              // Unknown event - could be OZ component events (Ownable, Upgradeable, Transfer)
-              // Transfer events would need to be handled to track ownership
+              // Unknown event - could be OZ component events (Ownable, Upgradeable)
               logger.debug(`Unknown event selector: ${selector}`);
               break;
           }
