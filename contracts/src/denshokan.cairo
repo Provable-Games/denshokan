@@ -174,7 +174,7 @@ pub mod Denshokan {
 
             let token_metadata: TokenMetadata = self
                 .core_token
-                .get_token_metadata(token_id.try_into().unwrap());
+                .token_metadata(token_id.try_into().unwrap());
 
             // Try to get the token URI from the game contract if available
             if token_metadata.game_id != 0 {
@@ -207,9 +207,9 @@ pub mod Denshokan {
                         game_address, score_selector, token_calldata.span(),
                     ) {
                     Result::Ok(result) => {
-                        // Try to deserialize the result as u32
+                        // Try to deserialize the result as u64
                         let mut result_span = result;
-                        match Serde::<u32>::deserialize(ref result_span) {
+                        match Serde::<u64>::deserialize(ref result_span) {
                             Option::Some(score) => score,
                             Option::None => 0,
                         }
@@ -329,10 +329,6 @@ pub mod Denshokan {
                         name: "", description: "", id: Option::None, context: array![].span(),
                     },
                 };
-                // Note: objectives are now tracked as a single objective_id in token metadata
-                // The objective_ids parameter is kept for backwards compatibility
-                let objective_ids: Span<u32> = array![].span();
-
                 create_custom_metadata(
                     token_id.try_into().unwrap(),
                     token_name,
@@ -346,7 +342,6 @@ pub mod Denshokan {
                     score,
                     minted_by_address,
                     player_name,
-                    objective_ids,
                 )
             } else {
                 // return the blank NFT renderer
@@ -363,8 +358,7 @@ pub mod Denshokan {
         fn royalty_info(
             self: @ContractState, token_id: u256, sale_price: u256,
         ) -> (ContractAddress, u256) {
-            let token_id_u64: u64 = token_id.try_into().unwrap();
-            let metadata = self.core_token.get_token_metadata(token_id_u64);
+            let metadata = self.core_token.token_metadata(token_id.try_into().unwrap());
             let game_registry_address = self.core_token.game_registry_address();
 
             // Multi-game token: get royalty info from registry with dynamic receiver

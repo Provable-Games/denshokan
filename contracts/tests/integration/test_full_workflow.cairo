@@ -52,6 +52,9 @@ fn test_complete_game_registration_and_token_lifecycle() {
             Option::None,
             ALICE(),
             false,
+            false,
+            0,
+            0,
         );
 
     // Verify token metadata
@@ -126,7 +129,7 @@ fn test_multiple_players_single_game() {
 
     // Multiple players mint tokens for the same game
     let players = array![ALICE(), BOB()];
-    let mut token_ids: Array<u64> = array![];
+    let mut token_ids: Array<felt252> = array![];
 
     let mut i: u32 = 0;
     while i < players.len() {
@@ -147,6 +150,9 @@ fn test_multiple_players_single_game() {
                 Option::None,
                 player,
                 false,
+                false,
+                0,
+                0,
             );
 
         token_ids.append(token_id);
@@ -197,6 +203,9 @@ fn test_game_creator_updates_royalty_fraction() {
             Option::None,
             ALICE(),
             false,
+            false,
+            0,
+            0,
         );
 
     // Verify initial royalty

@@ -35,7 +35,10 @@ fn test_soulbound_token_prevents_transfer() {
             Option::None,
             Option::None,
             ALICE(),
-            true // is_soulbound = true
+            true, // is_soulbound = true
+            false,
+            0,
+            0,
         );
 
     // Verify token is soulbound
@@ -79,7 +82,10 @@ fn test_soulbound_token_transfer_panics() {
             Option::None,
             Option::None,
             ALICE(),
-            true // is_soulbound = true
+            true, // is_soulbound = true
+            false,
+            0,
+            0,
         );
 
     // Try to transfer - this should panic
@@ -113,7 +119,10 @@ fn test_non_soulbound_token_can_transfer() {
             Option::None,
             Option::None,
             ALICE(),
-            false // is_soulbound = false
+            false, // is_soulbound = false
+            false,
+            0,
+            0,
         );
 
     // Verify token is not soulbound
@@ -162,7 +171,10 @@ fn test_soulbound_check_only_on_transfer() {
             Option::None,
             Option::None,
             ALICE(),
-            true // is_soulbound = true
+            true, // is_soulbound = true
+            false,
+            0,
+            0,
         );
 
     // Minting (from zero address) should succeed
