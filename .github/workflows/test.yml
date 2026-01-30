@@ -1,0 +1,100 @@
+name: lint and test
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - ".github/**"
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  contracts:
+    name: lint and test contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract scarb version
+        run: |
+          SCARB_VERSION=$(grep '^scarb ' contracts/.tool-versions | awk '{print $2}')
+          echo "SCARB_VERSION=$SCARB_VERSION" >> "$GITHUB_ENV"
+
+      - uses: software-mansion/setup-scarb@v1
+        with:
+          scarb-version: ${{ env.SCARB_VERSION }}
+
+      - name: Extract foundry version
+        run: |
+          FOUNDRY_VERSION=$(grep '^starknet-foundry ' contracts/.tool-versions | awk '{print $2}')
+          echo "FOUNDRY_VERSION=$FOUNDRY_VERSION" >> "$GITHUB_ENV"
+
+      - uses: foundry-rs/setup-snfoundry@v4
+        with:
+          starknet-foundry-version: ${{ env.FOUNDRY_VERSION }}
+
+      - name: Cache Scarb dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/scarb
+            contracts/target/
+          key: ${{ runner.os }}-scarb-${{ hashFiles('contracts/Scarb.toml', 'contracts/Scarb.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-scarb-
+
+      - name: Cache tools
+        uses: actions/cache@v4
+        id: cache-tools
+        with:
+          path: |
+            ~/.local/bin/cairo-coverage
+            ~/.local/bin/universal-sierra-compiler
+          key: ${{ runner.os }}-tools-cairo-coverage-universal-sierra-compiler-v1
+          restore-keys: |
+            ${{ runner.os }}-tools-
+
+      - name: Install tools
+        if: steps.cache-tools.outputs.cache-hit != 'true'
+        run: |
+          (curl -L https://raw.githubusercontent.com/software-mansion/cairo-coverage/main/scripts/install.sh | sh) &
+          (curl -L https://raw.githubusercontent.com/software-mansion/universal-sierra-compiler/master/scripts/install.sh | sh) &
+          wait
+
+      - name: Cairo lint
+        run: cd contracts && scarb fmt --check
+
+      - name: Run tests with coverage
+        run: cd contracts && snforge test --coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./contracts/coverage.lcov
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  indexer:
+    name: typecheck indexer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: TypeScript check
+        run: cd indexer && npx tsc --noEmit
