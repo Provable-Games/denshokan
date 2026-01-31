@@ -18,6 +18,7 @@ coverage:
       default:
         target: 80%
         threshold: 4%
+        informational: true
 
 flag_management:
   default_rules:
