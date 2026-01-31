@@ -5,6 +5,8 @@ node_modules/
 # Build outputs
 contracts/target/
 indexer/dist/
+api/dist/
+client/dist/
 *.sierra.json
 *.casm.json
 
