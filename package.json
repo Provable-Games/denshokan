@@ -5,7 +5,8 @@
   "private": true,
   "workspaces": [
     "indexer",
-    "api"
+    "api",
+    "client"
   ],
   "scripts": {
     "build:contracts": "cd contracts && scarb build",
@@ -16,6 +17,8 @@
     "dev:indexer": "cd indexer && npm run dev",
     "build:api": "cd api && npm run build",
     "dev:api": "cd api && npm run dev",
+    "dev:client": "cd client && npm run dev",
+    "build:client": "cd client && npm run build",
     "db:migrate": "cd indexer && npm run db:migrate",
     "db:generate": "cd indexer && npm run db:generate",
     "test": "npm run test:contracts",

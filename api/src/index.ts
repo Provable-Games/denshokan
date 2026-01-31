@@ -10,6 +10,8 @@ import { createWSEvents } from "./ws/subscriptions.js";
 import tokensRouter from "./routes/tokens.js";
 import gamesRouter from "./routes/games.js";
 import activityRouter from "./routes/activity.js";
+import playersRouter from "./routes/players.js";
+import mintersRouter from "./routes/minters.js";
 
 const app = new Hono();
 const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app });
@@ -29,6 +31,8 @@ app.get("/health", async (c) => {
 app.route("/tokens", tokensRouter);
 app.route("/games", gamesRouter);
 app.route("/activity", activityRouter);
+app.route("/players", playersRouter);
+app.route("/minters", mintersRouter);
 
 // WebSocket
 app.get("/ws", upgradeWebSocket(() => createWSEvents()));
