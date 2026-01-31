@@ -188,177 +188,161 @@ pub mod Denshokan {
                 .core_token
                 .token_metadata(token_id.try_into().unwrap());
 
-            // Try to get the token URI from the game contract if available
-            if token_metadata.game_id != 0 {
-                let game_registry_address = self.core_token.game_registry_address();
-                let game_registry_dispatcher = IMinigameRegistryDispatcher {
-                    contract_address: game_registry_address,
-                };
-                let game_metadata = game_registry_dispatcher.game_metadata(token_metadata.game_id);
-                let game_address = game_metadata.contract_address;
-                let renderer_address = self
-                    .core_token
-                    .renderer_address(token_id.try_into().unwrap());
-                let player_name = self.core_token.player_name(token_id.try_into().unwrap());
-                let game_dispatcher = IMinigameDispatcher { contract_address: game_address };
-                let settings_address = game_dispatcher.settings_address();
+            let game_registry_address = self.core_token.game_registry_address();
+            let game_registry_dispatcher = IMinigameRegistryDispatcher {
+                contract_address: game_registry_address,
+            };
+            let game_metadata = game_registry_dispatcher.game_metadata(token_metadata.game_id);
+            let game_address = game_metadata.contract_address;
+            let renderer_address = self.core_token.renderer_address(token_id.try_into().unwrap());
+            let player_name = self.core_token.player_name(token_id.try_into().unwrap());
+            let game_dispatcher = IMinigameDispatcher { contract_address: game_address };
+            let settings_address = game_dispatcher.settings_address();
 
-                let score_selector = selector!("score");
-                let token_name_selector = selector!("token_name");
-                let token_description_selector = selector!("token_description");
-                let game_details_svg_selector = selector!("game_details_svg");
-                let game_details_selector = selector!("game_details");
-                let settings_details_selector = selector!("settings_details");
-                let context_details_selector = selector!("context_details");
+            let score_selector = selector!("score");
+            let token_name_selector = selector!("token_name");
+            let token_description_selector = selector!("token_description");
+            let game_details_svg_selector = selector!("game_details_svg");
+            let game_details_selector = selector!("game_details");
+            let settings_details_selector = selector!("settings_details");
+            let context_details_selector = selector!("context_details");
 
-                let mut token_calldata = array![];
-                token_calldata.append(token_id.low.into());
+            let mut token_calldata = array![];
+            token_calldata.append(token_id.low.into());
 
-                let score =
-                    match call_contract_syscall(
-                        game_address, score_selector, token_calldata.span(),
-                    ) {
-                    Result::Ok(result) => {
-                        // Try to deserialize the result as u64
-                        let mut result_span = result;
-                        match Serde::<u64>::deserialize(ref result_span) {
-                            Option::Some(score) => score,
-                            Option::None => 0,
-                        }
-                    },
-                    Result::Err(_) => 0,
-                };
+            let score =
+                match call_contract_syscall(game_address, score_selector, token_calldata.span()) {
+                Result::Ok(result) => {
+                    // Try to deserialize the result as u64
+                    let mut result_span = result;
+                    match Serde::<u64>::deserialize(ref result_span) {
+                        Option::Some(score) => score,
+                        Option::None => 0,
+                    }
+                },
+                Result::Err(_) => 0,
+            };
 
-                let token_name =
-                    match call_contract_syscall(
-                        renderer_address, token_name_selector, token_calldata.span(),
-                    ) {
-                    Result::Ok(result) => {
-                        // Try to deserialize the result as ByteArray
-                        let mut result_span = result;
-                        match Serde::<ByteArray>::deserialize(ref result_span) {
-                            Option::Some(token_name) => token_name,
-                            Option::None => game_metadata.name.clone(),
-                        }
-                    },
-                    Result::Err(_) => game_metadata.name.clone(),
-                };
+            let token_name =
+                match call_contract_syscall(
+                    renderer_address, token_name_selector, token_calldata.span(),
+                ) {
+                Result::Ok(result) => {
+                    // Try to deserialize the result as ByteArray
+                    let mut result_span = result;
+                    match Serde::<ByteArray>::deserialize(ref result_span) {
+                        Option::Some(token_name) => token_name,
+                        Option::None => game_metadata.name.clone(),
+                    }
+                },
+                Result::Err(_) => game_metadata.name.clone(),
+            };
 
-                let token_description =
-                    match call_contract_syscall(
-                        renderer_address, token_description_selector, token_calldata.span(),
-                    ) {
-                    Result::Ok(result) => {
-                        // Try to deserialize the result as ByteArray
-                        let mut result_span = result;
-                        match Serde::<ByteArray>::deserialize(ref result_span) {
-                            Option::Some(token_description) => token_description,
-                            Option::None => "An NFT representing ownership of an embeddable game.",
-                        }
-                    },
-                    Result::Err(_) => "An NFT representing ownership of an embeddable game.",
-                };
+            let token_description =
+                match call_contract_syscall(
+                    renderer_address, token_description_selector, token_calldata.span(),
+                ) {
+                Result::Ok(result) => {
+                    // Try to deserialize the result as ByteArray
+                    let mut result_span = result;
+                    match Serde::<ByteArray>::deserialize(ref result_span) {
+                        Option::Some(token_description) => token_description,
+                        Option::None => "An NFT representing ownership of an embeddable game.",
+                    }
+                },
+                Result::Err(_) => "An NFT representing ownership of an embeddable game.",
+            };
 
-                let game_details_svg =
-                    match call_contract_syscall(
-                        renderer_address, game_details_svg_selector, token_calldata.span(),
-                    ) {
-                    Result::Ok(result) => {
-                        // Try to deserialize the result as ByteArray
-                        let mut result_span = result;
-                        match Serde::<ByteArray>::deserialize(ref result_span) {
-                            Option::Some(game_details_svg) => game_details_svg,
-                            Option::None => create_default_svg(
-                                token_id.try_into().unwrap(),
-                                game_metadata.clone(),
-                                score,
-                                player_name,
-                            ),
-                        }
-                    },
-                    Result::Err(_) => create_default_svg(
-                        token_id.try_into().unwrap(), game_metadata.clone(), score, player_name,
-                    ),
-                };
+            let game_details_svg =
+                match call_contract_syscall(
+                    renderer_address, game_details_svg_selector, token_calldata.span(),
+                ) {
+                Result::Ok(result) => {
+                    // Try to deserialize the result as ByteArray
+                    let mut result_span = result;
+                    match Serde::<ByteArray>::deserialize(ref result_span) {
+                        Option::Some(game_details_svg) => game_details_svg,
+                        Option::None => create_default_svg(
+                            token_id.try_into().unwrap(), game_metadata.clone(), score, player_name,
+                        ),
+                    }
+                },
+                Result::Err(_) => create_default_svg(
+                    token_id.try_into().unwrap(), game_metadata.clone(), score, player_name,
+                ),
+            };
 
-                let game_details =
-                    match call_contract_syscall(
-                        renderer_address, game_details_selector, token_calldata.span(),
-                    ) {
-                    Result::Ok(result) => {
-                        // Try to deserialize the result as Span<GameDetail>
-                        let mut result_span = result;
-                        match Serde::<Span<GameDetail>>::deserialize(ref result_span) {
-                            Option::Some(game_details) => game_details,
-                            Option::None => array![].span(),
-                        }
-                    },
-                    Result::Err(_) => array![].span(),
-                };
+            let game_details =
+                match call_contract_syscall(
+                    renderer_address, game_details_selector, token_calldata.span(),
+                ) {
+                Result::Ok(result) => {
+                    // Try to deserialize the result as Span<GameDetail>
+                    let mut result_span = result;
+                    match Serde::<Span<GameDetail>>::deserialize(ref result_span) {
+                        Option::Some(game_details) => game_details,
+                        Option::None => array![].span(),
+                    }
+                },
+                Result::Err(_) => array![].span(),
+            };
 
-                let mut settings_calldata = array![];
-                settings_calldata.append(token_metadata.settings_id.into());
+            let mut settings_calldata = array![];
+            settings_calldata.append(token_metadata.settings_id.into());
 
-                let settings_details =
-                    match call_contract_syscall(
-                        settings_address, settings_details_selector, settings_calldata.span(),
-                    ) {
-                    Result::Ok(result) => {
-                        // Try to deserialize the result as GameSettingDetails
-                        let mut result_span = result;
-                        match Serde::<GameSettingDetails>::deserialize(ref result_span) {
-                            Option::Some(settings_details) => settings_details,
-                            Option::None => GameSettingDetails {
-                                name: "", description: "", settings: array![].span(),
-                            },
-                        }
-                    },
-                    Result::Err(_) => GameSettingDetails {
-                        name: "", description: "", settings: array![].span(),
-                    },
-                };
+            let settings_details =
+                match call_contract_syscall(
+                    settings_address, settings_details_selector, settings_calldata.span(),
+                ) {
+                Result::Ok(result) => {
+                    // Try to deserialize the result as GameSettingDetails
+                    let mut result_span = result;
+                    match Serde::<GameSettingDetails>::deserialize(ref result_span) {
+                        Option::Some(settings_details) => settings_details,
+                        Option::None => GameSettingDetails {
+                            name: "", description: "", settings: array![].span(),
+                        },
+                    }
+                },
+                Result::Err(_) => GameSettingDetails {
+                    name: "", description: "", settings: array![].span(),
+                },
+            };
 
-                let minted_by_address = self.minter.get_minter_address(token_metadata.minted_by);
+            let minted_by_address = self.minter.get_minter_address(token_metadata.minted_by);
 
-                let context_details =
-                    match call_contract_syscall(
-                        minted_by_address, context_details_selector, token_calldata.span(),
-                    ) {
-                    Result::Ok(result) => {
-                        // Try to deserialize the result as GameContextDetails
-                        let mut result_span = result;
-                        match Serde::<GameContextDetails>::deserialize(ref result_span) {
-                            Option::Some(settings_details) => settings_details,
-                            Option::None => GameContextDetails {
-                                name: "",
-                                description: "",
-                                id: Option::None,
-                                context: array![].span(),
-                            },
-                        }
-                    },
-                    Result::Err(_) => GameContextDetails {
-                        name: "", description: "", id: Option::None, context: array![].span(),
-                    },
-                };
-                create_custom_metadata(
-                    token_id.try_into().unwrap(),
-                    token_name,
-                    token_description,
-                    game_metadata,
-                    game_details_svg,
-                    game_details,
-                    settings_details,
-                    context_details,
-                    token_metadata,
-                    score,
-                    minted_by_address,
-                    player_name,
-                )
-            } else {
-                // return the blank NFT renderer
-                "https://denshokan.dev/game/1"
-            }
+            let context_details =
+                match call_contract_syscall(
+                    minted_by_address, context_details_selector, token_calldata.span(),
+                ) {
+                Result::Ok(result) => {
+                    // Try to deserialize the result as GameContextDetails
+                    let mut result_span = result;
+                    match Serde::<GameContextDetails>::deserialize(ref result_span) {
+                        Option::Some(settings_details) => settings_details,
+                        Option::None => GameContextDetails {
+                            name: "", description: "", id: Option::None, context: array![].span(),
+                        },
+                    }
+                },
+                Result::Err(_) => GameContextDetails {
+                    name: "", description: "", id: Option::None, context: array![].span(),
+                },
+            };
+            create_custom_metadata(
+                token_id.try_into().unwrap(),
+                token_name,
+                token_description,
+                game_metadata,
+                game_details_svg,
+                game_details,
+                settings_details,
+                context_details,
+                token_metadata,
+                score,
+                minted_by_address,
+                player_name,
+            )
         }
     }
 
