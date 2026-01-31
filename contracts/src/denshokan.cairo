@@ -194,9 +194,7 @@ pub mod Denshokan {
             };
             let game_metadata = game_registry_dispatcher.game_metadata(token_metadata.game_id);
             let game_address = game_metadata.contract_address;
-            let renderer_address = self
-                .core_token
-                .renderer_address(token_id.try_into().unwrap());
+            let renderer_address = self.core_token.renderer_address(token_id.try_into().unwrap());
             let player_name = self.core_token.player_name(token_id.try_into().unwrap());
             let game_dispatcher = IMinigameDispatcher { contract_address: game_address };
             let settings_address = game_dispatcher.settings_address();
@@ -213,9 +211,7 @@ pub mod Denshokan {
             token_calldata.append(token_id.low.into());
 
             let score =
-                match call_contract_syscall(
-                    game_address, score_selector, token_calldata.span(),
-                ) {
+                match call_contract_syscall(game_address, score_selector, token_calldata.span()) {
                 Result::Ok(result) => {
                     // Try to deserialize the result as u64
                     let mut result_span = result;
@@ -267,10 +263,7 @@ pub mod Denshokan {
                     match Serde::<ByteArray>::deserialize(ref result_span) {
                         Option::Some(game_details_svg) => game_details_svg,
                         Option::None => create_default_svg(
-                            token_id.try_into().unwrap(),
-                            game_metadata.clone(),
-                            score,
-                            player_name,
+                            token_id.try_into().unwrap(), game_metadata.clone(), score, player_name,
                         ),
                     }
                 },
@@ -328,10 +321,7 @@ pub mod Denshokan {
                     match Serde::<GameContextDetails>::deserialize(ref result_span) {
                         Option::Some(settings_details) => settings_details,
                         Option::None => GameContextDetails {
-                            name: "",
-                            description: "",
-                            id: Option::None,
-                            context: array![].span(),
+                            name: "", description: "", id: Option::None, context: array![].span(),
                         },
                     }
                 },
