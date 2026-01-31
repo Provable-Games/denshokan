@@ -27,6 +27,7 @@ use openzeppelin_token::common::erc2981::erc2981::{DefaultConfig, ERC2981Compone
 
 // Core imports
 use openzeppelin_token::erc721::ERC721Component;
+use openzeppelin_token::erc721::extensions::erc721_enumerable::ERC721EnumerableComponent;
 use starknet::ContractAddress;
 use starknet::storage::StoragePointerReadAccess;
 use starknet::syscalls::call_contract_syscall;
@@ -48,6 +49,9 @@ pub mod Denshokan {
     component!(path: ERC2981Component, storage: erc2981, event: ERC2981Event);
     component!(path: SRC5Component, storage: src5, event: SRC5Event);
     component!(path: CoreTokenComponent, storage: core_token, event: CoreTokenEvent);
+    component!(
+        path: ERC721EnumerableComponent, storage: erc721_enumerable, event: ERC721EnumerableEvent,
+    );
 
     // Optional components (only included if enabled)
     component!(path: MinterComponent, storage: minter, event: MinterEvent);
@@ -71,6 +75,8 @@ pub mod Denshokan {
         src5: SRC5Component::Storage,
         #[substorage(v0)]
         core_token: CoreTokenComponent::Storage,
+        #[substorage(v0)]
+        erc721_enumerable: ERC721EnumerableComponent::Storage,
         // Optional storage (only included if features are enabled)
         #[substorage(v0)]
         minter: MinterComponent::Storage,
@@ -100,6 +106,8 @@ pub mod Denshokan {
         #[flat]
         CoreTokenEvent: CoreTokenComponent::Event,
         #[flat]
+        ERC721EnumerableEvent: ERC721EnumerableComponent::Event,
+        #[flat]
         MinterEvent: MinterComponent::Event,
         #[flat]
         ObjectivesEvent: ObjectivesComponent::Event,
@@ -122,6 +130,9 @@ pub mod Denshokan {
     impl SRC5Impl = SRC5Component::SRC5Impl<ContractState>;
     #[abi(embed_v0)]
     impl CoreTokenImpl = CoreTokenComponent::CoreTokenImpl<ContractState>;
+    #[abi(embed_v0)]
+    impl ERC721EnumerableImpl =
+        ERC721EnumerableComponent::ERC721EnumerableImpl<ContractState>;
 
     // Optional implementations (conditional based on feature flags)
     #[abi(embed_v0)]
@@ -143,6 +154,7 @@ pub mod Denshokan {
     impl SettingsInternalImpl = SettingsComponent::InternalImpl<ContractState>;
     impl ContextInternalImpl = ContextComponent::InternalImpl<ContractState>;
     impl RendererInternalImpl = RendererComponent::InternalImpl<ContractState>;
+    impl ERC721EnumerableInternalImpl = ERC721EnumerableComponent::InternalImpl<ContractState>;
 
     // ================================================================================================
     // OPTIONAL TRAIT IMPLEMENTATIONS
@@ -407,6 +419,10 @@ pub mod Denshokan {
                     panic!("Token is soulbound and cannot be transferred");
                 }
             }
+
+            // Update ERC721Enumerable tracking
+            let mut contract_state = self.get_contract_mut();
+            contract_state.erc721_enumerable.before_update(to, token_id);
         }
 
         fn after_update(
@@ -442,6 +458,7 @@ pub mod Denshokan {
             .core_token
             .initializer(Option::None, Option::None, Option::Some(game_registry_address));
 
+        self.erc721_enumerable.initializer();
         self.minter.initializer();
         self.objectives.initializer();
         self.settings.initializer();
