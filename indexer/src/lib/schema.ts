@@ -11,7 +11,11 @@
  * 2. score_history - historical score snapshots for charts/analytics
  * 3. games - game registry cache
  * 4. minters - minter registry cache
- * 5. indexer_state - cursor persistence for restart handling
+ * 5. token_events - raw event audit log
+ * 6. game_leaderboards - pre-computed leaderboard data
+ * 7. game_stats - aggregated per-game statistics
+ * 8. objectives - game objective definitions
+ * 9. settings - game settings definitions
  */
 
 import {
@@ -25,7 +29,6 @@ import {
   index,
   uniqueIndex,
   numeric,
-  smallint,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -50,12 +53,15 @@ export const tokens = pgTable(
     mintedBy: bigint("minted_by", { mode: "bigint" }).notNull(),
     settingsId: integer("settings_id").notNull(),
     mintedAt: timestamp("minted_at").notNull(),
-    lifecycleStart: integer("lifecycle_start").notNull().default(0),
-    lifecycleEnd: integer("lifecycle_end").notNull().default(0),
-    objectivesCount: smallint("objectives_count").notNull().default(0),
+    startDelay: integer("start_delay").notNull().default(0),
+    endDelay: integer("end_delay").notNull().default(0),
+    objectiveId: integer("objective_id").notNull().default(0),
     soulbound: boolean("soulbound").notNull().default(false),
     hasContext: boolean("has_context").notNull().default(false),
-    sequenceNumber: bigint("sequence_number", { mode: "bigint" }).notNull(),
+    paymaster: boolean("paymaster").notNull().default(false),
+    txHash: integer("tx_hash").notNull().default(0),
+    salt: integer("salt").notNull().default(0),
+    metadata: integer("metadata").notNull().default(0),
 
     // Mutable fields (from events)
     gameOver: boolean("game_over").notNull().default(false),
@@ -65,6 +71,11 @@ export const tokens = pgTable(
     ownerAddress: text("owner_address").notNull(),
     playerName: text("player_name"),
     clientUrl: text("client_url"),
+
+    // From TokenContextUpdate
+    contextData: text("context_data"),
+    // From TokenRendererUpdate
+    rendererAddress: text("renderer_address"),
 
     // Current game state
     currentScore: bigint("current_score", { mode: "bigint" }).notNull().$default(() => 0n),
@@ -84,8 +95,8 @@ export const tokens = pgTable(
     index("tokens_owner_game_idx").on(table.ownerAddress, table.gameId),
     // Recent activity
     index("tokens_updated_idx").on(table.lastUpdatedAt),
-    // Sequence number for ordering
-    index("tokens_sequence_idx").on(table.sequenceNumber),
+    // Objective queries
+    index("tokens_objective_idx").on(table.objectiveId),
     // Minter queries
     index("tokens_minted_by_idx").on(table.mintedBy),
     // Settings queries
@@ -177,7 +188,7 @@ export const tokenEvents = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     tokenId: bigint("token_id", { mode: "bigint" }).notNull(),
-    eventType: text("event_type").notNull(), // "score_update", "metadata_update", "player_name", "client_url"
+    eventType: text("event_type").notNull(),
     eventData: text("event_data").notNull(), // JSON encoded event data
     blockNumber: bigint("block_number", { mode: "bigint" }).notNull(),
     blockTimestamp: timestamp("block_timestamp").notNull(),
@@ -242,11 +253,51 @@ export const gameStats = pgTable(
     totalTokens: integer("total_tokens").notNull().default(0),
     completedGames: integer("completed_games").notNull().default(0),
     activeGames: integer("active_games").notNull().default(0),
-    avgScore: numeric("avg_score", { precision: 20, scale: 2 }),
-    highScore: bigint("high_score", { mode: "bigint" }),
     uniquePlayers: integer("unique_players").notNull().default(0),
     lastUpdated: timestamp("last_updated").defaultNow(),
   }
+);
+
+/**
+ * Objectives table - game objective definitions
+ *
+ * Stores objective definitions created via ObjectiveCreated events.
+ */
+export const objectives = pgTable(
+  "objectives",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    gameAddress: text("game_address").notNull(),
+    objectiveId: integer("objective_id").notNull(),
+    creatorAddress: text("creator_address").notNull(),
+    objectiveData: text("objective_data"),
+    blockNumber: bigint("block_number", { mode: "bigint" }).notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("objectives_game_objective_idx").on(table.gameAddress, table.objectiveId),
+  ]
+);
+
+/**
+ * Settings table - game settings definitions
+ *
+ * Stores settings definitions created via SettingsCreated events.
+ */
+export const settings = pgTable(
+  "settings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    gameAddress: text("game_address").notNull(),
+    settingsId: integer("settings_id").notNull(),
+    creatorAddress: text("creator_address").notNull(),
+    settingsData: text("settings_data"),
+    blockNumber: bigint("block_number", { mode: "bigint" }).notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("settings_game_settings_idx").on(table.gameAddress, table.settingsId),
+  ]
 );
 
 // Export all schema tables for Drizzle
@@ -258,4 +309,6 @@ export const schema = {
   tokenEvents,
   gameLeaderboards,
   gameStats,
+  objectives,
+  settings,
 };

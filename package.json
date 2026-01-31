@@ -4,7 +4,8 @@
   "description": "Game token contracts and indexer for Starknet",
   "private": true,
   "workspaces": [
-    "indexer"
+    "indexer",
+    "api"
   ],
   "scripts": {
     "build:contracts": "cd contracts && scarb build",
@@ -13,10 +14,12 @@
     "fmt:contracts": "cd contracts && scarb fmt -w",
     "build:indexer": "cd indexer && npm run build",
     "dev:indexer": "cd indexer && npm run dev",
+    "build:api": "cd api && npm run build",
+    "dev:api": "cd api && npm run dev",
     "db:migrate": "cd indexer && npm run db:migrate",
     "db:generate": "cd indexer && npm run db:generate",
     "test": "npm run test:contracts",
-    "build": "npm run build:contracts && npm run build:indexer",
+    "build": "npm run build:contracts && npm run build:indexer && npm run build:api",
     "fmt": "npm run fmt:contracts"
   },
   "repository": {
