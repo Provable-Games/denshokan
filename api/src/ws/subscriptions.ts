@@ -121,7 +121,8 @@ export function createWSEvents(): WSEvents {
           }
           ws.send(JSON.stringify({ type: "unsubscribed", channels: [...sub.channels] }));
         }
-      } catch {
+      } catch (e) {
+        console.error("[WebSocket] Error processing message:", e);
         ws.send(JSON.stringify({ type: "error", message: "Invalid message format" }));
       }
     },

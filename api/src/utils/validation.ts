@@ -33,21 +33,3 @@ export function parsePositiveInt(value: string | undefined, defaultValue: number
   if (isNaN(num) || num < 1) return defaultValue;
   return num;
 }
-
-export function parsePeriod(value: string | undefined): { start: Date; end: Date } | null {
-  if (!value) return null;
-
-  const now = new Date();
-  switch (value) {
-    case "1h":
-      return { start: new Date(now.getTime() - 3600_000), end: now };
-    case "24h":
-      return { start: new Date(now.getTime() - 86400_000), end: now };
-    case "7d":
-      return { start: new Date(now.getTime() - 7 * 86400_000), end: now };
-    case "30d":
-      return { start: new Date(now.getTime() - 30 * 86400_000), end: now };
-    default:
-      return null;
-  }
-}

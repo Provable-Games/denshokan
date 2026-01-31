@@ -8,7 +8,7 @@ interface RateLimitEntry {
 const store = new Map<string, RateLimitEntry>();
 
 // Clean up expired entries periodically
-setInterval(() => {
+export const cleanupTimer = setInterval(() => {
   const now = Date.now();
   for (const [key, entry] of store) {
     if (now - entry.windowStart > 60_000) {
@@ -21,6 +21,7 @@ function getClientKey(c: Context): string {
   return (
     c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
     c.req.header("x-real-ip") ??
+    (c.env?.incoming as { socket?: { remoteAddress?: string } })?.socket?.remoteAddress ??
     "unknown"
   );
 }

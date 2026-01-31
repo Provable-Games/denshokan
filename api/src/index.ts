@@ -4,7 +4,7 @@ import { serve } from "@hono/node-server";
 import { createNodeWebSocket } from "@hono/node-ws";
 
 import { healthCheck, shutdown } from "./db/client.js";
-import { rateLimit } from "./middleware/rateLimit.js";
+import { rateLimit, cleanupTimer } from "./middleware/rateLimit.js";
 import { createWSEvents } from "./ws/subscriptions.js";
 
 import tokensRouter from "./routes/tokens.js";
@@ -45,6 +45,7 @@ injectWebSocket(server);
 // Graceful shutdown
 function handleShutdown() {
   console.log("[Denshokan API] Shutting down...");
+  clearInterval(cleanupTimer);
   server.close(async () => {
     await shutdown();
     process.exit(0);

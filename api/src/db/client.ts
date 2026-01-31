@@ -19,7 +19,8 @@ export async function healthCheck(): Promise<boolean> {
     await client.query("SELECT 1");
     client.release();
     return true;
-  } catch {
+  } catch (e) {
+    console.error("[DB Health Check] Failed:", e);
     return false;
   }
 }

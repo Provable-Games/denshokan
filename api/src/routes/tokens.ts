@@ -12,7 +12,7 @@ app.get("/", async (c) => {
   const owner = parseAddress(c.req.query("owner"));
   const gameOver = c.req.query("game_over");
   const limit = parsePositiveInt(c.req.query("limit"), 50);
-  const offset = parsePositiveInt(c.req.query("offset"), 0) - 1;
+  const offset = parsePositiveInt(c.req.query("offset"), 0);
 
   const conditions = [];
   if (gameId !== null) conditions.push(eq(tokens.gameId, gameId));

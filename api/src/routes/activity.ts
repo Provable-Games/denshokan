@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { tokenEvents, gameStats } from "../db/schema.js";
 import { parsePositiveInt, parseGameId } from "../utils/validation.js";
@@ -9,13 +9,13 @@ const app = new Hono();
 // GET /activity - Recent token events (paginated)
 app.get("/", async (c) => {
   const limit = parsePositiveInt(c.req.query("limit"), 50);
-  const offset = parsePositiveInt(c.req.query("offset"), 0) - 1;
+  const offset = parsePositiveInt(c.req.query("offset"), 0);
   const eventType = c.req.query("type");
 
   const conditions = [];
   if (eventType) conditions.push(eq(tokenEvents.eventType, eventType));
 
-  const where = conditions.length > 0 ? conditions[0] : undefined;
+  const where = conditions.length > 0 ? and(...conditions) : undefined;
 
   const results = await db
     .select()
