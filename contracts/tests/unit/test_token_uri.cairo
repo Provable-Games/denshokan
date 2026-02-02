@@ -30,7 +30,7 @@ fn mint_for_game(
     cheat_caller_address(*tc.denshokan_address, mock.contract_address, CheatSpan::TargetCalls(1));
     (*tc.token_mixin)
         .mint(
-            Option::Some(game_metadata.contract_address),
+            game_metadata.contract_address,
             Option::None, // player_name
             Option::None, // settings_id
             Option::None, // start_time
@@ -120,7 +120,7 @@ fn test_token_uri_with_player_name() {
     let token_id = tc
         .token_mixin
         .mint(
-            Option::Some(game_metadata.contract_address),
+            game_metadata.contract_address,
             Option::Some('Hero'), // player_name
             Option::None, // settings_id
             Option::None, // start_time

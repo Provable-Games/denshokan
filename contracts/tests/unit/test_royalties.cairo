@@ -40,7 +40,7 @@ fn test_royalty_info_with_dynamic_receiver() {
     let token_id = tc
         .token_mixin
         .mint(
-            Option::Some(game_metadata.contract_address),
+            game_metadata.contract_address,
             Option::None, // player_name
             Option::None, // settings_id
             Option::None, // start_time
@@ -90,7 +90,7 @@ fn test_royalty_receiver_follows_game_creator_token_transfer() {
     let token_id = tc
         .token_mixin
         .mint(
-            Option::Some(game_metadata.contract_address),
+            game_metadata.contract_address,
             Option::None,
             Option::None,
             Option::None,
@@ -146,7 +146,7 @@ fn test_royalty_amount_calculation() {
     let token_id = tc
         .token_mixin
         .mint(
-            Option::Some(game_metadata.contract_address),
+            game_metadata.contract_address,
             Option::None,
             Option::None,
             Option::None,
@@ -203,7 +203,7 @@ fn test_royalty_with_multiple_games() {
     let token_id_1 = tc
         .token_mixin
         .mint(
-            Option::Some(game_1_metadata.contract_address),
+            game_1_metadata.contract_address,
             Option::None,
             Option::None,
             Option::None,
@@ -224,7 +224,7 @@ fn test_royalty_with_multiple_games() {
     let token_id_2 = tc
         .token_mixin
         .mint(
-            Option::Some(game_2_metadata.contract_address),
+            game_2_metadata.contract_address,
             Option::None,
             Option::None,
             Option::None,
@@ -245,7 +245,7 @@ fn test_royalty_with_multiple_games() {
     let token_id_3 = tc
         .token_mixin
         .mint(
-            Option::Some(game_3_metadata.contract_address),
+            game_3_metadata.contract_address,
             Option::None,
             Option::None,
             Option::None,
@@ -299,7 +299,7 @@ fn test_royalty_info_with_zero_sale_price() {
     let token_id = tc
         .token_mixin
         .mint(
-            Option::Some(game_metadata.contract_address),
+            game_metadata.contract_address,
             Option::None,
             Option::None,
             Option::None,

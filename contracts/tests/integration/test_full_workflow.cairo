@@ -41,7 +41,7 @@ fn test_complete_game_registration_and_token_lifecycle() {
     let token_id = tc
         .token_mixin
         .mint(
-            Option::Some(game_metadata.contract_address),
+            game_metadata.contract_address,
             Option::Some('Alice'),
             Option::None,
             Option::None,
@@ -139,7 +139,7 @@ fn test_multiple_players_single_game() {
         let token_id = tc
             .token_mixin
             .mint(
-                Option::Some(game_metadata.contract_address),
+                game_metadata.contract_address,
                 Option::None,
                 Option::None,
                 Option::None,
@@ -192,7 +192,7 @@ fn test_game_creator_updates_royalty_fraction() {
     let token_id = tc
         .token_mixin
         .mint(
-            Option::Some(game_metadata.contract_address),
+            game_metadata.contract_address,
             Option::None,
             Option::None,
             Option::None,
