@@ -15,13 +15,6 @@
       "when": 1769811523921,
       "tag": "0001_schema_updates",
       "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1769897923921,
-      "tag": "0002_notify_triggers",
-      "breakpoints": true
     }
   ]
 }
