@@ -25,7 +25,7 @@ fn test_soulbound_token_prevents_transfer() {
     let token_id = tc
         .token_mixin
         .mint(
-            Option::Some(game_metadata.contract_address),
+            game_metadata.contract_address,
             Option::None,
             Option::None,
             Option::None,
@@ -72,7 +72,7 @@ fn test_soulbound_token_transfer_panics() {
     let token_id = tc
         .token_mixin
         .mint(
-            Option::Some(game_metadata.contract_address),
+            game_metadata.contract_address,
             Option::None,
             Option::None,
             Option::None,
@@ -109,7 +109,7 @@ fn test_non_soulbound_token_can_transfer() {
     let token_id = tc
         .token_mixin
         .mint(
-            Option::Some(game_metadata.contract_address),
+            game_metadata.contract_address,
             Option::None,
             Option::None,
             Option::None,
@@ -161,7 +161,7 @@ fn test_soulbound_check_only_on_transfer() {
     let token_id = tc
         .token_mixin
         .mint(
-            Option::Some(game_metadata.contract_address),
+            game_metadata.contract_address,
             Option::None,
             Option::None,
             Option::None,

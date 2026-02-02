@@ -16,6 +16,9 @@
  * - ObjectiveCreated: New game objective definitions
  * - SettingsCreated: New game settings definitions
  * - TokenRendererUpdate: Token renderer contract updates
+ * - GameRegistryUpdate: Game registration from registry contract
+ * - GameMetadataUpdate: Game metadata from registry contract
+ * - GameRoyaltyUpdate: Game royalty changes from registry contract
  *
  * Architecture Notes:
  * - Uses high-level defineIndexer API for simplicity
@@ -50,13 +53,20 @@ import {
   decodeObjectiveCreated,
   decodeSettingsCreated,
   decodeTokenRendererUpdate,
+  decodeGameRegistryUpdate,
+  decodeGameMetadataUpdate,
+  decodeGameRoyaltyUpdate,
   decodePackedTokenId,
   feltToHex,
   stringifyWithBigInt,
 } from "../src/lib/decoder.js";
 
+/** Convert bigint token ID to string for numeric column storage */
+const toId = (id: bigint) => id.toString();
+
 interface DenshokanConfig {
   contractAddress: string;
+  registryAddress: string;
   streamUrl: string;
   startingBlock: string;
   databaseUrl: string;
@@ -67,19 +77,25 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
   const config = runtimeConfig.denshokan as DenshokanConfig;
   const {
     contractAddress,
+    registryAddress,
     streamUrl,
     startingBlock: startBlockStr,
     databaseUrl,
   } = config;
   const startingBlock = BigInt(startBlockStr);
 
-  // Normalize contract address to ensure proper format
-  const normalizedAddress = contractAddress.toLowerCase().startsWith("0x")
-    ? contractAddress.toLowerCase()
-    : `0x${contractAddress.toLowerCase()}`;
+  // Normalize contract addresses to ensure proper format
+  const normalizeAddress = (addr: string) =>
+    addr.toLowerCase().startsWith("0x")
+      ? addr.toLowerCase()
+      : `0x${addr.toLowerCase()}`;
+
+  const normalizedAddress = normalizeAddress(contractAddress);
+  const normalizedRegistryAddress = normalizeAddress(registryAddress);
 
   // Log configuration on startup
   console.log("[Denshokan Indexer] Contract:", contractAddress);
+  console.log("[Denshokan Indexer] Registry:", registryAddress);
   console.log("[Denshokan Indexer] Stream:", streamUrl);
   console.log("[Denshokan Indexer] Starting Block:", startingBlock.toString());
 
@@ -94,6 +110,9 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
       events: [
         {
           address: normalizedAddress as `0x${string}`,
+        },
+        {
+          address: normalizedRegistryAddress as `0x${string}`,
         },
       ],
     },
@@ -166,7 +185,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                 );
 
                 await db.insert(schema.tokens).values({
-                  tokenId: decoded.tokenId,
+                  tokenId: toId(decoded.tokenId),
                   gameId: packed.gameId,
                   mintedBy: packed.mintedBy,
                   settingsId: packed.settingsId,
@@ -205,12 +224,12 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                     lastUpdatedBlock: blockNumber,
                     lastUpdatedAt: blockTimestamp,
                   })
-                  .where(eq(schema.tokens.tokenId, decoded.tokenId));
+                  .where(eq(schema.tokens.tokenId, toId(decoded.tokenId)));
               }
 
               // Log event for audit trail
               await db.insert(schema.tokenEvents).values({
-                tokenId: decoded.tokenId,
+                tokenId: toId(decoded.tokenId),
                 eventType: isMint ? "mint" : "transfer",
                 eventData: stringifyWithBigInt(decoded),
                 blockNumber,
@@ -236,13 +255,13 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                   lastUpdatedBlock: blockNumber,
                   lastUpdatedAt: blockTimestamp,
                 })
-                .where(eq(schema.tokens.tokenId, decoded.tokenId));
+                .where(eq(schema.tokens.tokenId, toId(decoded.tokenId)));
 
               // Insert score history record
               await db
                 .insert(schema.scoreHistory)
                 .values({
-                  tokenId: decoded.tokenId,
+                  tokenId: toId(decoded.tokenId),
                   score: decoded.score,
                   blockNumber,
                   blockTimestamp,
@@ -255,7 +274,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
               await db
                 .insert(schema.tokenEvents)
                 .values({
-                  tokenId: decoded.tokenId,
+                  tokenId: toId(decoded.tokenId),
                   eventType: "score_update",
                   eventData: stringifyWithBigInt(decoded),
                   blockNumber,
@@ -282,13 +301,13 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                   lastUpdatedBlock: blockNumber,
                   lastUpdatedAt: blockTimestamp,
                 })
-                .where(eq(schema.tokens.tokenId, decoded.id));
+                .where(eq(schema.tokens.tokenId, toId(decoded.id)));
 
               // Log event for audit trail
               await db
                 .insert(schema.tokenEvents)
                 .values({
-                  tokenId: decoded.id,
+                  tokenId: toId(decoded.id),
                   eventType: "player_name",
                   eventData: stringifyWithBigInt(decoded),
                   blockNumber,
@@ -315,13 +334,13 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                   lastUpdatedBlock: blockNumber,
                   lastUpdatedAt: blockTimestamp,
                 })
-                .where(eq(schema.tokens.tokenId, decoded.id));
+                .where(eq(schema.tokens.tokenId, toId(decoded.id)));
 
               // Log event for audit trail
               await db
                 .insert(schema.tokenEvents)
                 .values({
-                  tokenId: decoded.id,
+                  tokenId: toId(decoded.id),
                   eventType: "client_url",
                   eventData: stringifyWithBigInt(decoded),
                   blockNumber,
@@ -345,11 +364,11 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                   lastUpdatedBlock: blockNumber,
                   lastUpdatedAt: blockTimestamp,
                 })
-                .where(eq(schema.tokens.tokenId, decoded.tokenId));
+                .where(eq(schema.tokens.tokenId, toId(decoded.tokenId)));
 
               // Log event for audit trail
               await db.insert(schema.tokenEvents).values({
-                tokenId: decoded.tokenId,
+                tokenId: toId(decoded.tokenId),
                 eventType: "game_over",
                 eventData: stringifyWithBigInt(decoded),
                 blockNumber,
@@ -372,11 +391,11 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                   lastUpdatedBlock: blockNumber,
                   lastUpdatedAt: blockTimestamp,
                 })
-                .where(eq(schema.tokens.tokenId, decoded.tokenId));
+                .where(eq(schema.tokens.tokenId, toId(decoded.tokenId)));
 
               // Log event for audit trail
               await db.insert(schema.tokenEvents).values({
-                tokenId: decoded.tokenId,
+                tokenId: toId(decoded.tokenId),
                 eventType: "completed_objective",
                 eventData: stringifyWithBigInt(decoded),
                 blockNumber,
@@ -422,11 +441,11 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                   lastUpdatedBlock: blockNumber,
                   lastUpdatedAt: blockTimestamp,
                 })
-                .where(eq(schema.tokens.tokenId, decoded.tokenId));
+                .where(eq(schema.tokens.tokenId, toId(decoded.tokenId)));
 
               // Log event for audit trail
               await db.insert(schema.tokenEvents).values({
-                tokenId: decoded.tokenId,
+                tokenId: toId(decoded.tokenId),
                 eventType: "context_update",
                 eventData: stringifyWithBigInt(decoded),
                 blockNumber,
@@ -499,11 +518,11 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                   lastUpdatedBlock: blockNumber,
                   lastUpdatedAt: blockTimestamp,
                 })
-                .where(eq(schema.tokens.tokenId, decoded.tokenId));
+                .where(eq(schema.tokens.tokenId, toId(decoded.tokenId)));
 
               // Log event for audit trail
               await db.insert(schema.tokenEvents).values({
-                tokenId: decoded.tokenId,
+                tokenId: toId(decoded.tokenId),
                 eventType: "renderer_update",
                 eventData: stringifyWithBigInt(decoded),
                 blockNumber,
@@ -511,6 +530,90 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                 transactionHash,
                 eventIndex,
               }).onConflictDoNothing();
+
+              break;
+            }
+
+            case EVENT_SELECTORS.GameRegistryUpdate: {
+              const decoded = decodeGameRegistryUpdate(keys, data);
+              logger.info(
+                `GameRegistryUpdate: game_id=${decoded.gameId}, contract=${decoded.contractAddress}`
+              );
+
+              await db.insert(schema.games).values({
+                gameId: decoded.gameId,
+                contractAddress: decoded.contractAddress,
+                lastUpdatedBlock: blockNumber,
+                lastUpdatedAt: blockTimestamp,
+              }).onConflictDoUpdate({
+                target: schema.games.gameId,
+                set: {
+                  contractAddress: decoded.contractAddress,
+                  lastUpdatedBlock: blockNumber,
+                  lastUpdatedAt: blockTimestamp,
+                },
+              });
+
+              break;
+            }
+
+            case EVENT_SELECTORS.GameMetadataUpdate: {
+              const decoded = decodeGameMetadataUpdate(keys, data);
+              logger.info(
+                `GameMetadataUpdate: game_id=${decoded.gameId}, name=${decoded.name}`
+              );
+
+              await db.insert(schema.games).values({
+                gameId: decoded.gameId,
+                contractAddress: decoded.contractAddress,
+                name: decoded.name,
+                description: decoded.description,
+                image: decoded.image,
+                developer: decoded.developer,
+                publisher: decoded.publisher,
+                genre: decoded.genre,
+                color: decoded.color,
+                clientUrl: decoded.clientUrl,
+                rendererAddress: decoded.rendererAddress,
+                royaltyFraction: decoded.royaltyFraction,
+                lastUpdatedBlock: blockNumber,
+                lastUpdatedAt: blockTimestamp,
+              }).onConflictDoUpdate({
+                target: schema.games.gameId,
+                set: {
+                  contractAddress: decoded.contractAddress,
+                  name: decoded.name,
+                  description: decoded.description,
+                  image: decoded.image,
+                  developer: decoded.developer,
+                  publisher: decoded.publisher,
+                  genre: decoded.genre,
+                  color: decoded.color,
+                  clientUrl: decoded.clientUrl,
+                  rendererAddress: decoded.rendererAddress,
+                  royaltyFraction: decoded.royaltyFraction,
+                  lastUpdatedBlock: blockNumber,
+                  lastUpdatedAt: blockTimestamp,
+                },
+              });
+
+              break;
+            }
+
+            case EVENT_SELECTORS.GameRoyaltyUpdate: {
+              const decoded = decodeGameRoyaltyUpdate(keys, data);
+              logger.info(
+                `GameRoyaltyUpdate: game_id=${decoded.gameId}, fraction=${decoded.royaltyFraction}`
+              );
+
+              await db
+                .update(schema.games)
+                .set({
+                  royaltyFraction: decoded.royaltyFraction,
+                  lastUpdatedBlock: blockNumber,
+                  lastUpdatedAt: blockTimestamp,
+                })
+                .where(eq(schema.games.gameId, decoded.gameId));
 
               break;
             }

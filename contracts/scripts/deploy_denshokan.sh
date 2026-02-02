@@ -10,13 +10,14 @@ set -euo pipefail
 # ============================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONTRACTS_DIR="$SCRIPT_DIR/.."
 
 # Load .env if it exists
-if [ -f "$SCRIPT_DIR/.env" ]; then
+if [ -f "$CONTRACTS_DIR/.env" ]; then
     set -a
-    source "$SCRIPT_DIR/.env"
+    source "$CONTRACTS_DIR/.env"
     set +a
-    echo "Loaded environment variables from $SCRIPT_DIR/.env"
+    echo "Loaded environment variables from $CONTRACTS_DIR/.env"
 fi
 
 # Colors for output
@@ -93,16 +94,16 @@ fi
 # ============================
 
 print_info "Building contracts..."
-cd "$SCRIPT_DIR"
+cd "$CONTRACTS_DIR"
 scarb build
 
 # Verify contract artifacts exist
-if [ ! -f "$SCRIPT_DIR/target/dev/denshokan_Denshokan.contract_class.json" ]; then
+if [ ! -f "$CONTRACTS_DIR/target/dev/denshokan_Denshokan.contract_class.json" ]; then
     print_error "Denshokan contract artifact not found"
     exit 1
 fi
 
-if [ ! -f "$SCRIPT_DIR/target/dev/denshokan_MinigameRegistry.contract_class.json" ]; then
+if [ ! -f "$CONTRACTS_DIR/target/dev/denshokan_MinigameRegistry.contract_class.json" ]; then
     print_error "MinigameRegistry contract artifact not found"
     exit 1
 fi
@@ -116,7 +117,7 @@ print_info "Contract artifacts found"
 if [ -z "$GAME_REGISTRY_ADDRESS" ]; then
     print_info "Declaring MinigameRegistry contract..."
 
-    REGISTRY_DECLARE_OUTPUT=$(sncast --profile "$PROFILE" \
+    REGISTRY_DECLARE_OUTPUT=$(sncast --profile "$PROFILE" --wait \
         declare \
         --contract-name MinigameRegistry 2>&1) || {
         # Check if already declared
@@ -139,7 +140,7 @@ if [ -z "$GAME_REGISTRY_ADDRESS" ]; then
     print_info "Deploying MinigameRegistry contract..."
 
     # Constructor: name: ByteArray, symbol: ByteArray, base_uri: ByteArray
-    REGISTRY_DEPLOY_OUTPUT=$(sncast --profile "$PROFILE" \
+    REGISTRY_DEPLOY_OUTPUT=$(sncast --profile "$PROFILE" --wait \
         deploy \
         --class-hash "$REGISTRY_CLASS_HASH" \
         --arguments "\"$REGISTRY_NAME\", \"$REGISTRY_SYMBOL\", \"$REGISTRY_BASE_URI\"" 2>&1)
@@ -163,7 +164,7 @@ fi
 
 print_info "Declaring Denshokan contract..."
 
-DENSHOKAN_DECLARE_OUTPUT=$(sncast --profile "$PROFILE" \
+DENSHOKAN_DECLARE_OUTPUT=$(sncast --profile "$PROFILE" --wait \
     declare \
     --contract-name Denshokan 2>&1) || {
     if echo "$DENSHOKAN_DECLARE_OUTPUT" | grep -q "already declared"; then
@@ -186,7 +187,7 @@ print_info "Deploying Denshokan contract..."
 
 # Constructor: name: ByteArray, symbol: ByteArray, base_uri: ByteArray,
 #              game_registry_address: ContractAddress
-DENSHOKAN_DEPLOY_OUTPUT=$(sncast --profile "$PROFILE" \
+DENSHOKAN_DEPLOY_OUTPUT=$(sncast --profile "$PROFILE" --wait \
     deploy \
     --class-hash "$DENSHOKAN_CLASS_HASH" \
     --arguments "\"$TOKEN_NAME\", \"$TOKEN_SYMBOL\", \"$TOKEN_BASE_URI\", $GAME_REGISTRY_ADDRESS" 2>&1)
@@ -205,8 +206,8 @@ print_info "Denshokan deployed at: $CONTRACT_ADDRESS"
 # SAVE DEPLOYMENT INFO
 # ============================
 
-DEPLOYMENT_FILE="$SCRIPT_DIR/deployments/denshokan_$(date +%Y%m%d_%H%M%S).json"
-mkdir -p "$SCRIPT_DIR/deployments"
+DEPLOYMENT_FILE="$CONTRACTS_DIR/deployments/denshokan_$(date +%Y%m%d_%H%M%S).json"
+mkdir -p "$CONTRACTS_DIR/deployments"
 
 cat > "$DEPLOYMENT_FILE" << EOF
 {

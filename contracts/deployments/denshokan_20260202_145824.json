@@ -1,0 +1,23 @@
+{
+  "profile": "sepolia",
+  "timestamp": "2026-02-02T14:58:24Z",
+  "denshokan_contract": {
+    "address": "0x066f194e7f31ae037b828cc869278dddf96a7bbad0088144f4fb7bf89d80658f",
+    "class_hash": "0x02f45dd4521d86229e06c8550424cc7c38d4c87cda560e7dd715bd0815a03ab4",
+    "parameters": {
+      "name": "Denshokan",
+      "symbol": "DNSH",
+      "base_uri": "https://api.denshokan.dev/token/",
+      "game_registry_address": "0x01598f5997e9c8a9c3d7f137c61b707ff4eb4a3b7ecc55d90bf65d6abe2e935a"
+    }
+  },
+  "minigame_registry_contract": {
+    "address": "0x01598f5997e9c8a9c3d7f137c61b707ff4eb4a3b7ecc55d90bf65d6abe2e935a",
+    "class_hash": "0x043834b224545536d8ed951276745b36396d4e63b0629698e70655bbaaef7c54",
+    "parameters": {
+      "name": "DenshokanRegistry",
+      "symbol": "DREG",
+      "base_uri": "https://api.denshokan.dev/registry/"
+    }
+  }
+}

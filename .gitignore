@@ -5,6 +5,8 @@ node_modules/
 # Build outputs
 contracts/target/
 indexer/dist/
+api/dist/
+client/dist/
 *.sierra.json
 *.casm.json
 
@@ -31,6 +33,9 @@ npm-debug.log*
 # Test coverage
 coverage/
 .nyc_output/
+
+# TLS / certificates
+*.pem
 
 # Temporary files
 tmp/
