@@ -28,6 +28,9 @@ sort-module-level-items = true
 [[target.starknet-contract]]
 sierra = true
 casm = true
+build-external-contracts = [
+    "game_components_test_common::mocks::minigame_starknet_mock::minigame_starknet_mock",
+]
 
 [lib]
 name = "denshokan"

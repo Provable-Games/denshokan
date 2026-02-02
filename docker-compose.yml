@@ -1,0 +1,68 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: denshokan-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: denshokan
+    volumes:
+      - denshokan_postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d denshokan"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Denshokan Indexer
+  indexer:
+    build:
+      context: ./indexer
+      dockerfile: Dockerfile
+    container_name: denshokan-indexer
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - ./indexer/.env
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/denshokan
+    volumes:
+      - indexer_state:/app/.apibara/state
+
+  # Denshokan API
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    container_name: denshokan-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/denshokan
+      PORT: 3001
+      CORS_ORIGIN: ${CORS_ORIGIN:-https://localhost:5173}
+      TLS_CERT: /certs/localhost-cert.pem
+      TLS_KEY: /certs/localhost-key.pem
+    volumes:
+      - ./api/localhost-cert.pem:/certs/localhost-cert.pem:ro
+      - ./api/localhost-key.pem:/certs/localhost-key.pem:ro
+    ports:
+      - "3001:3001"
+
+volumes:
+  denshokan_postgres_data:
+    driver: local
+  indexer_state:
+    driver: local
+
+networks:
+  default:
+    name: denshokan-network

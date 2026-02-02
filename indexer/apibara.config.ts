@@ -5,6 +5,8 @@ export default defineConfig({
     denshokan: {
       // Denshokan token contract address
       contractAddress: (process.env.CONTRACT_ADDRESS ?? "0x0").trim(),
+      // Minigame registry contract address
+      registryAddress: (process.env.REGISTRY_CONTRACT_ADDRESS ?? "0x0").trim(),
       // Starknet DNA stream URL (mainnet or sepolia)
       streamUrl: (process.env.STREAM_URL ?? "https://mainnet.starknet.a5a.ch").trim(),
       // Starting block - set to contract deployment block for full history

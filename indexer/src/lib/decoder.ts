@@ -42,6 +42,9 @@
  * - ObjectiveCreated: Emitted when a game objective is created
  * - SettingsCreated: Emitted when game settings are created
  * - TokenRendererUpdate: Emitted when token renderer is updated
+ * - GameRegistryUpdate: Emitted when a game is registered
+ * - GameMetadataUpdate: Emitted when game metadata is updated
+ * - GameRoyaltyUpdate: Emitted when game royalty fraction changes
  */
 
 import { hash } from "starknet";
@@ -71,6 +74,9 @@ export const EVENT_SELECTORS = {
   ObjectiveCreated: hash.getSelectorFromName("ObjectiveCreated"),
   SettingsCreated: hash.getSelectorFromName("SettingsCreated"),
   TokenRendererUpdate: hash.getSelectorFromName("TokenRendererUpdate"),
+  GameRegistryUpdate: hash.getSelectorFromName("GameRegistryUpdate"),
+  GameMetadataUpdate: hash.getSelectorFromName("GameMetadataUpdate"),
+  GameRoyaltyUpdate: hash.getSelectorFromName("GameRoyaltyUpdate"),
 } as const;
 
 /**
@@ -243,8 +249,12 @@ export function decodePackedTokenId(tokenIdFelt: string | bigint): PackedTokenId
 
 /**
  * Transfer event (ERC721)
- * Keys: [selector, from, to]
- * Data: [token_id_low, token_id_high]
+ * Keys: [selector, from, to, token_id_low, token_id_high]
+ * Data: []
+ *
+ * OZ ERC721 always uses u256 for token_id in Transfer events,
+ * even though Denshokan uses felt252 internally. The felt252
+ * value is stored as u256 (low, high) in the event keys.
  */
 export interface TransferEvent {
   from: string;
@@ -358,14 +368,14 @@ export interface TokenRendererUpdateEvent {
 
 /**
  * Decode Transfer event (ERC721)
- * Keys: [selector, from, to]
- * Data: [token_id_low, token_id_high]
+ * Keys: [selector, from, to, token_id_low, token_id_high]
+ * Data: []
  */
 export function decodeTransfer(keys: readonly string[], data: readonly string[]): TransferEvent {
   return {
     from: feltToHex(keys[1]),
     to: feltToHex(keys[2]),
-    tokenId: decodeU256(data[0], data[1]),
+    tokenId: decodeU256(keys[3], keys[4]),
   };
 }
 
@@ -533,5 +543,112 @@ export function decodeTokenRendererUpdate(keys: readonly string[], data: readonl
   return {
     tokenId: hexToBigInt(keys[1]),
     renderer: feltToHex(data[0]),
+  };
+}
+
+// ============ Game Registry Events ============
+
+/**
+ * GameRegistryUpdate event
+ * Keys: [selector, id(u32)]
+ * Data: [contract_address]
+ */
+export interface GameRegistryUpdateEvent {
+  gameId: number;
+  contractAddress: string;
+}
+
+/**
+ * GameMetadataUpdate event
+ * Keys: [selector, id(u32)]
+ * Data: [contract_address, name(ByteArray), description(ByteArray), developer(ByteArray),
+ *        publisher(ByteArray), genre(ByteArray), image(ByteArray), color(ByteArray),
+ *        client_url(ByteArray), renderer_address, royalty_fraction(u128)]
+ */
+export interface GameMetadataUpdateEvent {
+  gameId: number;
+  contractAddress: string;
+  name: string;
+  description: string;
+  developer: string;
+  publisher: string;
+  genre: string;
+  image: string;
+  color: string;
+  clientUrl: string;
+  rendererAddress: string;
+  royaltyFraction: string;
+}
+
+/**
+ * GameRoyaltyUpdate event
+ * Keys: [selector, game_id(u32)]
+ * Data: [royalty_fraction(u128)]
+ */
+export interface GameRoyaltyUpdateEvent {
+  gameId: number;
+  royaltyFraction: string;
+}
+
+export function decodeGameRegistryUpdate(keys: readonly string[], data: readonly string[]): GameRegistryUpdateEvent {
+  return {
+    gameId: Number(hexToBigInt(keys[1])),
+    contractAddress: feltToHex(data[0]),
+  };
+}
+
+export function decodeGameMetadataUpdate(keys: readonly string[], data: readonly string[]): GameMetadataUpdateEvent {
+  const contractAddress = feltToHex(data[0]);
+  let idx = 1;
+
+  const name = decodeByteArray(data, idx);
+  idx += name.consumed;
+
+  const description = decodeByteArray(data, idx);
+  idx += description.consumed;
+
+  const developer = decodeByteArray(data, idx);
+  idx += developer.consumed;
+
+  const publisher = decodeByteArray(data, idx);
+  idx += publisher.consumed;
+
+  const genre = decodeByteArray(data, idx);
+  idx += genre.consumed;
+
+  const image = decodeByteArray(data, idx);
+  idx += image.consumed;
+
+  const color = decodeByteArray(data, idx);
+  idx += color.consumed;
+
+  const clientUrl = decodeByteArray(data, idx);
+  idx += clientUrl.consumed;
+
+  const rendererAddress = feltToHex(data[idx]);
+  idx += 1;
+
+  const royaltyFraction = hexToBigInt(data[idx]).toString();
+
+  return {
+    gameId: Number(hexToBigInt(keys[1])),
+    contractAddress,
+    name: name.value,
+    description: description.value,
+    developer: developer.value,
+    publisher: publisher.value,
+    genre: genre.value,
+    image: image.value,
+    color: color.value,
+    clientUrl: clientUrl.value,
+    rendererAddress,
+    royaltyFraction,
+  };
+}
+
+export function decodeGameRoyaltyUpdate(keys: readonly string[], data: readonly string[]): GameRoyaltyUpdateEvent {
+  return {
+    gameId: Number(hexToBigInt(keys[1])),
+    royaltyFraction: hexToBigInt(data[0]).toString(),
   };
 }

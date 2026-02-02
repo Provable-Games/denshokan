@@ -6,7 +6,7 @@ const navItems = [
   { label: "Home", path: "/" },
   { label: "Games", path: "/games" },
   { label: "Mint", path: "/mint" },
-  { label: "Portfolio", path: "/portfolio" },
+  { label: "Game Tokens", path: "/portfolio" },
 ];
 
 export default function Header() {

@@ -24,6 +24,7 @@
     "react-router-dom": "6.22.1",
     "react-window": "^2.2.3",
     "starknet": "^8.9.2",
+    "vite-plugin-mkcert": "^1.17.9",
     "zustand": "^4.5.6"
   },
   "devDependencies": {

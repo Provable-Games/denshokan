@@ -1,13 +1,18 @@
 import { useState, useCallback } from "react";
 import { useAccount, useContract, useSendTransaction } from "@starknet-react/core";
+import { CairoOption, CairoOptionVariant } from "starknet";
 import { config } from "../config";
 import denshokanAbi from "../abi/denshokan.json";
 
 interface MintParams {
-  gameId?: number;
+  gameAddress: string;
   playerName?: string;
   settingsId?: number;
   soulbound?: boolean;
+  start?: number;
+  end?: number;
+  objectiveId?: number;
+  clientUrl?: string;
 }
 
 interface MintResult {
@@ -37,18 +42,20 @@ export function useMint() {
       setError(null);
 
       try {
-        // Build the mint call - the contract's mint function uses Option types
-        // None = [0], Some(value) = [1, value]
+        // Build the mint call - starknet.js v8 requires CairoOption instances
+        const none = <T>() => new CairoOption<T>(CairoOptionVariant.None);
+        const some = <T>(val: T) => new CairoOption<T>(CairoOptionVariant.Some, val);
+
         const call = contract.populate("mint", [
-          params.gameId !== undefined ? { Some: params.gameId } : { None: true }, // game_address (Option)
-          params.playerName ? { Some: params.playerName } : { None: true }, // player_name (Option)
-          params.settingsId !== undefined ? { Some: params.settingsId } : { None: true }, // settings_id (Option)
-          { None: true }, // start (Option<u64>)
-          { None: true }, // end (Option<u64>)
-          { None: true }, // objective_id (Option<u32>)
-          { None: true }, // context (Option<GameContextDetails>)
-          { None: true }, // client_url (Option<ByteArray>)
-          { None: true }, // renderer_address (Option<ContractAddress>)
+          params.gameAddress, // game_address (ContractAddress)
+          params.playerName ? some(params.playerName) : none(), // player_name (Option)
+          params.settingsId !== undefined ? some(params.settingsId) : none(), // settings_id (Option)
+          params.start !== undefined ? some(params.start) : none(), // start (Option<u64>)
+          params.end !== undefined ? some(params.end) : none(), // end (Option<u64>)
+          params.objectiveId !== undefined ? some(params.objectiveId) : none(), // objective_id (Option<u32>)
+          none(), // context (Option<GameContextDetails>)
+          params.clientUrl ? some(params.clientUrl) : none(), // client_url (Option<ByteArray>)
+          none(), // renderer_address (Option<ContractAddress>)
           address, // to
           params.soulbound ?? false, // soulbound
           false, // paymaster

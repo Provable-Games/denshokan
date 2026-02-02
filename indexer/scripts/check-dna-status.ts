@@ -33,7 +33,7 @@ async function checkDnaStatus(): Promise<void> {
 
     // For gRPC-based servers, a 405 Method Not Allowed is normal
     // since they expect gRPC protocol, not HTTP GET
-    if (response.status === 405 || response.status === 200 || response.status === 426) {
+    if (response.status === 405 || response.status === 200 || response.status === 415 || response.status === 426) {
       console.log("DNA server appears to be running (gRPC endpoint).");
       process.exit(0);
     }

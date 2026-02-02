@@ -9,7 +9,12 @@ const app = new Hono();
 // GET /games - List games
 app.get("/", async (c) => {
   const results = await db.select().from(games).orderBy(desc(games.createdAt));
-  return c.json({ data: results });
+  return c.json({
+    data: results.map((r) => ({
+      ...r,
+      lastUpdatedBlock: r.lastUpdatedBlock?.toString() ?? null,
+    })),
+  });
 });
 
 // GET /games/:id/stats - Game statistics
@@ -111,7 +116,13 @@ app.get("/:id", async (c) => {
     return c.json({ error: "Game not found" }, 404);
   }
 
-  return c.json({ data: result[0] });
+  const game = result[0];
+  return c.json({
+    data: {
+      ...game,
+      lastUpdatedBlock: game.lastUpdatedBlock?.toString() ?? null,
+    },
+  });
 });
 
 // GET /games/:id/leaderboard - Leaderboard for a game

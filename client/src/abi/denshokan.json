@@ -392,20 +392,6 @@
   },
   {
     "type": "enum",
-    "name": "core::option::Option::<core::starknet::contract_address::ContractAddress>",
-    "variants": [
-      {
-        "name": "Some",
-        "type": "core::starknet::contract_address::ContractAddress"
-      },
-      {
-        "name": "None",
-        "type": "()"
-      }
-    ]
-  },
-  {
-    "type": "enum",
     "name": "core::option::Option::<core::felt252>",
     "variants": [
       {
@@ -521,12 +507,26 @@
     ]
   },
   {
+    "type": "enum",
+    "name": "core::option::Option::<core::starknet::contract_address::ContractAddress>",
+    "variants": [
+      {
+        "name": "Some",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "name": "None",
+        "type": "()"
+      }
+    ]
+  },
+  {
     "type": "struct",
     "name": "game_components_interfaces::structs::token::MintParams",
     "members": [
       {
         "name": "game_address",
-        "type": "core::option::Option::<core::starknet::contract_address::ContractAddress>"
+        "type": "core::starknet::contract_address::ContractAddress"
       },
       {
         "name": "player_name",
@@ -579,44 +579,6 @@
       {
         "name": "metadata",
         "type": "core::integer::u16"
-      }
-    ]
-  },
-  {
-    "type": "struct",
-    "name": "game_components_interfaces::structs::token::SetTokenMetadataParams",
-    "members": [
-      {
-        "name": "token_id",
-        "type": "core::felt252"
-      },
-      {
-        "name": "game_address",
-        "type": "core::starknet::contract_address::ContractAddress"
-      },
-      {
-        "name": "player_name",
-        "type": "core::option::Option::<core::felt252>"
-      },
-      {
-        "name": "settings_id",
-        "type": "core::option::Option::<core::integer::u32>"
-      },
-      {
-        "name": "start",
-        "type": "core::option::Option::<core::integer::u64>"
-      },
-      {
-        "name": "end",
-        "type": "core::option::Option::<core::integer::u64>"
-      },
-      {
-        "name": "objective_id",
-        "type": "core::option::Option::<core::integer::u32>"
-      },
-      {
-        "name": "context",
-        "type": "core::option::Option::<game_components_interfaces::structs::metagame::GameContextDetails>"
       }
     ]
   },
@@ -964,7 +926,7 @@
         "inputs": [
           {
             "name": "game_address",
-            "type": "core::option::Option::<core::starknet::contract_address::ContractAddress>"
+            "type": "core::starknet::contract_address::ContractAddress"
           },
           {
             "name": "player_name",
@@ -1044,50 +1006,6 @@
       },
       {
         "type": "function",
-        "name": "set_token_metadata",
-        "inputs": [
-          {
-            "name": "token_id",
-            "type": "core::felt252"
-          },
-          {
-            "name": "game_address",
-            "type": "core::starknet::contract_address::ContractAddress"
-          },
-          {
-            "name": "player_name",
-            "type": "core::option::Option::<core::felt252>"
-          },
-          {
-            "name": "settings_id",
-            "type": "core::option::Option::<core::integer::u32>"
-          },
-          {
-            "name": "start",
-            "type": "core::option::Option::<core::integer::u64>"
-          },
-          {
-            "name": "end",
-            "type": "core::option::Option::<core::integer::u64>"
-          },
-          {
-            "name": "objective_id",
-            "type": "core::option::Option::<core::integer::u32>"
-          },
-          {
-            "name": "context",
-            "type": "core::option::Option::<game_components_interfaces::structs::metagame::GameContextDetails>"
-          }
-        ],
-        "outputs": [
-          {
-            "type": "core::felt252"
-          }
-        ],
-        "state_mutability": "external"
-      },
-      {
-        "type": "function",
         "name": "update_game",
         "inputs": [
           {
@@ -1109,18 +1027,6 @@
           {
             "name": "name",
             "type": "core::felt252"
-          }
-        ],
-        "outputs": [],
-        "state_mutability": "external"
-      },
-      {
-        "type": "function",
-        "name": "set_token_metadata_batch",
-        "inputs": [
-          {
-            "name": "updates",
-            "type": "core::array::Array::<game_components_interfaces::structs::token::SetTokenMetadataParams>"
           }
         ],
         "outputs": [],

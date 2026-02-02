@@ -2,12 +2,12 @@
  * Input validation helpers for API request parameters
  */
 
-export function parseTokenId(value: string | undefined): bigint | null {
+export function parseTokenId(value: string | undefined): string | null {
   if (!value) return null;
   try {
     const id = BigInt(value);
     if (id < 0n) return null;
-    return id;
+    return id.toString();
   } catch {
     return null;
   }
@@ -24,7 +24,8 @@ export function parseAddress(value: string | undefined): string | null {
   if (!value) return null;
   // Starknet addresses are hex strings
   if (!/^0x[0-9a-fA-F]+$/.test(value)) return null;
-  return value.toLowerCase();
+  // Normalize to unpadded lowercase hex to match indexer storage format
+  return `0x${BigInt(value).toString(16)}`;
 }
 
 export function parsePositiveInt(value: string | undefined, defaultValue: number): number {

@@ -45,8 +45,8 @@ export const tokens = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
 
-    // Token ID - stored as numeric for u64 precision
-    tokenId: bigint("token_id", { mode: "bigint" }).notNull().unique(),
+    // Token ID - stored as numeric for felt252 precision (251 bits)
+    tokenId: numeric("token_id").notNull().unique(),
 
     // Decoded from packed token_id (immutable)
     gameId: integer("game_id").notNull(),
@@ -114,7 +114,7 @@ export const scoreHistory = pgTable(
   "score_history",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    tokenId: bigint("token_id", { mode: "bigint" }).notNull(),
+    tokenId: numeric("token_id").notNull(),
     score: bigint("score", { mode: "bigint" }).notNull(),
     blockNumber: bigint("block_number", { mode: "bigint" }).notNull(),
     blockTimestamp: timestamp("block_timestamp").notNull(),
@@ -149,8 +149,17 @@ export const games = pgTable(
     contractAddress: text("contract_address").notNull(),
     name: text("name"),
     description: text("description"),
-    imageUrl: text("image_url"),
+    image: text("image"),
+    developer: text("developer"),
+    publisher: text("publisher"),
+    genre: text("genre"),
+    color: text("color"),
+    clientUrl: text("client_url"),
+    rendererAddress: text("renderer_address"),
+    royaltyFraction: numeric("royalty_fraction"),
     createdAt: timestamp("created_at").defaultNow(),
+    lastUpdatedBlock: bigint("last_updated_block", { mode: "bigint" }),
+    lastUpdatedAt: timestamp("last_updated_at").defaultNow(),
   },
   (table) => [
     index("games_contract_idx").on(table.contractAddress),
@@ -187,7 +196,7 @@ export const tokenEvents = pgTable(
   "token_events",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    tokenId: bigint("token_id", { mode: "bigint" }).notNull(),
+    tokenId: numeric("token_id").notNull(),
     eventType: text("event_type").notNull(),
     eventData: text("event_data").notNull(), // JSON encoded event data
     blockNumber: bigint("block_number", { mode: "bigint" }).notNull(),
@@ -223,7 +232,7 @@ export const gameLeaderboards = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     gameId: integer("game_id").notNull(),
-    tokenId: bigint("token_id", { mode: "bigint" }).notNull(),
+    tokenId: numeric("token_id").notNull(),
     ownerAddress: text("owner_address").notNull(),
     playerName: text("player_name"),
     score: bigint("score", { mode: "bigint" }).notNull(),
