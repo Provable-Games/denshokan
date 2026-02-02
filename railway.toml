@@ -1,7 +1,6 @@
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "./Dockerfile"
-dockerContext = ".."
+dockerfilePath = "./api/Dockerfile"
 
 [deploy]
 startCommand = "npx tsx src/index.ts"
