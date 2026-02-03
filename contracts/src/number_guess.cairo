@@ -1,0 +1,860 @@
+use starknet::ContractAddress;
+
+// ==========================================================================
+// NUMBER GUESSING GAME INTERFACE
+// ==========================================================================
+
+#[starknet::interface]
+pub trait INumberGuess<TContractState> {
+    /// Start a new game for a token with specified settings (difficulty level).
+    fn new_game(ref self: TContractState, token_id: felt252, settings_id: u32);
+    /// Make a guess. Returns: -1 (too low), 0 (correct), 1 (too high).
+    fn guess(ref self: TContractState, token_id: felt252, number: u32) -> i8;
+    /// Get the current guess count for the active game.
+    fn guess_count(self: @TContractState, token_id: felt252) -> u32;
+    /// Get the configured range (min, max) for the active game.
+    fn get_range(self: @TContractState, token_id: felt252) -> (u32, u32);
+    /// Get the max attempts for the active game (0 = unlimited).
+    fn get_max_attempts(self: @TContractState, token_id: felt252) -> u32;
+    /// Get total games played for a token.
+    fn games_played(self: @TContractState, token_id: felt252) -> u32;
+    /// Get total games won for a token.
+    fn games_won(self: @TContractState, token_id: felt252) -> u32;
+    /// Get the best score (lowest guesses to win) for a token.
+    fn best_score(self: @TContractState, token_id: felt252) -> u32;
+    /// Get the count of perfect games (1-guess wins) for a token.
+    fn perfect_games(self: @TContractState, token_id: felt252) -> u32;
+}
+
+#[starknet::interface]
+pub trait INumberGuessInit<TContractState> {
+    fn initializer(
+        ref self: TContractState,
+        game_creator: ContractAddress,
+        game_name: ByteArray,
+        game_description: ByteArray,
+        game_developer: ByteArray,
+        game_publisher: ByteArray,
+        game_genre: ByteArray,
+        game_image: ByteArray,
+        game_color: Option<ByteArray>,
+        client_url: Option<ByteArray>,
+        renderer_address: Option<ContractAddress>,
+        settings_address: Option<ContractAddress>,
+        objectives_address: Option<ContractAddress>,
+        minigame_token_address: ContractAddress,
+        royalty_fraction: Option<u128>,
+    );
+}
+
+// ==========================================================================
+// GAME STATUS CONSTANTS
+// ==========================================================================
+
+const STATUS_NO_GAME: u8 = 0;
+const STATUS_PLAYING: u8 = 1;
+const STATUS_WON: u8 = 2;
+const STATUS_LOST: u8 = 3;
+
+// ==========================================================================
+// SCORE CONSTANTS
+// ==========================================================================
+
+const BASE_SCORE: u64 = 100;
+const EFFICIENCY_BONUS_MULTIPLIER: u64 = 10;
+const PERFECT_GAME_BONUS: u64 = 50;
+
+// ==========================================================================
+// PURE RANDOMNESS FUNCTION
+// ==========================================================================
+
+/// Generate a pseudo-random number using Pedersen hash.
+/// seed: typically token_id + games_played
+/// min/max: inclusive range
+fn pedersen_random(seed: felt252, min: u32, max: u32) -> u32 {
+    assert!(max > min, "max must be greater than min");
+    let range: u32 = max - min + 1;
+
+    // Use core::pedersen for hashing
+    let hash: felt252 = core::pedersen::pedersen(seed, seed);
+
+    // Convert hash to u256 for safe modulo operation
+    let hash_u256: u256 = hash.into();
+    let range_u256: u256 = range.into();
+    let result_u256: u256 = hash_u256 % range_u256;
+
+    // Safe to unwrap since result is within u32 range
+    let result: u32 = result_u256.try_into().unwrap();
+    min + result
+}
+
+/// Calculate optimal guesses for a range (binary search optimal).
+/// optimal = ceil(log2(range_size))
+fn optimal_guesses(range_size: u32) -> u32 {
+    if range_size <= 1 {
+        return 1;
+    }
+    let mut n = range_size;
+    let mut count: u32 = 0;
+    loop {
+        if n == 0 {
+            break;
+        }
+        count += 1;
+        n = n / 2;
+    }
+    count
+}
+
+/// Calculate score for a win.
+fn calculate_score(actual_guesses: u32, range_min: u32, range_max: u32) -> u64 {
+    let range_size = range_max - range_min + 1;
+    let optimal = optimal_guesses(range_size);
+
+    let mut score: u64 = BASE_SCORE;
+
+    // Efficiency bonus if under optimal
+    if actual_guesses < optimal {
+        let bonus: u64 = ((optimal - actual_guesses + 1)
+            * EFFICIENCY_BONUS_MULTIPLIER.try_into().unwrap())
+            .into();
+        score += bonus;
+    }
+
+    // Perfect game bonus (1 guess)
+    if actual_guesses == 1 {
+        score += PERFECT_GAME_BONUS;
+    }
+
+    score
+}
+
+// ==========================================================================
+// CONTRACT
+// ==========================================================================
+
+#[starknet::contract]
+pub mod NumberGuess {
+    use game_components_minigame::extensions::objectives::interface::{
+        IMinigameObjectives, IMinigameObjectivesDetails,
+    };
+    use game_components_minigame::extensions::objectives::objectives::ObjectivesComponent;
+    use game_components_minigame::extensions::objectives::structs::GameObjective;
+    use game_components_minigame::extensions::settings::interface::{
+        IMinigameSettings, IMinigameSettingsDetails,
+    };
+    use game_components_minigame::extensions::settings::settings::SettingsComponent;
+    use game_components_minigame::extensions::settings::structs::{GameSetting, GameSettingDetails};
+    use game_components_minigame::interface::{IMinigameDetails, IMinigameTokenData};
+    use game_components_minigame::minigame::MinigameComponent;
+    use game_components_minigame::structs::GameDetail;
+    use openzeppelin_introspection::src5::SRC5Component;
+    use starknet::storage::{
+        Map, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess,
+    };
+    use starknet::{ContractAddress, get_contract_address};
+    use super::{
+        STATUS_LOST, STATUS_NO_GAME, STATUS_PLAYING, STATUS_WON, calculate_score, pedersen_random,
+    };
+
+    // ======================================================================
+    // COMPONENTS
+    // ======================================================================
+
+    component!(path: MinigameComponent, storage: minigame, event: MinigameEvent);
+    component!(path: ObjectivesComponent, storage: objectives, event: ObjectivesEvent);
+    component!(path: SettingsComponent, storage: settings, event: SettingsEvent);
+    component!(path: SRC5Component, storage: src5, event: SRC5Event);
+
+    #[abi(embed_v0)]
+    impl MinigameImpl = MinigameComponent::MinigameImpl<ContractState>;
+    impl MinigameInternalImpl = MinigameComponent::InternalImpl<ContractState>;
+    impl ObjectivesInternalImpl = ObjectivesComponent::InternalImpl<ContractState>;
+    impl SettingsInternalImpl = SettingsComponent::InternalImpl<ContractState>;
+
+    #[abi(embed_v0)]
+    impl SRC5Impl = SRC5Component::SRC5Impl<ContractState>;
+
+    // ======================================================================
+    // STORAGE
+    // ======================================================================
+
+    #[storage]
+    struct Storage {
+        #[substorage(v0)]
+        minigame: MinigameComponent::Storage,
+        #[substorage(v0)]
+        objectives: ObjectivesComponent::Storage,
+        #[substorage(v0)]
+        settings: SettingsComponent::Storage,
+        #[substorage(v0)]
+        src5: SRC5Component::Storage,
+        // Game state per token
+        secret_numbers: Map<felt252, u32>, // 0 if no active game
+        current_guess_count: Map<felt252, u32>,
+        game_status: Map<felt252, u8>,
+        // Range config (set from settings when game starts)
+        range_min: Map<felt252, u32>,
+        range_max: Map<felt252, u32>,
+        max_attempts: Map<felt252, u32>, // 0 = unlimited
+        // Statistics
+        games_played: Map<felt252, u32>,
+        games_won: Map<felt252, u32>,
+        best_score: Map<felt252, u32>, // Lowest guesses to win
+        perfect_games: Map<felt252, u32>, // 1-guess wins
+        scores: Map<felt252, u64>, // Cumulative score
+        // Settings storage
+        settings_count: u32,
+        // settings_id -> (name, description, min, max, max_attempts, exists)
+        settings_data: Map<u32, (ByteArray, ByteArray, u32, u32, u32, bool)>,
+        // Objectives storage
+        objective_count: u32,
+        // objective_id -> (type, threshold, exists)
+        // type: 1=first_win, 2=quick_thinker, 3=experienced, 4=lucky_guess
+        objective_data: Map<u32, (u8, u32, bool)>,
+    }
+
+    // ======================================================================
+    // EVENTS
+    // ======================================================================
+
+    #[event]
+    #[derive(Drop, starknet::Event)]
+    enum Event {
+        #[flat]
+        MinigameEvent: MinigameComponent::Event,
+        #[flat]
+        ObjectivesEvent: ObjectivesComponent::Event,
+        #[flat]
+        SettingsEvent: SettingsComponent::Event,
+        #[flat]
+        SRC5Event: SRC5Component::Event,
+    }
+
+    // ======================================================================
+    // IMinigameTokenData — score & game_over
+    // ======================================================================
+
+    #[abi(embed_v0)]
+    impl TokenDataImpl of IMinigameTokenData<ContractState> {
+        fn score(self: @ContractState, token_id: felt252) -> u64 {
+            self.scores.entry(token_id).read()
+        }
+
+        fn game_over(self: @ContractState, token_id: felt252) -> bool {
+            let status = self.game_status.entry(token_id).read();
+            status == STATUS_WON || status == STATUS_LOST
+        }
+
+        fn score_batch(self: @ContractState, token_ids: Span<felt252>) -> Array<u64> {
+            let mut results = array![];
+            let mut i = 0;
+            loop {
+                if i >= token_ids.len() {
+                    break;
+                }
+                results.append(self.score(*token_ids.at(i)));
+                i += 1;
+            }
+            results
+        }
+
+        fn game_over_batch(self: @ContractState, token_ids: Span<felt252>) -> Array<bool> {
+            let mut results = array![];
+            let mut i = 0;
+            loop {
+                if i >= token_ids.len() {
+                    break;
+                }
+                results.append(self.game_over(*token_ids.at(i)));
+                i += 1;
+            }
+            results
+        }
+    }
+
+    // ======================================================================
+    // IMinigameDetails — token name, description, game details
+    // ======================================================================
+
+    #[abi(embed_v0)]
+    impl DetailsImpl of IMinigameDetails<ContractState> {
+        fn token_name(self: @ContractState, token_id: felt252) -> ByteArray {
+            "Number Guess"
+        }
+
+        fn token_description(self: @ContractState, token_id: felt252) -> ByteArray {
+            let won = self.games_won.entry(token_id).read();
+            let played = self.games_played.entry(token_id).read();
+            let best = self.best_score.entry(token_id).read();
+            let perfect = self.perfect_games.entry(token_id).read();
+            format!(
+                "Number Guessing Game on-chain. Record: {} wins out of {} games. Best: {} guesses. Perfect games: {}.",
+                won,
+                played,
+                best,
+                perfect,
+            )
+        }
+
+        fn game_details(self: @ContractState, token_id: felt252) -> Span<GameDetail> {
+            let won = self.games_won.entry(token_id).read();
+            let played = self.games_played.entry(token_id).read();
+            let best = self.best_score.entry(token_id).read();
+            let perfect = self.perfect_games.entry(token_id).read();
+            let current_guesses = self.current_guess_count.entry(token_id).read();
+            let status_val = self.game_status.entry(token_id).read();
+            let range_min = self.range_min.entry(token_id).read();
+            let range_max = self.range_max.entry(token_id).read();
+            let max_attempts = self.max_attempts.entry(token_id).read();
+            let score = self.scores.entry(token_id).read();
+
+            let status_str: ByteArray = if status_val == STATUS_NO_GAME {
+                "No Game"
+            } else if status_val == STATUS_PLAYING {
+                "Playing"
+            } else if status_val == STATUS_WON {
+                "Won"
+            } else {
+                "Lost"
+            };
+
+            let attempts_str: ByteArray = if max_attempts == 0 {
+                "Unlimited"
+            } else {
+                format!("{}", max_attempts)
+            };
+
+            array![
+                GameDetail { name: "Wins", value: format!("{}", won) },
+                GameDetail { name: "Games Played", value: format!("{}", played) },
+                GameDetail { name: "Best Score", value: format!("{} guesses", best) },
+                GameDetail { name: "Perfect Games", value: format!("{}", perfect) },
+                GameDetail { name: "Current Guesses", value: format!("{}", current_guesses) },
+                GameDetail { name: "Status", value: status_str },
+                GameDetail { name: "Range", value: format!("{}-{}", range_min, range_max) },
+                GameDetail { name: "Max Attempts", value: attempts_str },
+                GameDetail { name: "Total Score", value: format!("{}", score) },
+            ]
+                .span()
+        }
+
+        fn token_name_batch(self: @ContractState, token_ids: Span<felt252>) -> Array<ByteArray> {
+            let mut results = array![];
+            let mut i = 0;
+            loop {
+                if i >= token_ids.len() {
+                    break;
+                }
+                results.append(self.token_name(*token_ids.at(i)));
+                i += 1;
+            }
+            results
+        }
+
+        fn token_description_batch(
+            self: @ContractState, token_ids: Span<felt252>,
+        ) -> Array<ByteArray> {
+            let mut results = array![];
+            let mut i = 0;
+            loop {
+                if i >= token_ids.len() {
+                    break;
+                }
+                results.append(self.token_description(*token_ids.at(i)));
+                i += 1;
+            }
+            results
+        }
+
+        fn game_details_batch(
+            self: @ContractState, token_ids: Span<felt252>,
+        ) -> Array<Span<GameDetail>> {
+            let mut results = array![];
+            let mut i = 0;
+            loop {
+                if i >= token_ids.len() {
+                    break;
+                }
+                results.append(self.game_details(*token_ids.at(i)));
+                i += 1;
+            }
+            results
+        }
+    }
+
+    // ======================================================================
+    // IMinigameSettings
+    // ======================================================================
+
+    #[abi(embed_v0)]
+    impl GameSettingsImpl of IMinigameSettings<ContractState> {
+        fn settings_exist(self: @ContractState, settings_id: u32) -> bool {
+            let (_, _, _, _, _, exists) = self.settings_data.entry(settings_id).read();
+            exists
+        }
+
+        fn settings_exist_batch(self: @ContractState, settings_ids: Span<u32>) -> Array<bool> {
+            let mut results = array![];
+            let mut i = 0;
+            loop {
+                if i >= settings_ids.len() {
+                    break;
+                }
+                results.append(self.settings_exist(*settings_ids.at(i)));
+                i += 1;
+            }
+            results
+        }
+    }
+
+    // ======================================================================
+    // IMinigameSettingsDetails
+    // ======================================================================
+
+    #[abi(embed_v0)]
+    impl GameSettingsDetailsImpl of IMinigameSettingsDetails<ContractState> {
+        fn settings_details(self: @ContractState, settings_id: u32) -> GameSettingDetails {
+            let (name, description, min, max, max_attempts, _) = self
+                .settings_data
+                .entry(settings_id)
+                .read();
+
+            let attempts_str: ByteArray = if max_attempts == 0 {
+                "Unlimited"
+            } else {
+                format!("{}", max_attempts)
+            };
+
+            GameSettingDetails {
+                name,
+                description,
+                settings: array![
+                    GameSetting { name: "Range Min", value: format!("{}", min) },
+                    GameSetting { name: "Range Max", value: format!("{}", max) },
+                    GameSetting { name: "Max Attempts", value: attempts_str },
+                ]
+                    .span(),
+            }
+        }
+
+        fn settings_details_batch(
+            self: @ContractState, settings_ids: Span<u32>,
+        ) -> Array<GameSettingDetails> {
+            let mut results = array![];
+            let mut i = 0;
+            loop {
+                if i >= settings_ids.len() {
+                    break;
+                }
+                results.append(self.settings_details(*settings_ids.at(i)));
+                i += 1;
+            }
+            results
+        }
+    }
+
+    // ======================================================================
+    // IMinigameObjectives
+    // ======================================================================
+
+    #[abi(embed_v0)]
+    impl GameObjectivesImpl of IMinigameObjectives<ContractState> {
+        fn objective_exists(self: @ContractState, objective_id: u32) -> bool {
+            let (_, _, exists) = self.objective_data.entry(objective_id).read();
+            exists
+        }
+
+        fn completed_objective(self: @ContractState, token_id: felt252, objective_id: u32) -> bool {
+            let (obj_type, threshold, exists) = self.objective_data.entry(objective_id).read();
+            if !exists {
+                return false;
+            }
+
+            // Objective types:
+            // 1 = First Win (win 1 game)
+            // 2 = Quick Thinker (win in under threshold guesses)
+            // 3 = Experienced Guesser (win threshold games)
+            // 4 = Lucky Guess (perfect game - 1 guess)
+
+            let wins = self.games_won.entry(token_id).read();
+            let best = self.best_score.entry(token_id).read();
+            let perfect = self.perfect_games.entry(token_id).read();
+
+            if obj_type == 1 {
+                // First Win: won at least 1 game
+                wins >= 1
+            } else if obj_type == 2 {
+                // Quick Thinker: best score under threshold
+                best > 0 && best < threshold
+            } else if obj_type == 3 {
+                // Experienced Guesser: won threshold games
+                wins >= threshold
+            } else if obj_type == 4 {
+                // Lucky Guess: has at least 1 perfect game
+                perfect >= 1
+            } else {
+                false
+            }
+        }
+
+        fn objective_exists_batch(self: @ContractState, objective_ids: Span<u32>) -> Array<bool> {
+            let mut results = array![];
+            let mut i = 0;
+            loop {
+                if i >= objective_ids.len() {
+                    break;
+                }
+                results.append(self.objective_exists(*objective_ids.at(i)));
+                i += 1;
+            }
+            results
+        }
+    }
+
+    // ======================================================================
+    // IMinigameObjectivesDetails
+    // ======================================================================
+
+    #[abi(embed_v0)]
+    impl GameObjectivesDetailsImpl of IMinigameObjectivesDetails<ContractState> {
+        fn objectives_details(self: @ContractState, token_id: felt252) -> Span<GameObjective> {
+            let count = self.objective_count.read();
+            let mut objectives = array![];
+            let mut i: u32 = 1;
+            while i <= count {
+                let (obj_type, threshold, exists) = self.objective_data.entry(i).read();
+                if exists {
+                    let completed = self.completed_objective(token_id, i);
+                    let completed_str: ByteArray = if completed {
+                        "Yes"
+                    } else {
+                        "No"
+                    };
+
+                    let name: ByteArray = if obj_type == 1 {
+                        "First Win"
+                    } else if obj_type == 2 {
+                        format!("Quick Thinker (under {} guesses)", threshold)
+                    } else if obj_type == 3 {
+                        format!("Win {} games", threshold)
+                    } else {
+                        "Lucky Guess"
+                    };
+
+                    objectives
+                        .append(
+                            GameObjective { name, value: format!("Completed: {}", completed_str) },
+                        );
+                }
+                i += 1;
+            }
+            objectives.span()
+        }
+
+        fn objectives_details_batch(
+            self: @ContractState, token_ids: Span<felt252>,
+        ) -> Array<Span<GameObjective>> {
+            let mut results = array![];
+            let mut i = 0;
+            loop {
+                if i >= token_ids.len() {
+                    break;
+                }
+                results.append(self.objectives_details(*token_ids.at(i)));
+                i += 1;
+            }
+            results
+        }
+    }
+
+    // ======================================================================
+    // INumberGuess — Game logic
+    // ======================================================================
+
+    #[abi(embed_v0)]
+    impl NumberGuessImpl of super::INumberGuess<ContractState> {
+        fn new_game(ref self: ContractState, token_id: felt252, settings_id: u32) {
+            // Verify settings exist
+            let (_, _, min, max, max_attempts, exists) = self
+                .settings_data
+                .entry(settings_id)
+                .read();
+            assert!(exists, "Settings do not exist");
+
+            // Generate random secret number
+            let games_played = self.games_played.entry(token_id).read();
+            let seed: felt252 = token_id + games_played.into();
+            let secret = pedersen_random(seed, min, max);
+
+            // Initialize game state
+            self.secret_numbers.entry(token_id).write(secret);
+            self.current_guess_count.entry(token_id).write(0);
+            self.game_status.entry(token_id).write(STATUS_PLAYING);
+            self.range_min.entry(token_id).write(min);
+            self.range_max.entry(token_id).write(max);
+            self.max_attempts.entry(token_id).write(max_attempts);
+        }
+
+        fn guess(ref self: ContractState, token_id: felt252, number: u32) -> i8 {
+            // Verify game is active
+            let status = self.game_status.entry(token_id).read();
+            assert!(status == STATUS_PLAYING, "No active game");
+
+            // Verify guess is within range
+            let min = self.range_min.entry(token_id).read();
+            let max = self.range_max.entry(token_id).read();
+            assert!(number >= min && number <= max, "Guess out of range");
+
+            // Increment guess count
+            let guess_count = self.current_guess_count.entry(token_id).read() + 1;
+            self.current_guess_count.entry(token_id).write(guess_count);
+
+            // Get secret number
+            let secret = self.secret_numbers.entry(token_id).read();
+
+            // Check guess
+            if number == secret {
+                // Correct guess - player wins
+                self.game_status.entry(token_id).write(STATUS_WON);
+
+                // Update statistics
+                let played = self.games_played.entry(token_id).read() + 1;
+                self.games_played.entry(token_id).write(played);
+
+                let won = self.games_won.entry(token_id).read() + 1;
+                self.games_won.entry(token_id).write(won);
+
+                // Update best score
+                let current_best = self.best_score.entry(token_id).read();
+                if current_best == 0 || guess_count < current_best {
+                    self.best_score.entry(token_id).write(guess_count);
+                }
+
+                // Check for perfect game
+                if guess_count == 1 {
+                    let perfect = self.perfect_games.entry(token_id).read() + 1;
+                    self.perfect_games.entry(token_id).write(perfect);
+                }
+
+                // Calculate and add score
+                let points = calculate_score(guess_count, min, max);
+                let total_score = self.scores.entry(token_id).read() + points;
+                self.scores.entry(token_id).write(total_score);
+
+                return 0; // Correct
+            }
+
+            // Check if max attempts reached
+            let max_attempts = self.max_attempts.entry(token_id).read();
+            if max_attempts > 0 && guess_count >= max_attempts {
+                // Game over - player loses
+                self.game_status.entry(token_id).write(STATUS_LOST);
+
+                let played = self.games_played.entry(token_id).read() + 1;
+                self.games_played.entry(token_id).write(played);
+
+                // Return feedback even on loss
+                if number < secret {
+                    return -1; // Too low
+                } else {
+                    return 1; // Too high
+                }
+            }
+
+            // Return feedback
+            if number < secret {
+                -1 // Too low
+            } else {
+                1 // Too high
+            }
+        }
+
+        fn guess_count(self: @ContractState, token_id: felt252) -> u32 {
+            self.current_guess_count.entry(token_id).read()
+        }
+
+        fn get_range(self: @ContractState, token_id: felt252) -> (u32, u32) {
+            (self.range_min.entry(token_id).read(), self.range_max.entry(token_id).read())
+        }
+
+        fn get_max_attempts(self: @ContractState, token_id: felt252) -> u32 {
+            self.max_attempts.entry(token_id).read()
+        }
+
+        fn games_played(self: @ContractState, token_id: felt252) -> u32 {
+            self.games_played.entry(token_id).read()
+        }
+
+        fn games_won(self: @ContractState, token_id: felt252) -> u32 {
+            self.games_won.entry(token_id).read()
+        }
+
+        fn best_score(self: @ContractState, token_id: felt252) -> u32 {
+            self.best_score.entry(token_id).read()
+        }
+
+        fn perfect_games(self: @ContractState, token_id: felt252) -> u32 {
+            self.perfect_games.entry(token_id).read()
+        }
+    }
+
+    // ======================================================================
+    // Initializer
+    // ======================================================================
+
+    #[abi(embed_v0)]
+    impl NumberGuessInitImpl of super::INumberGuessInit<ContractState> {
+        fn initializer(
+            ref self: ContractState,
+            game_creator: ContractAddress,
+            game_name: ByteArray,
+            game_description: ByteArray,
+            game_developer: ByteArray,
+            game_publisher: ByteArray,
+            game_genre: ByteArray,
+            game_image: ByteArray,
+            game_color: Option<ByteArray>,
+            client_url: Option<ByteArray>,
+            renderer_address: Option<ContractAddress>,
+            settings_address: Option<ContractAddress>,
+            objectives_address: Option<ContractAddress>,
+            minigame_token_address: ContractAddress,
+            royalty_fraction: Option<u128>,
+        ) {
+            let settings_address = match settings_address {
+                Option::Some(address) => {
+                    self.settings.initializer();
+                    Option::Some(address)
+                },
+                Option::None => {
+                    self.settings.initializer();
+                    Option::Some(get_contract_address())
+                },
+            };
+            let objectives_address = match objectives_address {
+                Option::Some(address) => {
+                    self.objectives.initializer();
+                    Option::Some(address)
+                },
+                Option::None => {
+                    self.objectives.initializer();
+                    Option::Some(get_contract_address())
+                },
+            };
+
+            self
+                .minigame
+                .initializer(
+                    game_creator,
+                    game_name,
+                    game_description,
+                    game_developer,
+                    game_publisher,
+                    game_genre,
+                    game_image,
+                    game_color,
+                    client_url,
+                    renderer_address,
+                    settings_address,
+                    objectives_address,
+                    minigame_token_address,
+                    royalty_fraction,
+                );
+
+            // Create default settings (3 difficulty levels)
+            // Settings 1: Easy - Range 1-10, Unlimited attempts
+            self
+                .settings_data
+                .entry(1)
+                .write(("Easy", "Guess a number between 1 and 10", 1, 10, 0, true));
+            // Settings 2: Medium - Range 1-100, 10 attempts
+            self
+                .settings_data
+                .entry(2)
+                .write(("Medium", "Guess a number between 1 and 100", 1, 100, 10, true));
+            // Settings 3: Hard - Range 1-1000, 10 attempts
+            self
+                .settings_data
+                .entry(3)
+                .write(("Hard", "Guess a number between 1 and 1000", 1, 1000, 10, true));
+            self.settings_count.write(3);
+
+            // Create default objectives (4 achievements)
+            // Objective 1: First Win (type 1, threshold 1)
+            self.objective_data.entry(1).write((1, 1, true));
+            // Objective 2: Quick Thinker - win in under 5 guesses (type 2, threshold 5)
+            self.objective_data.entry(2).write((2, 5, true));
+            // Objective 3: Experienced Guesser - win 10 games (type 3, threshold 10)
+            self.objective_data.entry(3).write((3, 10, true));
+            // Objective 4: Lucky Guess - perfect game (type 4, threshold 1)
+            self.objective_data.entry(4).write((4, 1, true));
+            self.objective_count.write(4);
+
+            // Register objectives with the component
+            self
+                .objectives
+                .create_objective(1, "First Win", "Win your first game", minigame_token_address);
+            self
+                .objectives
+                .create_objective(
+                    2, "Quick Thinker", "Win a game in under 5 guesses", minigame_token_address,
+                );
+            self
+                .objectives
+                .create_objective(3, "Experienced Guesser", "Win 10 games", minigame_token_address);
+            self
+                .objectives
+                .create_objective(
+                    4, "Lucky Guess", "Win a game on your first guess", minigame_token_address,
+                );
+
+            // Create settings in the component
+            self
+                .settings
+                .create_settings(
+                    get_contract_address(),
+                    1,
+                    "Easy",
+                    "Guess a number between 1 and 10",
+                    array![
+                        GameSetting { name: "Range Min", value: "1" },
+                        GameSetting { name: "Range Max", value: "10" },
+                        GameSetting { name: "Max Attempts", value: "Unlimited" },
+                    ]
+                        .span(),
+                    minigame_token_address,
+                );
+            self
+                .settings
+                .create_settings(
+                    get_contract_address(),
+                    2,
+                    "Medium",
+                    "Guess a number between 1 and 100",
+                    array![
+                        GameSetting { name: "Range Min", value: "1" },
+                        GameSetting { name: "Range Max", value: "100" },
+                        GameSetting { name: "Max Attempts", value: "10" },
+                    ]
+                        .span(),
+                    minigame_token_address,
+                );
+            self
+                .settings
+                .create_settings(
+                    get_contract_address(),
+                    3,
+                    "Hard",
+                    "Guess a number between 1 and 1000",
+                    array![
+                        GameSetting { name: "Range Min", value: "1" },
+                        GameSetting { name: "Range Max", value: "1000" },
+                        GameSetting { name: "Max Attempts", value: "10" },
+                    ]
+                        .span(),
+                    minigame_token_address,
+                );
+        }
+    }
+}
