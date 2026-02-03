@@ -1,21 +1,43 @@
-import { useEffect } from "react";
-import { useTokenStore } from "../stores/tokenStore";
-import { api } from "../services/api";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import {
+  useToken,
+  useDenshokanClient,
+} from "@provable-games/denshokan-sdk/react";
+
+interface ClientToken {
+  tokenId: string;
+  gameId: number;
+  ownerAddress: string;
+  playerName: string | null;
+  currentScore: string;
+  gameOver: boolean;
+  soulbound: boolean;
+  mintedAt: string;
+}
 
 export function useTokenDetail(tokenId: string) {
-  const { tokenDetails, fetchTokenDetail } = useTokenStore();
+  const { data: sdkToken } = useToken(tokenId || undefined);
+  const client = useDenshokanClient();
   const [scores, setScores] = useState<any[]>([]);
 
   useEffect(() => {
     if (tokenId) {
-      fetchTokenDetail(tokenId);
-      api.getTokenScores(tokenId, 100).then((res) => setScores(res.data)).catch(() => {});
+      client.getTokenScores(tokenId, 100).then(setScores).catch(() => {});
     }
-  }, [tokenId]);
+  }, [client, tokenId]);
 
-  return {
-    token: tokenDetails[tokenId] || null,
-    scores,
-  };
+  const token: ClientToken | null = sdkToken
+    ? {
+        tokenId: sdkToken.tokenId,
+        gameId: sdkToken.gameId,
+        ownerAddress: sdkToken.owner,
+        playerName: sdkToken.playerName || null,
+        currentScore: String(sdkToken.score),
+        gameOver: sdkToken.gameOver,
+        soulbound: sdkToken.soulbound,
+        mintedAt: sdkToken.mintedAt,
+      }
+    : null;
+
+  return { token, scores };
 }

@@ -1,5 +1,6 @@
-import { useEffect, useRef } from "react";
-import { wsManager } from "../services/websocketManager";
+import { useCallback } from "react";
+import { useSubscription } from "@provable-games/denshokan-sdk/react";
+import type { WSChannel, WSMessage } from "@provable-games/denshokan-sdk";
 
 interface UseWebSocketOptions {
   channels?: string[];
@@ -9,35 +10,20 @@ interface UseWebSocketOptions {
 }
 
 export function useWebSocket(options: UseWebSocketOptions = {}) {
-  const { channels = [], gameIds, onMessage, autoConnect = true } = options;
-  const callbackRef = useRef(onMessage);
-  callbackRef.current = onMessage;
+  const { channels = [], gameIds, onMessage } = options;
 
-  const subscriberId = useRef(`ws-${Math.random().toString(36).slice(2)}`);
+  const handler = useCallback(
+    (message: WSMessage) => {
+      onMessage?.(message.channel, message.data);
+    },
+    [onMessage],
+  );
 
-  useEffect(() => {
-    const unsub = wsManager.subscribe(subscriberId.current, (channel, data) => {
-      callbackRef.current?.(channel, data);
-    });
+  useSubscription(
+    channels as WSChannel[],
+    handler,
+    gameIds?.map(Number),
+  );
 
-    if (channels.length > 0) {
-      wsManager.subscribeToChannels(channels, gameIds);
-    }
-
-    if (autoConnect) {
-      wsManager.connect();
-    }
-
-    return () => {
-      unsub();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (channels.length > 0) {
-      wsManager.subscribeToChannels(channels, gameIds);
-    }
-  }, [channels.join(","), gameIds?.join(",")]);
-
-  return { connected: wsManager.connected };
+  return { connected: true };
 }

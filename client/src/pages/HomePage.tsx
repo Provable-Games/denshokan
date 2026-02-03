@@ -1,19 +1,20 @@
 import { useEffect, useState } from "react";
 import { Box, Typography, Grid, Card, CardContent, Button } from "@mui/material";
 import { useNavigate } from "react-router-dom";
+import { useDenshokanClient } from "@provable-games/denshokan-sdk/react";
 import { useGameList } from "../hooks/useGameList";
-import { api } from "../services/api";
 import GameGrid from "../components/games/GameGrid";
 import LoadingSpinner from "../components/common/LoadingSpinner";
 
 export default function HomePage() {
   const navigate = useNavigate();
   const { games, loading } = useGameList();
+  const client = useDenshokanClient();
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
 
   useEffect(() => {
-    api.getActivity({ limit: 5 }).then((res) => setRecentActivity(res.data)).catch(() => {});
-  }, []);
+    client.getActivity({ limit: 5 }).then(setRecentActivity).catch(() => {});
+  }, [client]);
 
   return (
     <Box>
@@ -50,7 +51,7 @@ export default function HomePage() {
                 <Card variant="outlined">
                   <CardContent>
                     <Typography variant="subtitle2" color="text.secondary">
-                      {evt.eventType}
+                      {evt.type}
                     </Typography>
                     <Typography>Token #{String(evt.tokenId).slice(0, 12)}...</Typography>
                   </CardContent>
