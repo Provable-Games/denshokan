@@ -82,6 +82,37 @@ pub trait IDenshokanFilter<TState> {
     ) -> FilterResult;
 
     // ============================================================
+    // PLAYABLE/GAME_OVER FILTERS (uses mutable state)
+    // ============================================================
+
+    /// Returns playable tokens for a specific game (most common UI query)
+    fn tokens_by_game_and_playable(
+        self: @TState, game_address: ContractAddress, offset: u256, limit: u256,
+    ) -> FilterResult;
+
+    /// Returns game_over tokens for a specific game (leaderboards/history)
+    fn tokens_by_game_and_game_over(
+        self: @TState, game_address: ContractAddress, offset: u256, limit: u256,
+    ) -> FilterResult;
+
+    /// Returns playable tokens owned by address for a specific game
+    fn tokens_of_owner_by_game_and_playable(
+        self: @TState,
+        owner: ContractAddress,
+        game_address: ContractAddress,
+        offset: u256,
+        limit: u256,
+    ) -> FilterResult;
+
+    /// Returns all playable tokens globally
+    fn tokens_by_playable(self: @TState, offset: u256, limit: u256) -> FilterResult;
+
+    /// Returns owner's tokens filtered by soulbound status
+    fn tokens_of_owner_by_soulbound(
+        self: @TState, owner: ContractAddress, is_soulbound: bool, offset: u256, limit: u256,
+    ) -> FilterResult;
+
+    // ============================================================
     // COUNT FUNCTIONS (for pagination UI)
     // ============================================================
 
@@ -104,4 +135,18 @@ pub trait IDenshokanFilter<TState> {
     fn count_tokens_by_soulbound(self: @TState, is_soulbound: bool) -> u256;
 
     fn count_tokens_by_minted_at_range(self: @TState, start_time: u64, end_time: u64) -> u256;
+
+    fn count_tokens_by_game_and_playable(self: @TState, game_address: ContractAddress) -> u256;
+
+    fn count_tokens_by_game_and_game_over(self: @TState, game_address: ContractAddress) -> u256;
+
+    fn count_tokens_of_owner_by_game_and_playable(
+        self: @TState, owner: ContractAddress, game_address: ContractAddress,
+    ) -> u256;
+
+    fn count_tokens_by_playable(self: @TState) -> u256;
+
+    fn count_tokens_of_owner_by_soulbound(
+        self: @TState, owner: ContractAddress, is_soulbound: bool,
+    ) -> u256;
 }

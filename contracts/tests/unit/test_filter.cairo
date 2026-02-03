@@ -529,3 +529,182 @@ fn test_empty_token_supply() {
     let count = filter.count_tokens_by_game_address(game_metadata.contract_address);
     assert!(count == 0, "Count should be 0");
 }
+
+// ================================================================================================
+// PLAYABLE/GAME_OVER FILTER TESTS
+// ================================================================================================
+
+#[test]
+fn test_tokens_by_game_and_playable() {
+    let tc = setup_with_registry();
+    let filter = get_filter_dispatcher(tc.denshokan_address);
+
+    // Register a game
+    let (game_id, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "TestGame", Option::None,
+    );
+    let game_metadata = tc.registry.game_metadata(game_id);
+
+    // Mint tokens - newly minted tokens should be playable
+    mint_token_with_salt(@tc, game_metadata.contract_address, ALICE(), false, 1);
+    mint_token_with_salt(@tc, game_metadata.contract_address, ALICE(), false, 2);
+    mint_token_with_salt(@tc, game_metadata.contract_address, BOB(), false, 3);
+
+    // Query playable tokens for game
+    let result = filter.tokens_by_game_and_playable(game_metadata.contract_address, 0, 100);
+    assert!(result.token_ids.len() == 3, "Should return 3 playable tokens");
+    assert!(result.total == 3, "Total should be 3");
+
+    // Count should match
+    let count = filter.count_tokens_by_game_and_playable(game_metadata.contract_address);
+    assert!(count == result.total, "Count should match filter total");
+}
+
+#[test]
+fn test_tokens_by_game_and_playable_unregistered_game() {
+    let tc = setup_with_registry();
+    let filter = get_filter_dispatcher(tc.denshokan_address);
+
+    // Query with unregistered game
+    let fake_game: ContractAddress = 'FAKE_GAME'.try_into().unwrap();
+    let result = filter.tokens_by_game_and_playable(fake_game, 0, 100);
+    assert!(result.token_ids.len() == 0, "Should return empty for unregistered game");
+    assert!(result.total == 0, "Total should be 0");
+}
+
+#[test]
+fn test_tokens_by_game_and_game_over() {
+    let tc = setup_with_registry();
+    let filter = get_filter_dispatcher(tc.denshokan_address);
+
+    // Register a game
+    let (game_id, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "TestGame", Option::None,
+    );
+    let game_metadata = tc.registry.game_metadata(game_id);
+
+    // Mint tokens - newly minted tokens are NOT game_over
+    mint_token_with_salt(@tc, game_metadata.contract_address, ALICE(), false, 1);
+    mint_token_with_salt(@tc, game_metadata.contract_address, ALICE(), false, 2);
+
+    // Query game_over tokens - should be empty since none are game_over yet
+    let result = filter.tokens_by_game_and_game_over(game_metadata.contract_address, 0, 100);
+    assert!(result.token_ids.len() == 0, "Should return 0 game_over tokens");
+    assert!(result.total == 0, "Total should be 0");
+
+    // Count should match
+    let count = filter.count_tokens_by_game_and_game_over(game_metadata.contract_address);
+    assert!(count == result.total, "Count should match filter total");
+}
+
+#[test]
+fn test_tokens_of_owner_by_game_and_playable() {
+    let tc = setup_with_registry();
+    let filter = get_filter_dispatcher(tc.denshokan_address);
+
+    // Register two games
+    let (game_id1, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "Game1", Option::None,
+    );
+    let game1_metadata = tc.registry.game_metadata(game_id1);
+
+    let (game_id2, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "Game2", Option::None,
+    );
+    let game2_metadata = tc.registry.game_metadata(game_id2);
+
+    // ALICE has tokens in both games
+    mint_token_with_salt(@tc, game1_metadata.contract_address, ALICE(), false, 1);
+    mint_token_with_salt(@tc, game1_metadata.contract_address, ALICE(), false, 2);
+    mint_token_with_salt(@tc, game2_metadata.contract_address, ALICE(), false, 1);
+
+    // BOB has tokens in game1
+    mint_token_with_salt(@tc, game1_metadata.contract_address, BOB(), false, 3);
+
+    // Query ALICE's playable tokens in game1
+    let result = filter
+        .tokens_of_owner_by_game_and_playable(ALICE(), game1_metadata.contract_address, 0, 100);
+    assert!(result.token_ids.len() == 2, "ALICE should have 2 playable game1 tokens");
+    assert!(result.total == 2, "Total should be 2");
+
+    // Query ALICE's playable tokens in game2
+    let result2 = filter
+        .tokens_of_owner_by_game_and_playable(ALICE(), game2_metadata.contract_address, 0, 100);
+    assert!(result2.token_ids.len() == 1, "ALICE should have 1 playable game2 token");
+    assert!(result2.total == 1, "Total should be 1");
+
+    // Count should match
+    let count = filter
+        .count_tokens_of_owner_by_game_and_playable(ALICE(), game1_metadata.contract_address);
+    assert!(count == result.total, "Count should match filter total");
+}
+
+#[test]
+fn test_tokens_by_playable() {
+    let tc = setup_with_registry();
+    let filter = get_filter_dispatcher(tc.denshokan_address);
+
+    // Register two games
+    let (game_id1, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "Game1", Option::None,
+    );
+    let game1_metadata = tc.registry.game_metadata(game_id1);
+
+    let (game_id2, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "Game2", Option::None,
+    );
+    let game2_metadata = tc.registry.game_metadata(game_id2);
+
+    // Mint tokens in both games
+    mint_token_with_salt(@tc, game1_metadata.contract_address, ALICE(), false, 1);
+    mint_token_with_salt(@tc, game1_metadata.contract_address, ALICE(), false, 2);
+    mint_token_with_salt(@tc, game2_metadata.contract_address, BOB(), false, 1);
+
+    // Query all playable tokens globally
+    let result = filter.tokens_by_playable(0, 100);
+    assert!(result.token_ids.len() == 3, "Should return 3 playable tokens globally");
+    assert!(result.total == 3, "Total should be 3");
+
+    // Count should match
+    let count = filter.count_tokens_by_playable();
+    assert!(count == result.total, "Count should match filter total");
+}
+
+#[test]
+fn test_tokens_of_owner_by_soulbound() {
+    let tc = setup_with_registry();
+    let filter = get_filter_dispatcher(tc.denshokan_address);
+
+    // Register a game
+    let (game_id, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "TestGame", Option::None,
+    );
+    let game_metadata = tc.registry.game_metadata(game_id);
+
+    // ALICE has soulbound and non-soulbound tokens
+    mint_token_with_salt(@tc, game_metadata.contract_address, ALICE(), true, 1); // soulbound
+    mint_token_with_salt(@tc, game_metadata.contract_address, ALICE(), true, 2); // soulbound
+    mint_token_with_salt(@tc, game_metadata.contract_address, ALICE(), false, 3); // transferable
+
+    // BOB has only non-soulbound
+    mint_token_with_salt(@tc, game_metadata.contract_address, BOB(), false, 4);
+
+    // Query ALICE's soulbound tokens
+    let result = filter.tokens_of_owner_by_soulbound(ALICE(), true, 0, 100);
+    assert!(result.token_ids.len() == 2, "ALICE should have 2 soulbound tokens");
+    assert!(result.total == 2, "Total should be 2");
+
+    // Query ALICE's transferable tokens
+    let result2 = filter.tokens_of_owner_by_soulbound(ALICE(), false, 0, 100);
+    assert!(result2.token_ids.len() == 1, "ALICE should have 1 transferable token");
+    assert!(result2.total == 1, "Total should be 1");
+
+    // Query BOB's soulbound tokens (should be empty)
+    let result3 = filter.tokens_of_owner_by_soulbound(BOB(), true, 0, 100);
+    assert!(result3.token_ids.len() == 0, "BOB should have 0 soulbound tokens");
+    assert!(result3.total == 0, "Total should be 0");
+
+    // Count should match
+    let count = filter.count_tokens_of_owner_by_soulbound(ALICE(), true);
+    assert!(count == result.total, "Count should match filter total");
+}
