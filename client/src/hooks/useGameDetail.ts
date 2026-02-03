@@ -21,7 +21,7 @@ export function useGameDetail(gameId: number) {
 
     client.getGame(gameId).then((g) => {
       setGame({
-        gameId: g.id,
+        gameId: g.gameId,
         contractAddress: g.contractAddress,
         name: g.name || null,
         description: g.description || null,

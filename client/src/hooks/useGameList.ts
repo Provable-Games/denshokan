@@ -12,7 +12,7 @@ export interface ClientGame {
 
 function adaptGame(g: Game): ClientGame {
   return {
-    gameId: g.id,
+    gameId: g.gameId,
     contractAddress: g.contractAddress,
     name: g.name || null,
     description: g.description || null,
