@@ -3,7 +3,7 @@
 // It separates view logic from the main Denshokan contract to reduce contract size.
 
 use core::num::traits::Zero;
-use crate::filter::{FilterResult, IDenshokanFilter, MAX_FILTER_LIMIT};
+use crate::filter::{FilterResult, IDenshokanFilter, MAX_FILTER_LIMIT, TokenFullState};
 use game_components_registry::interface::{
     IMinigameRegistryDispatcher, IMinigameRegistryDispatcherTrait,
 };
@@ -396,6 +396,80 @@ pub mod DenshokanViewer {
             self: @ContractState, owner: ContractAddress, is_soulbound: bool,
         ) -> u256 {
             self._count_owner_tokens_by_soulbound(owner, is_soulbound)
+        }
+
+        // ============================================================
+        // OWNER TOKENS (no game filter)
+        // ============================================================
+
+        fn tokens_of_owner(
+            self: @ContractState, owner: ContractAddress, offset: u256, limit: u256,
+        ) -> FilterResult {
+            self._filter_owner_tokens(owner, offset, limit)
+        }
+
+        fn count_tokens_of_owner(self: @ContractState, owner: ContractAddress) -> u256 {
+            self._get_erc721().balance_of(owner)
+        }
+
+        // ============================================================
+        // OWNER + PLAYABLE STATUS (across all games)
+        // ============================================================
+
+        fn tokens_of_owner_by_playable(
+            self: @ContractState, owner: ContractAddress, offset: u256, limit: u256,
+        ) -> FilterResult {
+            self._filter_owner_tokens_by_playable(owner, offset, limit)
+        }
+
+        fn tokens_of_owner_by_game_over(
+            self: @ContractState, owner: ContractAddress, offset: u256, limit: u256,
+        ) -> FilterResult {
+            self._filter_owner_tokens_by_game_over(owner, offset, limit)
+        }
+
+        fn count_tokens_of_owner_by_playable(self: @ContractState, owner: ContractAddress) -> u256 {
+            self._count_owner_tokens_by_playable(owner)
+        }
+
+        fn count_tokens_of_owner_by_game_over(self: @ContractState, owner: ContractAddress) -> u256 {
+            self._count_owner_tokens_by_game_over(owner)
+        }
+
+        // ============================================================
+        // BATCH FULL STATE
+        // ============================================================
+
+        fn tokens_full_state_batch(
+            self: @ContractState, token_ids: Array<felt252>,
+        ) -> Array<TokenFullState> {
+            let erc721 = self._get_erc721();
+            let token = self._get_token();
+            let mut result: Array<TokenFullState> = array![];
+
+            for token_id in token_ids {
+                let metadata = token.token_metadata(token_id);
+                let owner = erc721.owner_of(token_id.into());
+                let player_name = token.player_name(token_id);
+                let is_playable = token.is_playable(token_id);
+                let game_address = token.token_game_address(token_id);
+
+                result
+                    .append(
+                        TokenFullState {
+                            token_id,
+                            owner,
+                            player_name,
+                            is_playable,
+                            game_address,
+                            game_over: metadata.game_over,
+                            completed_objective: metadata.completed_objective,
+                            lifecycle: metadata.lifecycle,
+                        },
+                    );
+            };
+
+            result
         }
     }
 
@@ -1093,6 +1167,153 @@ pub mod DenshokanViewer {
                 let token_id_u256 = enumerable.token_of_owner_by_index(owner, index);
                 let token_id: felt252 = token_id_u256.try_into().unwrap();
                 if unpack_soulbound(token_id) == target_soulbound {
+                    count += 1;
+                }
+                index += 1;
+            }
+
+            count
+        }
+
+        // ============================================================
+        // OWNER TOKENS HELPERS (no game filter)
+        // ============================================================
+
+        fn _filter_owner_tokens(
+            self: @ContractState, owner: ContractAddress, offset: u256, limit: u256,
+        ) -> FilterResult {
+            let effective_limit = if limit == 0 || limit > MAX_FILTER_LIMIT {
+                MAX_FILTER_LIMIT
+            } else {
+                limit
+            };
+
+            let erc721 = self._get_erc721();
+            let enumerable = self._get_enumerable();
+            let owner_balance = erc721.balance_of(owner);
+            let mut result: Array<felt252> = array![];
+            let mut collected: u256 = 0;
+            let mut index: u256 = 0;
+
+            while index < owner_balance {
+                if index >= offset && collected < effective_limit {
+                    let token_id_u256 = enumerable.token_of_owner_by_index(owner, index);
+                    let token_id: felt252 = token_id_u256.try_into().unwrap();
+                    result.append(token_id);
+                    collected += 1;
+                }
+                index += 1;
+            }
+
+            FilterResult { token_ids: result, total: owner_balance }
+        }
+
+        // ============================================================
+        // OWNER + PLAYABLE/GAME_OVER HELPERS (across all games)
+        // ============================================================
+
+        fn _filter_owner_tokens_by_playable(
+            self: @ContractState, owner: ContractAddress, offset: u256, limit: u256,
+        ) -> FilterResult {
+            let effective_limit = if limit == 0 || limit > MAX_FILTER_LIMIT {
+                MAX_FILTER_LIMIT
+            } else {
+                limit
+            };
+
+            let erc721 = self._get_erc721();
+            let enumerable = self._get_enumerable();
+            let token = self._get_token();
+            let owner_balance = erc721.balance_of(owner);
+            let mut result: Array<felt252> = array![];
+            let mut total_matches: u256 = 0;
+            let mut index: u256 = 0;
+
+            while index < owner_balance {
+                let token_id_u256 = enumerable.token_of_owner_by_index(owner, index);
+                let token_id: felt252 = token_id_u256.try_into().unwrap();
+
+                if token.is_playable(token_id) {
+                    if total_matches >= offset && result.len().into() < effective_limit {
+                        result.append(token_id);
+                    }
+                    total_matches += 1;
+                }
+
+                index += 1;
+            }
+
+            FilterResult { token_ids: result, total: total_matches }
+        }
+
+        fn _filter_owner_tokens_by_game_over(
+            self: @ContractState, owner: ContractAddress, offset: u256, limit: u256,
+        ) -> FilterResult {
+            let effective_limit = if limit == 0 || limit > MAX_FILTER_LIMIT {
+                MAX_FILTER_LIMIT
+            } else {
+                limit
+            };
+
+            let erc721 = self._get_erc721();
+            let enumerable = self._get_enumerable();
+            let token = self._get_token();
+            let owner_balance = erc721.balance_of(owner);
+            let mut result: Array<felt252> = array![];
+            let mut total_matches: u256 = 0;
+            let mut index: u256 = 0;
+
+            while index < owner_balance {
+                let token_id_u256 = enumerable.token_of_owner_by_index(owner, index);
+                let token_id: felt252 = token_id_u256.try_into().unwrap();
+                let metadata = token.token_metadata(token_id);
+
+                if metadata.game_over {
+                    if total_matches >= offset && result.len().into() < effective_limit {
+                        result.append(token_id);
+                    }
+                    total_matches += 1;
+                }
+
+                index += 1;
+            }
+
+            FilterResult { token_ids: result, total: total_matches }
+        }
+
+        fn _count_owner_tokens_by_playable(self: @ContractState, owner: ContractAddress) -> u256 {
+            let erc721 = self._get_erc721();
+            let enumerable = self._get_enumerable();
+            let token = self._get_token();
+            let owner_balance = erc721.balance_of(owner);
+            let mut count: u256 = 0;
+            let mut index: u256 = 0;
+
+            while index < owner_balance {
+                let token_id_u256 = enumerable.token_of_owner_by_index(owner, index);
+                let token_id: felt252 = token_id_u256.try_into().unwrap();
+                if token.is_playable(token_id) {
+                    count += 1;
+                }
+                index += 1;
+            }
+
+            count
+        }
+
+        fn _count_owner_tokens_by_game_over(self: @ContractState, owner: ContractAddress) -> u256 {
+            let erc721 = self._get_erc721();
+            let enumerable = self._get_enumerable();
+            let token = self._get_token();
+            let owner_balance = erc721.balance_of(owner);
+            let mut count: u256 = 0;
+            let mut index: u256 = 0;
+
+            while index < owner_balance {
+                let token_id_u256 = enumerable.token_of_owner_by_index(owner, index);
+                let token_id: felt252 = token_id_u256.try_into().unwrap();
+                let metadata = token.token_metadata(token_id);
+                if metadata.game_over {
                     count += 1;
                 }
                 index += 1;

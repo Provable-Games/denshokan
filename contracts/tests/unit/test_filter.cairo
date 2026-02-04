@@ -715,3 +715,196 @@ fn test_tokens_of_owner_by_soulbound() {
     let count = filter.count_tokens_of_owner_by_soulbound(ALICE(), true);
     assert!(count == result.total, "Count should match filter total");
 }
+
+// ================================================================================================
+// OWNER TOKENS (NO FILTER) TESTS
+// ================================================================================================
+
+#[test]
+fn test_tokens_of_owner() {
+    let tc = setup_with_registry();
+    let filter = get_filter_dispatcher(tc.denshokan_address);
+
+    // Register a game
+    let (game_id, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "TestGame", Option::None,
+    );
+    let game_metadata = tc.registry.game_metadata(game_id);
+
+    // ALICE owns multiple tokens
+    mint_token_with_salt(@tc, game_metadata.contract_address, ALICE(), false, 1);
+    mint_token_with_salt(@tc, game_metadata.contract_address, ALICE(), false, 2);
+    mint_token_with_salt(@tc, game_metadata.contract_address, ALICE(), true, 3);
+
+    // BOB owns one token
+    mint_token_with_salt(@tc, game_metadata.contract_address, BOB(), false, 4);
+
+    // Query ALICE's tokens
+    let result = filter.tokens_of_owner(ALICE(), 0, 100);
+    assert!(result.token_ids.len() == 3, "ALICE should have 3 tokens");
+    assert!(result.total == 3, "Total should be 3");
+
+    // Query BOB's tokens
+    let result2 = filter.tokens_of_owner(BOB(), 0, 100);
+    assert!(result2.token_ids.len() == 1, "BOB should have 1 token");
+    assert!(result2.total == 1, "Total should be 1");
+
+    // Count should match
+    let count = filter.count_tokens_of_owner(ALICE());
+    assert!(count == result.total, "Count should match filter total");
+}
+
+#[test]
+fn test_tokens_of_owner_pagination() {
+    let tc = setup_with_registry();
+    let filter = get_filter_dispatcher(tc.denshokan_address);
+
+    // Register a game
+    let (game_id, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "TestGame", Option::None,
+    );
+    let game_metadata = tc.registry.game_metadata(game_id);
+
+    // Mint 5 tokens for ALICE
+    mint_token_with_salt(@tc, game_metadata.contract_address, ALICE(), false, 1);
+    mint_token_with_salt(@tc, game_metadata.contract_address, ALICE(), false, 2);
+    mint_token_with_salt(@tc, game_metadata.contract_address, ALICE(), false, 3);
+    mint_token_with_salt(@tc, game_metadata.contract_address, ALICE(), false, 4);
+    mint_token_with_salt(@tc, game_metadata.contract_address, ALICE(), false, 5);
+
+    // Test first page (limit 2)
+    let page1 = filter.tokens_of_owner(ALICE(), 0, 2);
+    assert!(page1.token_ids.len() == 2, "Page 1 should have 2 tokens");
+    assert!(page1.total == 5, "Total should be 5");
+
+    // Test second page (offset 2, limit 2)
+    let page2 = filter.tokens_of_owner(ALICE(), 2, 2);
+    assert!(page2.token_ids.len() == 2, "Page 2 should have 2 tokens");
+    assert!(page2.total == 5, "Total should still be 5");
+
+    // Test third page (offset 4, limit 2)
+    let page3 = filter.tokens_of_owner(ALICE(), 4, 2);
+    assert!(page3.token_ids.len() == 1, "Page 3 should have 1 token");
+    assert!(page3.total == 5, "Total should still be 5");
+}
+
+// ================================================================================================
+// OWNER + PLAYABLE/GAME_OVER (ACROSS ALL GAMES) TESTS
+// ================================================================================================
+
+#[test]
+fn test_tokens_of_owner_by_playable_across_games() {
+    let tc = setup_with_registry();
+    let filter = get_filter_dispatcher(tc.denshokan_address);
+
+    // Register two games
+    let (game_id1, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "Game1", Option::None,
+    );
+    let game1_metadata = tc.registry.game_metadata(game_id1);
+
+    let (game_id2, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "Game2", Option::None,
+    );
+    let game2_metadata = tc.registry.game_metadata(game_id2);
+
+    // ALICE has tokens in both games - all should be playable initially
+    mint_token_with_salt(@tc, game1_metadata.contract_address, ALICE(), false, 1);
+    mint_token_with_salt(@tc, game1_metadata.contract_address, ALICE(), false, 2);
+    mint_token_with_salt(@tc, game2_metadata.contract_address, ALICE(), false, 1);
+
+    // BOB has tokens
+    mint_token_with_salt(@tc, game1_metadata.contract_address, BOB(), false, 3);
+
+    // Query ALICE's playable tokens across all games
+    let result = filter.tokens_of_owner_by_playable(ALICE(), 0, 100);
+    assert!(result.token_ids.len() == 3, "ALICE should have 3 playable tokens");
+    assert!(result.total == 3, "Total should be 3");
+
+    // Query BOB's playable tokens
+    let result2 = filter.tokens_of_owner_by_playable(BOB(), 0, 100);
+    assert!(result2.token_ids.len() == 1, "BOB should have 1 playable token");
+    assert!(result2.total == 1, "Total should be 1");
+
+    // Count should match
+    let count = filter.count_tokens_of_owner_by_playable(ALICE());
+    assert!(count == result.total, "Count should match filter total");
+}
+
+#[test]
+fn test_tokens_of_owner_by_game_over() {
+    let tc = setup_with_registry();
+    let filter = get_filter_dispatcher(tc.denshokan_address);
+
+    // Register a game
+    let (game_id, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "TestGame", Option::None,
+    );
+    let game_metadata = tc.registry.game_metadata(game_id);
+
+    // Mint tokens - newly minted tokens are NOT game_over
+    mint_token_with_salt(@tc, game_metadata.contract_address, ALICE(), false, 1);
+    mint_token_with_salt(@tc, game_metadata.contract_address, ALICE(), false, 2);
+
+    // Query game_over tokens - should be empty since none are game_over yet
+    let result = filter.tokens_of_owner_by_game_over(ALICE(), 0, 100);
+    assert!(result.token_ids.len() == 0, "Should return 0 game_over tokens");
+    assert!(result.total == 0, "Total should be 0");
+
+    // Count should match
+    let count = filter.count_tokens_of_owner_by_game_over(ALICE());
+    assert!(count == result.total, "Count should match filter total");
+}
+
+// ================================================================================================
+// BATCH FULL STATE TESTS
+// ================================================================================================
+
+#[test]
+fn test_tokens_full_state_batch() {
+    let tc = setup_with_registry();
+    let filter = get_filter_dispatcher(tc.denshokan_address);
+
+    // Register a game
+    let (game_id, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "TestGame", Option::None,
+    );
+    let game_metadata = tc.registry.game_metadata(game_id);
+
+    // Mint tokens
+    let token1 = mint_token_with_salt(@tc, game_metadata.contract_address, ALICE(), false, 1);
+    let token2 = mint_token_with_salt(@tc, game_metadata.contract_address, BOB(), true, 2);
+
+    // Query full state for both tokens
+    let token_ids = array![token1, token2];
+    let states = filter.tokens_full_state_batch(token_ids);
+
+    assert!(states.len() == 2, "Should return 2 states");
+
+    // Check first token state
+    let state1 = states.at(0);
+    assert!(*state1.token_id == token1, "Token ID should match");
+    assert!(*state1.owner == ALICE(), "Owner should be ALICE");
+    assert!(*state1.is_playable, "Should be playable");
+    assert!(!*state1.game_over, "Should not be game_over");
+    assert!(*state1.game_address == game_metadata.contract_address, "Game address should match");
+
+    // Check second token state
+    let state2 = states.at(1);
+    assert!(*state2.token_id == token2, "Token ID should match");
+    assert!(*state2.owner == BOB(), "Owner should be BOB");
+    assert!(*state2.is_playable, "Should be playable");
+    assert!(!*state2.game_over, "Should not be game_over");
+}
+
+#[test]
+fn test_tokens_full_state_batch_empty() {
+    let tc = setup_with_registry();
+    let filter = get_filter_dispatcher(tc.denshokan_address);
+
+    // Query with empty array
+    let token_ids: Array<felt252> = array![];
+    let states = filter.tokens_full_state_batch(token_ids);
+
+    assert!(states.len() == 0, "Should return empty array");
+}

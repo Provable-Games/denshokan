@@ -2,6 +2,7 @@
 // Provides paginated view functions that combine ERC721Enumerable iteration
 // with PackedTokenId unpacking for efficient token filtering.
 
+use game_components_token::structs::Lifecycle;
 use starknet::ContractAddress;
 
 /// Maximum number of tokens returned per filter call
@@ -14,6 +15,20 @@ pub const MAX_FILTER_LIMIT: u256 = 100;
 pub struct FilterResult {
     pub token_ids: Array<felt252>, // Matching token IDs
     pub total: u256 // Total matches (for pagination UI)
+}
+
+/// Full state for a token including mutable state not in packed token ID
+/// Used for batch queries to minimize RPC calls
+#[derive(Drop, Serde)]
+pub struct TokenFullState {
+    pub token_id: felt252,
+    pub owner: ContractAddress,
+    pub player_name: felt252,
+    pub is_playable: bool,
+    pub game_address: ContractAddress,
+    pub game_over: bool,
+    pub completed_objective: bool,
+    pub lifecycle: Lifecycle,
 }
 
 /// Filter interface for querying tokens by various criteria
@@ -149,4 +164,46 @@ pub trait IDenshokanFilter<TState> {
     fn count_tokens_of_owner_by_soulbound(
         self: @TState, owner: ContractAddress, is_soulbound: bool,
     ) -> u256;
+
+    // ============================================================
+    // OWNER TOKENS (no game filter)
+    // ============================================================
+
+    /// Returns all tokens owned by address (paginated)
+    fn tokens_of_owner(
+        self: @TState, owner: ContractAddress, offset: u256, limit: u256,
+    ) -> FilterResult;
+
+    /// Returns count of all tokens owned by address
+    fn count_tokens_of_owner(self: @TState, owner: ContractAddress) -> u256;
+
+    // ============================================================
+    // OWNER + PLAYABLE STATUS (across all games)
+    // ============================================================
+
+    /// Returns owner's playable tokens across all games
+    fn tokens_of_owner_by_playable(
+        self: @TState, owner: ContractAddress, offset: u256, limit: u256,
+    ) -> FilterResult;
+
+    /// Returns owner's game_over tokens across all games
+    fn tokens_of_owner_by_game_over(
+        self: @TState, owner: ContractAddress, offset: u256, limit: u256,
+    ) -> FilterResult;
+
+    /// Returns count of owner's playable tokens across all games
+    fn count_tokens_of_owner_by_playable(self: @TState, owner: ContractAddress) -> u256;
+
+    /// Returns count of owner's game_over tokens across all games
+    fn count_tokens_of_owner_by_game_over(self: @TState, owner: ContractAddress) -> u256;
+
+    // ============================================================
+    // BATCH FULL STATE (high impact for RPC efficiency)
+    // ============================================================
+
+    /// Returns full state for multiple tokens in one call
+    /// Includes: owner, player_name, is_playable, game_address, game_over, completed_objective, lifecycle
+    fn tokens_full_state_batch(
+        self: @TState, token_ids: Array<felt252>,
+    ) -> Array<TokenFullState>;
 }
