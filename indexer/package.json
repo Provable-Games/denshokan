@@ -3,10 +3,11 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "apibara dev",
+    "dev": "npm run db:cleanup && apibara dev",
     "build": "apibara build",
-    "start": "apibara start",
+    "start": "npm run db:cleanup && apibara start",
     "check-dna": "tsx scripts/check-dna-status.ts",
+    "db:cleanup": "tsx scripts/cleanup-triggers.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio"
