@@ -19,6 +19,7 @@ const denshokanConfig = {
   rpcUrl: config.rpcUrl,
   denshokanAddress: config.denshokanAddress,
   registryAddress: config.registryAddress,
+  viewerAddress: config.viewerAddress,
   primarySource: "rpc" as any,
 };
 

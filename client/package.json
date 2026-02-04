@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@provable-games/denshokan-sdk": "file:../../denshokan-sdk",
+    "@provable-games/denshokan-sdk": "^0.1.1",
     "@cartridge/connector": "^0.12.1",
     "@cartridge/controller": "^0.12.2",
     "@emotion/react": "^11.14.0",
@@ -24,7 +24,7 @@
     "react-dom": "^18.2.0",
     "react-router-dom": "6.22.1",
     "react-window": "^2.2.3",
-    "starknet": "^8.9.2",
+    "starknet": "^9.2.1",
     "vite-plugin-mkcert": "^1.17.9"
   },
   "devDependencies": {

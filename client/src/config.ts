@@ -8,6 +8,7 @@ interface NetworkConfig {
   explorerUrl: string;
   denshokanAddress: string;
   registryAddress: string;
+  viewerAddress: string;
 }
 
 const configs: Record<string, NetworkConfig> = {
@@ -21,6 +22,7 @@ const configs: Record<string, NetworkConfig> = {
     explorerUrl: "https://voyager.online",
     denshokanAddress: import.meta.env.VITE_DENSHOKAN_ADDRESS || "",
     registryAddress: import.meta.env.VITE_REGISTRY_ADDRESS || "",
+    viewerAddress: import.meta.env.VITE_VIEWER_ADDRESS || "",
   },
   sepolia: {
     chainId: "SN_SEPOLIA",
@@ -32,6 +34,7 @@ const configs: Record<string, NetworkConfig> = {
     explorerUrl: "https://sepolia.voyager.online",
     denshokanAddress: import.meta.env.VITE_DENSHOKAN_ADDRESS || "",
     registryAddress: import.meta.env.VITE_REGISTRY_ADDRESS || "",
+    viewerAddress: import.meta.env.VITE_VIEWER_ADDRESS || "",
   },
 };
 
