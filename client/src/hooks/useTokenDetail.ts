@@ -7,6 +7,7 @@ import {
 interface ClientToken {
   tokenId: string;
   gameId: number;
+  gameAddress: string | null;
   ownerAddress: string;
   playerName: string | null;
   currentScore: string;
@@ -30,6 +31,7 @@ export function useTokenDetail(tokenId: string) {
     ? {
         tokenId: sdkToken.tokenId,
         gameId: sdkToken.gameId,
+        gameAddress: (sdkToken as any).gameAddress || null,
         ownerAddress: sdkToken.owner,
         playerName: sdkToken.playerName || null,
         currentScore: String(sdkToken.score),
@@ -39,5 +41,8 @@ export function useTokenDetail(tokenId: string) {
       }
     : null;
 
-  return { token, scores };
+  const isLoading = !sdkToken && tokenId !== "";
+  const error = null; // Could add error handling if needed
+
+  return { token, scores, isLoading, error };
 }

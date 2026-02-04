@@ -24,6 +24,41 @@ pub trait INumberGuess<TContractState> {
     fn best_score(self: @TContractState, token_id: felt252) -> u32;
     /// Get the count of perfect games (1-guess wins) for a token.
     fn perfect_games(self: @TContractState, token_id: felt252) -> u32;
+    /// Get the current game status for a token.
+    fn game_status(self: @TContractState, token_id: felt252) -> u8;
+}
+
+/// Public configuration interface for creating settings and objectives.
+/// Anyone can create new settings or objectives - this is intentionally permissionless.
+#[starknet::interface]
+pub trait INumberGuessConfig<TContractState> {
+    /// Create a new settings configuration. Returns the new settings_id.
+    /// Public - anyone can create custom difficulty settings.
+    fn create_settings(
+        ref self: TContractState,
+        name: ByteArray,
+        description: ByteArray,
+        min: u32,
+        max: u32,
+        max_attempts: u32,
+    ) -> u32;
+
+    /// Create a new objective. Returns the new objective_id.
+    /// Public - anyone can create custom objectives.
+    /// Objective types: 1=Win, 2=WinWithinN (threshold=max guesses), 3=PerfectGame
+    fn create_objective(
+        ref self: TContractState,
+        name: ByteArray,
+        description: ByteArray,
+        objective_type: u8,
+        threshold: u32,
+    ) -> u32;
+
+    /// Get total settings count.
+    fn settings_count(self: @TContractState) -> u32;
+
+    /// Get total objectives count.
+    fn objective_count(self: @TContractState) -> u32;
 }
 
 #[starknet::interface]
@@ -210,8 +245,13 @@ pub mod NumberGuess {
         // Objectives storage
         objective_count: u32,
         // objective_id -> (type, threshold, exists)
-        // type: 1=first_win, 2=quick_thinker, 3=experienced, 4=lucky_guess
+        // type: 1=Win, 2=WinWithinN, 3=PerfectGame
         objective_data: Map<u32, (u8, u32, bool)>,
+        // Per-token, per-objective completion tracking (for single-game objectives)
+        token_objectives_completed: Map<(felt252, u32), bool>,
+        // Objective metadata for display names/descriptions
+        // objective_id -> (name, description)
+        objective_metadata: Map<u32, (ByteArray, ByteArray)>,
     }
 
     // ======================================================================
@@ -466,36 +506,14 @@ pub mod NumberGuess {
         }
 
         fn completed_objective(self: @ContractState, token_id: felt252, objective_id: u32) -> bool {
-            let (obj_type, threshold, exists) = self.objective_data.entry(objective_id).read();
+            let (_, _, exists) = self.objective_data.entry(objective_id).read();
             if !exists {
                 return false;
             }
 
-            // Objective types:
-            // 1 = First Win (win 1 game)
-            // 2 = Quick Thinker (win in under threshold guesses)
-            // 3 = Experienced Guesser (win threshold games)
-            // 4 = Lucky Guess (perfect game - 1 guess)
-
-            let wins = self.games_won.entry(token_id).read();
-            let best = self.best_score.entry(token_id).read();
-            let perfect = self.perfect_games.entry(token_id).read();
-
-            if obj_type == 1 {
-                // First Win: won at least 1 game
-                wins >= 1
-            } else if obj_type == 2 {
-                // Quick Thinker: best score under threshold
-                best > 0 && best < threshold
-            } else if obj_type == 3 {
-                // Experienced Guesser: won threshold games
-                wins >= threshold
-            } else if obj_type == 4 {
-                // Lucky Guess: has at least 1 perfect game
-                perfect >= 1
-            } else {
-                false
-            }
+            // Check the per-token, per-objective completion tracking
+            // Objectives are now single-game scoped (recorded when the game is won)
+            self.token_objectives_completed.entry((token_id, objective_id)).read()
         }
 
         fn objective_exists_batch(self: @ContractState, objective_ids: Span<u32>) -> Array<bool> {
@@ -523,7 +541,7 @@ pub mod NumberGuess {
             let mut objectives = array![];
             let mut i: u32 = 1;
             while i <= count {
-                let (obj_type, threshold, exists) = self.objective_data.entry(i).read();
+                let (_, _, exists) = self.objective_data.entry(i).read();
                 if exists {
                     let completed = self.completed_objective(token_id, i);
                     let completed_str: ByteArray = if completed {
@@ -532,15 +550,8 @@ pub mod NumberGuess {
                         "No"
                     };
 
-                    let name: ByteArray = if obj_type == 1 {
-                        "First Win"
-                    } else if obj_type == 2 {
-                        format!("Quick Thinker (under {} guesses)", threshold)
-                    } else if obj_type == 3 {
-                        format!("Win {} games", threshold)
-                    } else {
-                        "Lucky Guess"
-                    };
+                    // Get name from metadata
+                    let (name, _) = self.objective_metadata.entry(i).read();
 
                     objectives
                         .append(
@@ -642,6 +653,9 @@ pub mod NumberGuess {
                 let total_score = self.scores.entry(token_id).read() + points;
                 self.scores.entry(token_id).write(total_score);
 
+                // Check and record single-game objective completions
+                self.check_and_record_objectives(token_id, guess_count);
+
                 return 0; // Correct
             }
 
@@ -696,6 +710,117 @@ pub mod NumberGuess {
 
         fn perfect_games(self: @ContractState, token_id: felt252) -> u32 {
             self.perfect_games.entry(token_id).read()
+        }
+
+        fn game_status(self: @ContractState, token_id: felt252) -> u8 {
+            self.game_status.entry(token_id).read()
+        }
+    }
+
+    // ======================================================================
+    // INumberGuessConfig — Public configuration
+    // ======================================================================
+
+    #[abi(embed_v0)]
+    impl NumberGuessConfigImpl of super::INumberGuessConfig<ContractState> {
+        fn create_settings(
+            ref self: ContractState,
+            name: ByteArray,
+            description: ByteArray,
+            min: u32,
+            max: u32,
+            max_attempts: u32,
+        ) -> u32 {
+            // Validate inputs
+            assert!(max > min, "max must be greater than min");
+
+            // Auto-increment settings ID
+            let settings_id = self.settings_count.read() + 1;
+            self.settings_count.write(settings_id);
+
+            // Store settings data
+            self
+                .settings_data
+                .entry(settings_id)
+                .write((name, description, min, max, max_attempts, true));
+
+            settings_id
+        }
+
+        fn create_objective(
+            ref self: ContractState,
+            name: ByteArray,
+            description: ByteArray,
+            objective_type: u8,
+            threshold: u32,
+        ) -> u32 {
+            // Validate objective type (1=Win, 2=WinWithinN, 3=PerfectGame)
+            assert!(
+                objective_type >= 1 && objective_type <= 3, "Invalid objective type (must be 1-3)",
+            );
+
+            // Auto-increment objective ID
+            let objective_id = self.objective_count.read() + 1;
+            self.objective_count.write(objective_id);
+
+            // Store objective data and metadata
+            self.objective_data.entry(objective_id).write((objective_type, threshold, true));
+            self.objective_metadata.entry(objective_id).write((name, description));
+
+            objective_id
+        }
+
+        fn settings_count(self: @ContractState) -> u32 {
+            self.settings_count.read()
+        }
+
+        fn objective_count(self: @ContractState) -> u32 {
+            self.objective_count.read()
+        }
+    }
+
+    // ======================================================================
+    // Internal helpers
+    // ======================================================================
+
+    #[generate_trait]
+    impl InternalImpl of InternalTrait {
+        /// Check and record objective completions for this specific game.
+        /// Called after a win to evaluate single-game objectives.
+        fn check_and_record_objectives(
+            ref self: ContractState, token_id: felt252, guess_count: u32,
+        ) {
+            let count = self.objective_count.read();
+            let mut i: u32 = 1;
+            while i <= count {
+                let (obj_type, threshold, exists) = self.objective_data.entry(i).read();
+                if exists {
+                    // Check if already completed for this token
+                    let already_completed = self
+                        .token_objectives_completed
+                        .entry((token_id, i))
+                        .read();
+                    if !already_completed {
+                        let completed = if obj_type == 1 {
+                            // Type 1: Win - completed on any win
+                            true
+                        } else if obj_type == 2 {
+                            // Type 2: WinWithinN - win with <= threshold guesses
+                            guess_count <= threshold
+                        } else if obj_type == 3 {
+                            // Type 3: PerfectGame - win on first guess
+                            guess_count == 1
+                        } else {
+                            false
+                        };
+
+                        if completed {
+                            self.token_objectives_completed.entry((token_id, i)).write(true);
+                        }
+                    }
+                }
+                i += 1;
+            };
         }
     }
 
@@ -780,16 +905,25 @@ pub mod NumberGuess {
                 .write(("Hard", "Guess a number between 1 and 1000", 1, 1000, 10, true));
             self.settings_count.write(3);
 
-            // Create default objectives (4 achievements)
+            // Create default objectives (3 single-game achievements)
+            // Objective types: 1=Win, 2=WinWithinN, 3=PerfectGame
+            //
             // Objective 1: First Win (type 1, threshold 1)
             self.objective_data.entry(1).write((1, 1, true));
-            // Objective 2: Quick Thinker - win in under 5 guesses (type 2, threshold 5)
+            self.objective_metadata.entry(1).write(("First Win", "Win your first game"));
+            // Objective 2: Quick Thinker - win in 5 or fewer guesses (type 2, threshold 5)
             self.objective_data.entry(2).write((2, 5, true));
-            // Objective 3: Experienced Guesser - win 10 games (type 3, threshold 10)
-            self.objective_data.entry(3).write((3, 10, true));
-            // Objective 4: Lucky Guess - perfect game (type 4, threshold 1)
-            self.objective_data.entry(4).write((4, 1, true));
-            self.objective_count.write(4);
+            self
+                .objective_metadata
+                .entry(2)
+                .write(("Quick Thinker", "Win a game in 5 or fewer guesses"));
+            // Objective 3: Lucky Guess - perfect game (type 3, threshold 1)
+            self.objective_data.entry(3).write((3, 1, true));
+            self
+                .objective_metadata
+                .entry(3)
+                .write(("Lucky Guess", "Win a game on your first guess"));
+            self.objective_count.write(3);
 
             // Register objectives with the component
             self
@@ -798,15 +932,12 @@ pub mod NumberGuess {
             self
                 .objectives
                 .create_objective(
-                    2, "Quick Thinker", "Win a game in under 5 guesses", minigame_token_address,
+                    2, "Quick Thinker", "Win a game in 5 or fewer guesses", minigame_token_address,
                 );
             self
                 .objectives
-                .create_objective(3, "Experienced Guesser", "Win 10 games", minigame_token_address);
-            self
-                .objectives
                 .create_objective(
-                    4, "Lucky Guess", "Win a game on your first guess", minigame_token_address,
+                    3, "Lucky Guess", "Win a game on your first guess", minigame_token_address,
                 );
 
             // Create settings in the component
