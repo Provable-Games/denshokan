@@ -55,6 +55,11 @@ TOKEN_NAME="${TOKEN_NAME:-Denshokan}"
 TOKEN_SYMBOL="${TOKEN_SYMBOL:-DNSH}"
 TOKEN_BASE_URI="${TOKEN_BASE_URI:-https://api.denshokan.dev/token/}"
 
+# Viewer parameters
+# VIEWER_OWNER: Address that can upgrade the DenshokanViewer contract
+# If not set, will use the deployer account address from snfoundry.toml profile
+VIEWER_OWNER="${VIEWER_OWNER:-}"
+
 # Optional: existing registry address (skip registry deployment if set)
 GAME_REGISTRY_ADDRESS="${GAME_REGISTRY_ADDRESS:-}"
 
@@ -74,6 +79,13 @@ echo "  Token Parameters:"
 echo "    Name: $TOKEN_NAME"
 echo "    Symbol: $TOKEN_SYMBOL"
 echo "    Base URI: $TOKEN_BASE_URI"
+echo ""
+echo "  Viewer Parameters:"
+if [ -n "$VIEWER_OWNER" ]; then
+    echo "    Owner: $VIEWER_OWNER"
+else
+    echo "    Owner: (will use deployer account)"
+fi
 echo ""
 if [ -n "$GAME_REGISTRY_ADDRESS" ]; then
     echo "  Using existing registry: $GAME_REGISTRY_ADDRESS"
@@ -211,6 +223,17 @@ print_info "Denshokan deployed at: $CONTRACT_ADDRESS"
 # DEPLOY DENSHOKAN VIEWER
 # ============================
 
+# Get viewer owner address (use deployer account if not specified)
+if [ -z "$VIEWER_OWNER" ]; then
+    print_info "Fetching deployer account address for viewer owner..."
+    VIEWER_OWNER=$(sncast --profile "$PROFILE" account list 2>&1 | grep -oE '0x[0-9a-fA-F]+' | head -1)
+    if [ -z "$VIEWER_OWNER" ]; then
+        print_error "Failed to get deployer account address. Set VIEWER_OWNER manually."
+        exit 1
+    fi
+    print_info "Using deployer account as viewer owner: $VIEWER_OWNER"
+fi
+
 print_info "Declaring DenshokanViewer contract..."
 
 VIEWER_DECLARE_OUTPUT=$(sncast --profile "$PROFILE" --wait \
@@ -234,11 +257,11 @@ print_info "DenshokanViewer class hash: $VIEWER_CLASS_HASH"
 
 print_info "Deploying DenshokanViewer contract..."
 
-# Constructor: denshokan_address: ContractAddress
+# Constructor: owner: ContractAddress, denshokan_address: ContractAddress
 VIEWER_DEPLOY_OUTPUT=$(sncast --profile "$PROFILE" --wait \
     deploy \
     --class-hash "$VIEWER_CLASS_HASH" \
-    --arguments "$CONTRACT_ADDRESS" 2>&1)
+    --arguments "$VIEWER_OWNER, $CONTRACT_ADDRESS" 2>&1)
 
 VIEWER_ADDRESS=$(echo "$VIEWER_DEPLOY_OUTPUT" | grep -oE 'contract_address: 0x[0-9a-fA-F]+' | grep -oE '0x[0-9a-fA-F]+' || echo "$VIEWER_DEPLOY_OUTPUT" | grep -oE '0x[0-9a-fA-F]{64}' | head -1)
 
@@ -275,6 +298,7 @@ cat > "$DEPLOYMENT_FILE" << EOF
     "address": "$VIEWER_ADDRESS",
     "class_hash": "$VIEWER_CLASS_HASH",
     "parameters": {
+      "owner": "$VIEWER_OWNER",
       "denshokan_address": "$CONTRACT_ADDRESS"
     }
   },
@@ -316,6 +340,7 @@ echo
 echo "DenshokanViewer Contract (Filter/Query API):"
 echo "  Address: $VIEWER_ADDRESS"
 echo "  Class Hash: $VIEWER_CLASS_HASH"
+echo "  Owner: $VIEWER_OWNER"
 echo "  Denshokan Address: $CONTRACT_ADDRESS"
 echo
 
