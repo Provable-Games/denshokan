@@ -45,3 +45,6 @@ temp/
 # Database
 *.sqlite
 *.db
+
+# Deployments
+contracts/deployments/

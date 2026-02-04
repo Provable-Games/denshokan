@@ -19,7 +19,6 @@ use game_components_token::extensions::objectives::objectives::ObjectivesCompone
 use game_components_token::extensions::renderer::renderer::RendererComponent;
 use game_components_token::extensions::settings::settings::SettingsComponent;
 use game_components_token::structs::TokenMetadata;
-
 use game_components_utils::renderer::{create_custom_metadata, create_default_svg};
 use openzeppelin_interfaces::erc2981::{IERC2981, IERC2981_ID};
 use openzeppelin_interfaces::erc721::{IERC721Dispatcher, IERC721DispatcherTrait, IERC721Metadata};

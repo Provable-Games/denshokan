@@ -3,7 +3,6 @@
 // It separates view logic from the main Denshokan contract to reduce contract size.
 
 use core::num::traits::Zero;
-use crate::filter::{FilterResult, IDenshokanFilter, MAX_FILTER_LIMIT};
 use game_components_registry::interface::{
     IMinigameRegistryDispatcher, IMinigameRegistryDispatcherTrait,
 };
@@ -20,6 +19,7 @@ use openzeppelin_interfaces::erc721::{
 };
 use starknet::ContractAddress;
 use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
+use crate::filter::{FilterResult, IDenshokanFilter, MAX_FILTER_LIMIT};
 
 // ================================================================================================
 // CONTRACT
