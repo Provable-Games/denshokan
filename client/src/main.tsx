@@ -19,6 +19,7 @@ const denshokanConfig = {
   rpcUrl: config.rpcUrl,
   denshokanAddress: config.denshokanAddress,
   registryAddress: config.registryAddress,
+  primarySource: "rpc" as any,
 };
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
@@ -39,5 +40,5 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         </StarknetProvider>
       </SnackbarProvider>
     </ThemeProvider>
-  </React.StrictMode>
+  </React.StrictMode>,
 );

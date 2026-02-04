@@ -40,6 +40,8 @@ export function usePlayerPortfolio() {
     refetch: refetchTokens,
   } = usePlayerTokens(isConnected ? address : undefined);
 
+  console.log(sdkTokens);
+
   const stats: ClientPlayerStats | null = sdkStats
     ? {
         totalTokens: sdkStats.totalTokens,
