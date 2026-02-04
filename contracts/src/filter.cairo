@@ -202,8 +202,7 @@ pub trait IDenshokanFilter<TState> {
     // ============================================================
 
     /// Returns full state for multiple tokens in one call
-    /// Includes: owner, player_name, is_playable, game_address, game_over, completed_objective, lifecycle
-    fn tokens_full_state_batch(
-        self: @TState, token_ids: Array<felt252>,
-    ) -> Array<TokenFullState>;
+    /// Includes: owner, player_name, is_playable, game_address, game_over, completed_objective,
+    /// lifecycle
+    fn tokens_full_state_batch(self: @TState, token_ids: Array<felt252>) -> Array<TokenFullState>;
 }

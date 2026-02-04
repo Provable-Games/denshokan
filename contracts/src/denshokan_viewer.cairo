@@ -3,7 +3,6 @@
 // It separates view logic from the main Denshokan contract to reduce contract size.
 
 use core::num::traits::Zero;
-use crate::filter::{FilterResult, IDenshokanFilter, MAX_FILTER_LIMIT, TokenFullState};
 use game_components_registry::interface::{
     IMinigameRegistryDispatcher, IMinigameRegistryDispatcherTrait,
 };
@@ -20,6 +19,7 @@ use openzeppelin_interfaces::erc721::{
 };
 use starknet::ContractAddress;
 use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
+use crate::filter::{FilterResult, IDenshokanFilter, MAX_FILTER_LIMIT, TokenFullState};
 
 // ================================================================================================
 // CONTRACT
@@ -432,7 +432,9 @@ pub mod DenshokanViewer {
             self._count_owner_tokens_by_playable(owner)
         }
 
-        fn count_tokens_of_owner_by_game_over(self: @ContractState, owner: ContractAddress) -> u256 {
+        fn count_tokens_of_owner_by_game_over(
+            self: @ContractState, owner: ContractAddress,
+        ) -> u256 {
             self._count_owner_tokens_by_game_over(owner)
         }
 
@@ -467,7 +469,7 @@ pub mod DenshokanViewer {
                             lifecycle: metadata.lifecycle,
                         },
                     );
-            };
+            }
 
             result
         }
