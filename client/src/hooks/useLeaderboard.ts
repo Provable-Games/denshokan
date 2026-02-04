@@ -1,34 +1,50 @@
-import { useEffect, useCallback } from "react";
-import { useLeaderboardStore } from "../stores/leaderboardStore";
-import { useWebSocket } from "./useWebSocket";
+import { useCallback } from "react";
+import {
+  useLeaderboard as useSdkLeaderboard,
+  useSubscription,
+} from "@provable-games/denshokan-sdk/react";
+import type { LeaderboardEntry, WSMessage } from "@provable-games/denshokan-sdk";
+
+interface ClientLeaderboardEntry {
+  rank: number;
+  tokenId: string;
+  ownerAddress: string;
+  playerName: string | null;
+  score: string;
+}
+
+function adaptEntry(e: LeaderboardEntry): ClientLeaderboardEntry {
+  return {
+    rank: e.rank,
+    tokenId: e.tokenId,
+    ownerAddress: e.owner,
+    playerName: e.playerName || null,
+    score: String(e.score),
+  };
+}
 
 export function useLeaderboard(gameId: number, limit = 50) {
-  const { entries, loading, fetchLeaderboard, updateFromWS } = useLeaderboardStore();
-
-  useEffect(() => {
-    if (gameId) {
-      fetchLeaderboard(gameId, { limit });
-    }
-  }, [gameId, limit]);
-
-  const handleWS = useCallback(
-    (channel: string, data: any) => {
-      if (channel === "score_updates" || channel === "game_over_events") {
-        updateFromWS(gameId, data);
-      }
-    },
-    [gameId]
+  const { data, isLoading, refetch } = useSdkLeaderboard(
+    gameId || undefined,
+    { limit },
   );
 
-  useWebSocket({
-    channels: ["scores", "game_over"],
-    gameIds: gameId ? [String(gameId)] : undefined,
-    onMessage: handleWS,
-  });
+  const handleWS = useCallback(
+    (_message: WSMessage) => {
+      refetch();
+    },
+    [refetch],
+  );
+
+  useSubscription(
+    ["scores", "game_over"],
+    handleWS,
+    gameId ? [gameId] : undefined,
+  );
 
   return {
-    entries: entries[gameId] || [],
-    loading: loading[gameId] || false,
-    refetch: () => fetchLeaderboard(gameId, { limit }),
+    entries: data?.map(adaptEntry) ?? [],
+    loading: isLoading,
+    refetch,
   };
 }

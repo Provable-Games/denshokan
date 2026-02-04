@@ -39,6 +39,8 @@ export default function MintForm({ onMint, minting, error }: Props) {
   const { games } = useGameList();
   const { isConnected } = useController();
 
+  console.log("Games:", games);
+
   const [selectedGame, setSelectedGame] = useState<string>("");
   const [playerName, setPlayerName] = useState("");
   const [soulbound, setSoulbound] = useState(false);
@@ -88,9 +90,21 @@ export default function MintForm({ onMint, minting, error }: Props) {
         sx={{ mb: 2 }}
       />
 
-      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          mb: 2,
+        }}
+      >
         <FormControlLabel
-          control={<Switch checked={soulbound} onChange={(e) => setSoulbound(e.target.checked)} />}
+          control={
+            <Switch
+              checked={soulbound}
+              onChange={(e) => setSoulbound(e.target.checked)}
+            />
+          }
           label="Soulbound"
         />
         <Typography variant="caption" color="text.secondary">
@@ -135,7 +149,15 @@ export default function MintForm({ onMint, minting, error }: Props) {
             transition={{ duration: 0.2 }}
             style={{ overflow: "hidden" }}
           >
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1, pb: 2 }}>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 2,
+                pt: 1,
+                pb: 2,
+              }}
+            >
               <TextField
                 fullWidth
                 label="Start Time"
@@ -172,7 +194,11 @@ export default function MintForm({ onMint, minting, error }: Props) {
         )}
       </AnimatePresence>
 
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
 
       <Button
         variant="contained"
@@ -181,11 +207,19 @@ export default function MintForm({ onMint, minting, error }: Props) {
         disabled={!isConnected || !selectedGame || minting}
         onClick={handleSubmit}
       >
-        {!isConnected ? "Connect Wallet to Mint" : minting ? "Minting..." : "Mint Token"}
+        {!isConnected
+          ? "Connect Wallet to Mint"
+          : minting
+            ? "Minting..."
+            : "Mint Token"}
       </Button>
 
       {!isConnected && (
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 1, textAlign: "center" }}>
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={{ mt: 1, textAlign: "center" }}
+        >
           Connect your wallet to mint game tokens
         </Typography>
       )}

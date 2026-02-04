@@ -46,7 +46,7 @@ export default function TokenDetailPage() {
           {scores.map((s, i) => (
             <Box key={i} sx={{ display: "flex", justifyContent: "space-between", py: 1, borderBottom: 1, borderColor: "divider" }}>
               <Typography>{Number(s.score).toLocaleString()}</Typography>
-              <Typography color="text.secondary">{new Date(s.blockTimestamp).toLocaleDateString()}</Typography>
+              <Typography color="text.secondary">{new Date(s.timestamp).toLocaleDateString()}</Typography>
             </Box>
           ))}
         </Box>
