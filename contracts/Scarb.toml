@@ -37,9 +37,12 @@ name = "denshokan"
 
 [[target.starknet-contract]]
 name = "denshokan_tests"
+sierra = true
+casm = true
 test = true
 build-external-contracts = [
     "denshokan::denshokan::Denshokan",
+    "denshokan::denshokan_viewer::DenshokanViewer",
     "denshokan::minigame_registry::MinigameRegistry",
     "game_components_test_common::mocks::minigame_starknet_mock::minigame_starknet_mock",
 ]

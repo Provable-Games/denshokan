@@ -2,7 +2,10 @@ use denshokan::filter::{IDenshokanFilterDispatcher, IDenshokanFilterDispatcherTr
 use game_components_registry::interface::IMinigameRegistryDispatcherTrait;
 use game_components_token::interface::IMinigameTokenMixinDispatcherTrait;
 use game_components_token::structs::{unpack_game_id, unpack_soulbound};
-use snforge_std::{CheatSpan, cheat_block_timestamp, cheat_caller_address};
+use snforge_std::{
+    CheatSpan, ContractClassTrait, DeclareResultTrait, cheat_block_timestamp, cheat_caller_address,
+    declare,
+};
 use starknet::ContractAddress;
 use crate::helpers::constants::{ALICE, BOB, CHARLIE, GAME_CREATOR};
 use crate::helpers::setup::{register_game, setup_with_registry};
@@ -12,7 +15,11 @@ use crate::helpers::setup::{register_game, setup_with_registry};
 // ================================================================================================
 
 fn get_filter_dispatcher(denshokan_address: ContractAddress) -> IDenshokanFilterDispatcher {
-    IDenshokanFilterDispatcher { contract_address: denshokan_address }
+    let contract = declare("DenshokanViewer").unwrap().contract_class();
+    let mut calldata = array![];
+    calldata.append(denshokan_address.into());
+    let (contract_address, _) = contract.deploy(@calldata).unwrap();
+    IDenshokanFilterDispatcher { contract_address }
 }
 
 /// Helper to mint a token with specific parameters for testing
