@@ -108,6 +108,11 @@ if [ ! -f "$CONTRACTS_DIR/target/dev/denshokan_MinigameRegistry.contract_class.j
     exit 1
 fi
 
+if [ ! -f "$CONTRACTS_DIR/target/dev/denshokan_DenshokanViewer.contract_class.json" ]; then
+    print_error "DenshokanViewer contract artifact not found"
+    exit 1
+fi
+
 print_info "Contract artifacts found"
 
 # ============================
@@ -203,6 +208,49 @@ fi
 print_info "Denshokan deployed at: $CONTRACT_ADDRESS"
 
 # ============================
+# DEPLOY DENSHOKAN VIEWER
+# ============================
+
+print_info "Declaring DenshokanViewer contract..."
+
+VIEWER_DECLARE_OUTPUT=$(sncast --profile "$PROFILE" --wait \
+    declare \
+    --contract-name DenshokanViewer 2>&1) || {
+    if echo "$VIEWER_DECLARE_OUTPUT" | grep -q "already declared"; then
+        print_warning "DenshokanViewer already declared"
+        VIEWER_CLASS_HASH=$(echo "$VIEWER_DECLARE_OUTPUT" | grep -oE '0x[0-9a-fA-F]+' | head -1)
+    else
+        print_error "Failed to declare DenshokanViewer"
+        echo "$VIEWER_DECLARE_OUTPUT"
+        exit 1
+    fi
+}
+
+if [ -z "${VIEWER_CLASS_HASH:-}" ]; then
+    VIEWER_CLASS_HASH=$(echo "$VIEWER_DECLARE_OUTPUT" | grep -oE 'class_hash: 0x[0-9a-fA-F]+' | grep -oE '0x[0-9a-fA-F]+' || echo "$VIEWER_DECLARE_OUTPUT" | grep -oE '0x[0-9a-fA-F]+' | tail -1)
+fi
+
+print_info "DenshokanViewer class hash: $VIEWER_CLASS_HASH"
+
+print_info "Deploying DenshokanViewer contract..."
+
+# Constructor: denshokan_address: ContractAddress
+VIEWER_DEPLOY_OUTPUT=$(sncast --profile "$PROFILE" --wait \
+    deploy \
+    --class-hash "$VIEWER_CLASS_HASH" \
+    --arguments "$CONTRACT_ADDRESS" 2>&1)
+
+VIEWER_ADDRESS=$(echo "$VIEWER_DEPLOY_OUTPUT" | grep -oE 'contract_address: 0x[0-9a-fA-F]+' | grep -oE '0x[0-9a-fA-F]+' || echo "$VIEWER_DEPLOY_OUTPUT" | grep -oE '0x[0-9a-fA-F]{64}' | head -1)
+
+if [ -z "$VIEWER_ADDRESS" ]; then
+    print_error "Failed to deploy DenshokanViewer"
+    echo "$VIEWER_DEPLOY_OUTPUT"
+    exit 1
+fi
+
+print_info "DenshokanViewer deployed at: $VIEWER_ADDRESS"
+
+# ============================
 # SAVE DEPLOYMENT INFO
 # ============================
 
@@ -221,6 +269,13 @@ cat > "$DEPLOYMENT_FILE" << EOF
       "symbol": "$TOKEN_SYMBOL",
       "base_uri": "$TOKEN_BASE_URI",
       "game_registry_address": "$GAME_REGISTRY_ADDRESS"
+    }
+  },
+  "denshokan_viewer_contract": {
+    "address": "$VIEWER_ADDRESS",
+    "class_hash": "$VIEWER_CLASS_HASH",
+    "parameters": {
+      "denshokan_address": "$CONTRACT_ADDRESS"
     }
   },
   "minigame_registry_contract": {
@@ -258,8 +313,14 @@ echo "  Token Symbol: $TOKEN_SYMBOL"
 echo "  Base URI: $TOKEN_BASE_URI"
 echo "  Game Registry: $GAME_REGISTRY_ADDRESS"
 echo
+echo "DenshokanViewer Contract (Filter/Query API):"
+echo "  Address: $VIEWER_ADDRESS"
+echo "  Class Hash: $VIEWER_CLASS_HASH"
+echo "  Denshokan Address: $CONTRACT_ADDRESS"
+echo
 
 echo "To interact with the contracts:"
 echo "  export DENSHOKAN_CONTRACT=$CONTRACT_ADDRESS"
+echo "  export DENSHOKAN_VIEWER=$VIEWER_ADDRESS"
 echo "  export GAME_REGISTRY=$GAME_REGISTRY_ADDRESS"
 echo

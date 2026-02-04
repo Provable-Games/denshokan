@@ -19,13 +19,12 @@ use game_components_token::extensions::objectives::objectives::ObjectivesCompone
 use game_components_token::extensions::renderer::renderer::RendererComponent;
 use game_components_token::extensions::settings::settings::SettingsComponent;
 use game_components_token::structs::TokenMetadata;
+
 use game_components_utils::renderer::{create_custom_metadata, create_default_svg};
 use openzeppelin_interfaces::erc2981::{IERC2981, IERC2981_ID};
 use openzeppelin_interfaces::erc721::{IERC721Dispatcher, IERC721DispatcherTrait, IERC721Metadata};
 use openzeppelin_introspection::src5::SRC5Component;
 use openzeppelin_token::common::erc2981::erc2981::{DefaultConfig, ERC2981Component};
-
-// Core imports
 use openzeppelin_token::erc721::ERC721Component;
 use openzeppelin_token::erc721::extensions::erc721_enumerable::ERC721EnumerableComponent;
 use starknet::ContractAddress;
@@ -333,6 +332,10 @@ pub mod Denshokan {
             (receiver, royalty_amount)
         }
     }
+
+    // NOTE: Filter functionality has been moved to DenshokanViewer contract
+    // to reduce contract size. Use the separate DenshokanViewer contract
+    // for all IDenshokanFilter operations.
 
     // ================================================================================================
     // ERC721 HOOKS
