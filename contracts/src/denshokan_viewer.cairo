@@ -1,6 +1,7 @@
 // DenshokanViewer Contract
 // This contract implements IDenshokanFilter for efficient RPC batching.
 // It separates view logic from the main Denshokan contract to reduce contract size.
+// Now includes OwnableComponent and UpgradeableComponent for access control and upgradability.
 
 use core::num::traits::Zero;
 use game_components_registry::interface::{
@@ -13,12 +14,15 @@ use game_components_token::structs::{
     unpack_game_id, unpack_minted_at, unpack_minted_by, unpack_objective_id, unpack_settings_id,
     unpack_soulbound,
 };
+use openzeppelin_access::ownable::OwnableComponent;
 use openzeppelin_interfaces::erc721::{
     IERC721Dispatcher, IERC721DispatcherTrait, IERC721EnumerableDispatcher,
     IERC721EnumerableDispatcherTrait,
 };
-use starknet::ContractAddress;
+use openzeppelin_interfaces::upgrades::IUpgradeable;
+use openzeppelin_upgrades::UpgradeableComponent;
 use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
+use starknet::{ClassHash, ContractAddress};
 use crate::filter::{FilterResult, IDenshokanFilter, MAX_FILTER_LIMIT, TokenFullState};
 
 // ================================================================================================
@@ -30,12 +34,48 @@ pub mod DenshokanViewer {
     use super::*;
 
     // ================================================================================================
+    // COMPONENT DECLARATIONS
+    // ================================================================================================
+
+    component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
+    component!(path: UpgradeableComponent, storage: upgradeable, event: UpgradeableEvent);
+
+    // ================================================================================================
+    // COMPONENT IMPLEMENTATIONS
+    // ================================================================================================
+
+    #[abi(embed_v0)]
+    impl OwnableImpl = OwnableComponent::OwnableImpl<ContractState>;
+    #[abi(embed_v0)]
+    impl OwnableCamelOnlyImpl =
+        OwnableComponent::OwnableCamelOnlyImpl<ContractState>;
+    impl OwnableInternalImpl = OwnableComponent::InternalImpl<ContractState>;
+    impl UpgradeableInternalImpl = UpgradeableComponent::InternalImpl<ContractState>;
+
+    // ================================================================================================
     // STORAGE
     // ================================================================================================
 
     #[storage]
     struct Storage {
         denshokan_address: ContractAddress,
+        #[substorage(v0)]
+        ownable: OwnableComponent::Storage,
+        #[substorage(v0)]
+        upgradeable: UpgradeableComponent::Storage,
+    }
+
+    // ================================================================================================
+    // EVENTS
+    // ================================================================================================
+
+    #[event]
+    #[derive(Drop, starknet::Event)]
+    enum Event {
+        #[flat]
+        OwnableEvent: OwnableComponent::Event,
+        #[flat]
+        UpgradeableEvent: UpgradeableComponent::Event,
     }
 
     // ================================================================================================
@@ -43,9 +83,25 @@ pub mod DenshokanViewer {
     // ================================================================================================
 
     #[constructor]
-    fn constructor(ref self: ContractState, denshokan_address: ContractAddress) {
+    fn constructor(
+        ref self: ContractState, owner: ContractAddress, denshokan_address: ContractAddress,
+    ) {
+        assert!(!owner.is_zero(), "DenshokanViewer: owner address cannot be zero");
         assert!(!denshokan_address.is_zero(), "DenshokanViewer: denshokan address cannot be zero");
+        self.ownable.initializer(owner);
         self.denshokan_address.write(denshokan_address);
+    }
+
+    // ================================================================================================
+    // UPGRADEABLE IMPLEMENTATION
+    // ================================================================================================
+
+    #[abi(embed_v0)]
+    impl UpgradeableImpl of IUpgradeable<ContractState> {
+        fn upgrade(ref self: ContractState, new_class_hash: ClassHash) {
+            self.ownable.assert_only_owner();
+            self.upgradeable.upgrade(new_class_hash);
+        }
     }
 
     // ================================================================================================
@@ -343,6 +399,153 @@ pub mod DenshokanViewer {
         }
 
         // ============================================================
+        // MINTER + OWNER FILTER
+        // ============================================================
+
+        fn tokens_of_owner_by_minter(
+            self: @ContractState,
+            owner: ContractAddress,
+            minter_address: ContractAddress,
+            offset: u256,
+            limit: u256,
+        ) -> FilterResult {
+            let minter_id: u64 = self._get_token().get_minter_id(minter_address);
+
+            if minter_id == 0 {
+                return FilterResult { token_ids: array![], total: 0 };
+            }
+
+            self._filter_owner_tokens_by_minter(owner, minter_id, offset, limit)
+        }
+
+        // ============================================================
+        // MINTER + GAME FILTER
+        // ============================================================
+
+        fn tokens_by_minter_and_game(
+            self: @ContractState,
+            minter_address: ContractAddress,
+            game_address: ContractAddress,
+            offset: u256,
+            limit: u256,
+        ) -> FilterResult {
+            let minter_id: u64 = self._get_token().get_minter_id(minter_address);
+
+            if minter_id == 0 {
+                return FilterResult { token_ids: array![], total: 0 };
+            }
+
+            let registry = self._get_registry();
+            let game_id: u64 = registry.game_id_from_address(game_address);
+
+            if game_id == 0 {
+                return FilterResult { token_ids: array![], total: 0 };
+            }
+
+            let target_game_id: u32 = game_id.try_into().unwrap();
+            self._filter_all_tokens_by_minter_and_game(minter_id, target_game_id, offset, limit)
+        }
+
+        // ============================================================
+        // OWNER + GAME + SETTINGS FILTER
+        // ============================================================
+
+        fn tokens_of_owner_by_game_and_settings(
+            self: @ContractState,
+            owner: ContractAddress,
+            game_address: ContractAddress,
+            settings_id: u32,
+            offset: u256,
+            limit: u256,
+        ) -> FilterResult {
+            let registry = self._get_registry();
+            let game_id: u64 = registry.game_id_from_address(game_address);
+
+            if game_id == 0 {
+                return FilterResult { token_ids: array![], total: 0 };
+            }
+
+            let target_game_id: u32 = game_id.try_into().unwrap();
+            self
+                ._filter_owner_tokens_by_game_and_settings(
+                    owner, target_game_id, settings_id, offset, limit,
+                )
+        }
+
+        // ============================================================
+        // OWNER + GAME + OBJECTIVE FILTER
+        // ============================================================
+
+        fn tokens_of_owner_by_game_and_objective(
+            self: @ContractState,
+            owner: ContractAddress,
+            game_address: ContractAddress,
+            objective_id: u32,
+            offset: u256,
+            limit: u256,
+        ) -> FilterResult {
+            let registry = self._get_registry();
+            let game_id: u64 = registry.game_id_from_address(game_address);
+
+            if game_id == 0 {
+                return FilterResult { token_ids: array![], total: 0 };
+            }
+
+            let target_game_id: u32 = game_id.try_into().unwrap();
+            self
+                ._filter_owner_tokens_by_game_and_objective(
+                    owner, target_game_id, objective_id, offset, limit,
+                )
+        }
+
+        // ============================================================
+        // OWNER + GAME + GAME_OVER FILTER
+        // ============================================================
+
+        fn tokens_of_owner_by_game_and_game_over(
+            self: @ContractState,
+            owner: ContractAddress,
+            game_address: ContractAddress,
+            offset: u256,
+            limit: u256,
+        ) -> FilterResult {
+            let registry = self._get_registry();
+            let game_id: u64 = registry.game_id_from_address(game_address);
+
+            if game_id == 0 {
+                return FilterResult { token_ids: array![], total: 0 };
+            }
+
+            let target_game_id: u32 = game_id.try_into().unwrap();
+            self._filter_owner_tokens_by_game_and_game_over(owner, target_game_id, offset, limit)
+        }
+
+        // ============================================================
+        // GAME + SOULBOUND FILTER
+        // ============================================================
+
+        fn tokens_by_game_and_soulbound(
+            self: @ContractState,
+            game_address: ContractAddress,
+            is_soulbound: bool,
+            offset: u256,
+            limit: u256,
+        ) -> FilterResult {
+            let registry = self._get_registry();
+            let game_id: u64 = registry.game_id_from_address(game_address);
+
+            if game_id == 0 {
+                return FilterResult { token_ids: array![], total: 0 };
+            }
+
+            let target_game_id: u32 = game_id.try_into().unwrap();
+            self
+                ._filter_all_tokens_by_game_and_soulbound(
+                    target_game_id, is_soulbound, offset, limit,
+                )
+        }
+
+        // ============================================================
         // COUNT FUNCTIONS FOR NEW FILTERS
         // ============================================================
 
@@ -396,6 +599,104 @@ pub mod DenshokanViewer {
             self: @ContractState, owner: ContractAddress, is_soulbound: bool,
         ) -> u256 {
             self._count_owner_tokens_by_soulbound(owner, is_soulbound)
+        }
+
+        // ============================================================
+        // COUNT FUNCTIONS FOR NEW FILTER COMBINATIONS
+        // ============================================================
+
+        fn count_tokens_of_owner_by_minter(
+            self: @ContractState, owner: ContractAddress, minter_address: ContractAddress,
+        ) -> u256 {
+            let minter_id: u64 = self._get_token().get_minter_id(minter_address);
+
+            if minter_id == 0 {
+                return 0;
+            }
+
+            self._count_owner_tokens_by_minter(owner, minter_id)
+        }
+
+        fn count_tokens_by_minter_and_game(
+            self: @ContractState, minter_address: ContractAddress, game_address: ContractAddress,
+        ) -> u256 {
+            let minter_id: u64 = self._get_token().get_minter_id(minter_address);
+
+            if minter_id == 0 {
+                return 0;
+            }
+
+            let registry = self._get_registry();
+            let game_id: u64 = registry.game_id_from_address(game_address);
+
+            if game_id == 0 {
+                return 0;
+            }
+
+            let target_game_id: u32 = game_id.try_into().unwrap();
+            self._count_tokens_by_minter_and_game(minter_id, target_game_id)
+        }
+
+        fn count_tokens_of_owner_by_game_and_settings(
+            self: @ContractState,
+            owner: ContractAddress,
+            game_address: ContractAddress,
+            settings_id: u32,
+        ) -> u256 {
+            let registry = self._get_registry();
+            let game_id: u64 = registry.game_id_from_address(game_address);
+
+            if game_id == 0 {
+                return 0;
+            }
+
+            let target_game_id: u32 = game_id.try_into().unwrap();
+            self._count_owner_tokens_by_game_and_settings(owner, target_game_id, settings_id)
+        }
+
+        fn count_tokens_of_owner_by_game_and_objective(
+            self: @ContractState,
+            owner: ContractAddress,
+            game_address: ContractAddress,
+            objective_id: u32,
+        ) -> u256 {
+            let registry = self._get_registry();
+            let game_id: u64 = registry.game_id_from_address(game_address);
+
+            if game_id == 0 {
+                return 0;
+            }
+
+            let target_game_id: u32 = game_id.try_into().unwrap();
+            self._count_owner_tokens_by_game_and_objective(owner, target_game_id, objective_id)
+        }
+
+        fn count_tokens_of_owner_by_game_and_game_over(
+            self: @ContractState, owner: ContractAddress, game_address: ContractAddress,
+        ) -> u256 {
+            let registry = self._get_registry();
+            let game_id: u64 = registry.game_id_from_address(game_address);
+
+            if game_id == 0 {
+                return 0;
+            }
+
+            let target_game_id: u32 = game_id.try_into().unwrap();
+            self._count_owner_tokens_by_game_and_game_over(owner, target_game_id)
+        }
+
+        fn count_tokens_by_game_and_soulbound(
+            self: @ContractState, game_address: ContractAddress, is_soulbound: bool,
+        ) -> u256 {
+            let registry = self._get_registry();
+            let game_id: u64 = registry.game_id_from_address(game_address);
+
+            if game_id == 0 {
+                return 0;
+            }
+
+            let target_game_id: u32 = game_id.try_into().unwrap();
+            self._count_tokens_by_game_and_soulbound(target_game_id, is_soulbound)
         }
 
         // ============================================================
@@ -1316,6 +1617,400 @@ pub mod DenshokanViewer {
                 let token_id: felt252 = token_id_u256.try_into().unwrap();
                 let metadata = token.token_metadata(token_id);
                 if metadata.game_over {
+                    count += 1;
+                }
+                index += 1;
+            }
+
+            count
+        }
+
+        // ============================================================
+        // NEW FILTER HELPERS: MINTER + OWNER
+        // ============================================================
+
+        fn _filter_owner_tokens_by_minter(
+            self: @ContractState,
+            owner: ContractAddress,
+            target_minter_id: u64,
+            offset: u256,
+            limit: u256,
+        ) -> FilterResult {
+            let effective_limit = if limit == 0 || limit > MAX_FILTER_LIMIT {
+                MAX_FILTER_LIMIT
+            } else {
+                limit
+            };
+
+            let erc721 = self._get_erc721();
+            let enumerable = self._get_enumerable();
+            let owner_balance = erc721.balance_of(owner);
+            let mut result: Array<felt252> = array![];
+            let mut total_matches: u256 = 0;
+            let mut index: u256 = 0;
+
+            while index < owner_balance {
+                let token_id_u256 = enumerable.token_of_owner_by_index(owner, index);
+                let token_id: felt252 = token_id_u256.try_into().unwrap();
+                let minted_by = unpack_minted_by(token_id);
+
+                if minted_by == target_minter_id {
+                    if total_matches >= offset && result.len().into() < effective_limit {
+                        result.append(token_id);
+                    }
+                    total_matches += 1;
+                }
+
+                index += 1;
+            }
+
+            FilterResult { token_ids: result, total: total_matches }
+        }
+
+        fn _count_owner_tokens_by_minter(
+            self: @ContractState, owner: ContractAddress, target_minter_id: u64,
+        ) -> u256 {
+            let erc721 = self._get_erc721();
+            let enumerable = self._get_enumerable();
+            let owner_balance = erc721.balance_of(owner);
+            let mut count: u256 = 0;
+            let mut index: u256 = 0;
+
+            while index < owner_balance {
+                let token_id_u256 = enumerable.token_of_owner_by_index(owner, index);
+                let token_id: felt252 = token_id_u256.try_into().unwrap();
+                if unpack_minted_by(token_id) == target_minter_id {
+                    count += 1;
+                }
+                index += 1;
+            }
+
+            count
+        }
+
+        // ============================================================
+        // NEW FILTER HELPERS: MINTER + GAME
+        // ============================================================
+
+        fn _filter_all_tokens_by_minter_and_game(
+            self: @ContractState,
+            target_minter_id: u64,
+            target_game_id: u32,
+            offset: u256,
+            limit: u256,
+        ) -> FilterResult {
+            let effective_limit = if limit == 0 || limit > MAX_FILTER_LIMIT {
+                MAX_FILTER_LIMIT
+            } else {
+                limit
+            };
+
+            let enumerable = self._get_enumerable();
+            let total_supply = enumerable.total_supply();
+            let mut result: Array<felt252> = array![];
+            let mut total_matches: u256 = 0;
+            let mut index: u256 = 0;
+
+            while index < total_supply {
+                let token_id_u256 = enumerable.token_by_index(index);
+                let token_id: felt252 = token_id_u256.try_into().unwrap();
+                let minted_by = unpack_minted_by(token_id);
+                let game_id = unpack_game_id(token_id);
+
+                if minted_by == target_minter_id && game_id == target_game_id {
+                    if total_matches >= offset && result.len().into() < effective_limit {
+                        result.append(token_id);
+                    }
+                    total_matches += 1;
+                }
+
+                index += 1;
+            }
+
+            FilterResult { token_ids: result, total: total_matches }
+        }
+
+        fn _count_tokens_by_minter_and_game(
+            self: @ContractState, target_minter_id: u64, target_game_id: u32,
+        ) -> u256 {
+            let enumerable = self._get_enumerable();
+            let total_supply = enumerable.total_supply();
+            let mut count: u256 = 0;
+            let mut index: u256 = 0;
+
+            while index < total_supply {
+                let token_id_u256 = enumerable.token_by_index(index);
+                let token_id: felt252 = token_id_u256.try_into().unwrap();
+                if unpack_minted_by(token_id) == target_minter_id
+                    && unpack_game_id(token_id) == target_game_id {
+                    count += 1;
+                }
+                index += 1;
+            }
+
+            count
+        }
+
+        // ============================================================
+        // NEW FILTER HELPERS: OWNER + GAME + SETTINGS
+        // ============================================================
+
+        fn _filter_owner_tokens_by_game_and_settings(
+            self: @ContractState,
+            owner: ContractAddress,
+            target_game_id: u32,
+            target_settings_id: u32,
+            offset: u256,
+            limit: u256,
+        ) -> FilterResult {
+            let effective_limit = if limit == 0 || limit > MAX_FILTER_LIMIT {
+                MAX_FILTER_LIMIT
+            } else {
+                limit
+            };
+
+            let erc721 = self._get_erc721();
+            let enumerable = self._get_enumerable();
+            let owner_balance = erc721.balance_of(owner);
+            let mut result: Array<felt252> = array![];
+            let mut total_matches: u256 = 0;
+            let mut index: u256 = 0;
+
+            while index < owner_balance {
+                let token_id_u256 = enumerable.token_of_owner_by_index(owner, index);
+                let token_id: felt252 = token_id_u256.try_into().unwrap();
+                let game_id = unpack_game_id(token_id);
+                let settings_id = unpack_settings_id(token_id);
+
+                if game_id == target_game_id && settings_id == target_settings_id {
+                    if total_matches >= offset && result.len().into() < effective_limit {
+                        result.append(token_id);
+                    }
+                    total_matches += 1;
+                }
+
+                index += 1;
+            }
+
+            FilterResult { token_ids: result, total: total_matches }
+        }
+
+        fn _count_owner_tokens_by_game_and_settings(
+            self: @ContractState,
+            owner: ContractAddress,
+            target_game_id: u32,
+            target_settings_id: u32,
+        ) -> u256 {
+            let erc721 = self._get_erc721();
+            let enumerable = self._get_enumerable();
+            let owner_balance = erc721.balance_of(owner);
+            let mut count: u256 = 0;
+            let mut index: u256 = 0;
+
+            while index < owner_balance {
+                let token_id_u256 = enumerable.token_of_owner_by_index(owner, index);
+                let token_id: felt252 = token_id_u256.try_into().unwrap();
+                if unpack_game_id(token_id) == target_game_id
+                    && unpack_settings_id(token_id) == target_settings_id {
+                    count += 1;
+                }
+                index += 1;
+            }
+
+            count
+        }
+
+        // ============================================================
+        // NEW FILTER HELPERS: OWNER + GAME + OBJECTIVE
+        // ============================================================
+
+        fn _filter_owner_tokens_by_game_and_objective(
+            self: @ContractState,
+            owner: ContractAddress,
+            target_game_id: u32,
+            target_objective_id: u32,
+            offset: u256,
+            limit: u256,
+        ) -> FilterResult {
+            let effective_limit = if limit == 0 || limit > MAX_FILTER_LIMIT {
+                MAX_FILTER_LIMIT
+            } else {
+                limit
+            };
+
+            let erc721 = self._get_erc721();
+            let enumerable = self._get_enumerable();
+            let owner_balance = erc721.balance_of(owner);
+            let mut result: Array<felt252> = array![];
+            let mut total_matches: u256 = 0;
+            let mut index: u256 = 0;
+
+            while index < owner_balance {
+                let token_id_u256 = enumerable.token_of_owner_by_index(owner, index);
+                let token_id: felt252 = token_id_u256.try_into().unwrap();
+                let game_id = unpack_game_id(token_id);
+                let objective_id = unpack_objective_id(token_id);
+
+                if game_id == target_game_id && objective_id == target_objective_id {
+                    if total_matches >= offset && result.len().into() < effective_limit {
+                        result.append(token_id);
+                    }
+                    total_matches += 1;
+                }
+
+                index += 1;
+            }
+
+            FilterResult { token_ids: result, total: total_matches }
+        }
+
+        fn _count_owner_tokens_by_game_and_objective(
+            self: @ContractState,
+            owner: ContractAddress,
+            target_game_id: u32,
+            target_objective_id: u32,
+        ) -> u256 {
+            let erc721 = self._get_erc721();
+            let enumerable = self._get_enumerable();
+            let owner_balance = erc721.balance_of(owner);
+            let mut count: u256 = 0;
+            let mut index: u256 = 0;
+
+            while index < owner_balance {
+                let token_id_u256 = enumerable.token_of_owner_by_index(owner, index);
+                let token_id: felt252 = token_id_u256.try_into().unwrap();
+                if unpack_game_id(token_id) == target_game_id
+                    && unpack_objective_id(token_id) == target_objective_id {
+                    count += 1;
+                }
+                index += 1;
+            }
+
+            count
+        }
+
+        // ============================================================
+        // NEW FILTER HELPERS: OWNER + GAME + GAME_OVER
+        // ============================================================
+
+        fn _filter_owner_tokens_by_game_and_game_over(
+            self: @ContractState,
+            owner: ContractAddress,
+            target_game_id: u32,
+            offset: u256,
+            limit: u256,
+        ) -> FilterResult {
+            let effective_limit = if limit == 0 || limit > MAX_FILTER_LIMIT {
+                MAX_FILTER_LIMIT
+            } else {
+                limit
+            };
+
+            let erc721 = self._get_erc721();
+            let enumerable = self._get_enumerable();
+            let token = self._get_token();
+            let owner_balance = erc721.balance_of(owner);
+            let mut result: Array<felt252> = array![];
+            let mut total_matches: u256 = 0;
+            let mut index: u256 = 0;
+
+            while index < owner_balance {
+                let token_id_u256 = enumerable.token_of_owner_by_index(owner, index);
+                let token_id: felt252 = token_id_u256.try_into().unwrap();
+                let game_id = unpack_game_id(token_id);
+                let metadata = token.token_metadata(token_id);
+
+                if game_id == target_game_id && metadata.game_over {
+                    if total_matches >= offset && result.len().into() < effective_limit {
+                        result.append(token_id);
+                    }
+                    total_matches += 1;
+                }
+
+                index += 1;
+            }
+
+            FilterResult { token_ids: result, total: total_matches }
+        }
+
+        fn _count_owner_tokens_by_game_and_game_over(
+            self: @ContractState, owner: ContractAddress, target_game_id: u32,
+        ) -> u256 {
+            let erc721 = self._get_erc721();
+            let enumerable = self._get_enumerable();
+            let token = self._get_token();
+            let owner_balance = erc721.balance_of(owner);
+            let mut count: u256 = 0;
+            let mut index: u256 = 0;
+
+            while index < owner_balance {
+                let token_id_u256 = enumerable.token_of_owner_by_index(owner, index);
+                let token_id: felt252 = token_id_u256.try_into().unwrap();
+                let metadata = token.token_metadata(token_id);
+                if unpack_game_id(token_id) == target_game_id && metadata.game_over {
+                    count += 1;
+                }
+                index += 1;
+            }
+
+            count
+        }
+
+        // ============================================================
+        // NEW FILTER HELPERS: GAME + SOULBOUND
+        // ============================================================
+
+        fn _filter_all_tokens_by_game_and_soulbound(
+            self: @ContractState,
+            target_game_id: u32,
+            target_soulbound: bool,
+            offset: u256,
+            limit: u256,
+        ) -> FilterResult {
+            let effective_limit = if limit == 0 || limit > MAX_FILTER_LIMIT {
+                MAX_FILTER_LIMIT
+            } else {
+                limit
+            };
+
+            let enumerable = self._get_enumerable();
+            let total_supply = enumerable.total_supply();
+            let mut result: Array<felt252> = array![];
+            let mut total_matches: u256 = 0;
+            let mut index: u256 = 0;
+
+            while index < total_supply {
+                let token_id_u256 = enumerable.token_by_index(index);
+                let token_id: felt252 = token_id_u256.try_into().unwrap();
+                let game_id = unpack_game_id(token_id);
+                let is_soulbound = unpack_soulbound(token_id);
+
+                if game_id == target_game_id && is_soulbound == target_soulbound {
+                    if total_matches >= offset && result.len().into() < effective_limit {
+                        result.append(token_id);
+                    }
+                    total_matches += 1;
+                }
+
+                index += 1;
+            }
+
+            FilterResult { token_ids: result, total: total_matches }
+        }
+
+        fn _count_tokens_by_game_and_soulbound(
+            self: @ContractState, target_game_id: u32, target_soulbound: bool,
+        ) -> u256 {
+            let enumerable = self._get_enumerable();
+            let total_supply = enumerable.total_supply();
+            let mut count: u256 = 0;
+            let mut index: u256 = 0;
+
+            while index < total_supply {
+                let token_id_u256 = enumerable.token_by_index(index);
+                let token_id: felt252 = token_id_u256.try_into().unwrap();
+                if unpack_game_id(token_id) == target_game_id
+                    && unpack_soulbound(token_id) == target_soulbound {
                     count += 1;
                 }
                 index += 1;

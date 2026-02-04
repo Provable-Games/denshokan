@@ -58,9 +58,11 @@ dependencies = [
  "game_components_test_common",
  "game_components_token",
  "game_components_utils",
+ "openzeppelin_access",
  "openzeppelin_interfaces",
  "openzeppelin_introspection",
  "openzeppelin_token",
+ "openzeppelin_upgrades",
  "snforge_std",
 ]
 
@@ -72,7 +74,7 @@ source = "git+https://github.com/EkuboProtocol/starknet-contracts.git?tag=v4.0.1
 [[package]]
 name = "game_components_interfaces"
 version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=next#c6ce37e24a2bc6a3c841ff153959963f702a8fd6"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=next#d191b4ca67a67ae973a247084d6f76d0b7a46ad0"
 dependencies = [
  "ekubo",
 ]
@@ -80,7 +82,7 @@ dependencies = [
 [[package]]
 name = "game_components_leaderboard"
 version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=next#c6ce37e24a2bc6a3c841ff153959963f702a8fd6"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=next#d191b4ca67a67ae973a247084d6f76d0b7a46ad0"
 dependencies = [
  "game_components_interfaces",
  "openzeppelin_introspection",
@@ -89,7 +91,7 @@ dependencies = [
 [[package]]
 name = "game_components_metagame"
 version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=next#c6ce37e24a2bc6a3c841ff153959963f702a8fd6"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=next#d191b4ca67a67ae973a247084d6f76d0b7a46ad0"
 dependencies = [
  "game_components_interfaces",
  "game_components_minigame",
@@ -104,7 +106,7 @@ dependencies = [
 [[package]]
 name = "game_components_minigame"
 version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=next#c6ce37e24a2bc6a3c841ff153959963f702a8fd6"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=next#d191b4ca67a67ae973a247084d6f76d0b7a46ad0"
 dependencies = [
  "game_components_interfaces",
  "game_components_metagame",
@@ -119,7 +121,7 @@ dependencies = [
 [[package]]
 name = "game_components_registry"
 version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=next#c6ce37e24a2bc6a3c841ff153959963f702a8fd6"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=next#d191b4ca67a67ae973a247084d6f76d0b7a46ad0"
 dependencies = [
  "game_components_interfaces",
  "game_components_minigame",
@@ -130,7 +132,7 @@ dependencies = [
 [[package]]
 name = "game_components_test_common"
 version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=next#c6ce37e24a2bc6a3c841ff153959963f702a8fd6"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=next#d191b4ca67a67ae973a247084d6f76d0b7a46ad0"
 dependencies = [
  "game_components_interfaces",
  "game_components_leaderboard",
@@ -150,7 +152,7 @@ dependencies = [
 [[package]]
 name = "game_components_testing"
 version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=next#c6ce37e24a2bc6a3c841ff153959963f702a8fd6"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=next#d191b4ca67a67ae973a247084d6f76d0b7a46ad0"
 dependencies = [
  "snforge_std",
 ]
@@ -158,7 +160,7 @@ dependencies = [
 [[package]]
 name = "game_components_token"
 version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=next#c6ce37e24a2bc6a3c841ff153959963f702a8fd6"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=next#d191b4ca67a67ae973a247084d6f76d0b7a46ad0"
 dependencies = [
  "game_components_interfaces",
  "game_components_leaderboard",
@@ -175,7 +177,7 @@ dependencies = [
 [[package]]
 name = "game_components_utils"
 version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=next#c6ce37e24a2bc6a3c841ff153959963f702a8fd6"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=next#d191b4ca67a67ae973a247084d6f76d0b7a46ad0"
 dependencies = [
  "alexandria_encoding",
  "game_components_metagame",
@@ -222,6 +224,11 @@ dependencies = [
  "openzeppelin_introspection",
  "openzeppelin_utils",
 ]
+
+[[package]]
+name = "openzeppelin_upgrades"
+version = "3.0.0"
+source = "git+https://github.com/OpenZeppelin/cairo-contracts.git?tag=v3.0.0#ddd3338e787a3fbf4a92b366640a57ee364390cb"
 
 [[package]]
 name = "openzeppelin_utils"
