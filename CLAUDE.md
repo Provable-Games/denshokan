@@ -6,13 +6,32 @@ Game token contracts and indexer for Starknet. Denshokan (伝承館) means "Hall
 
 ```
 denshokan/
-├── contracts/         # Cairo smart contracts (Scarb 2.15.0)
+├── contracts/         # Cairo smart contracts (Scarb 2.15.0, Cairo 2.15.0)
 ├── indexer/           # Apibara event indexer (TypeScript)
 ├── api/               # Hono REST API + WebSocket server
-└── client/            # React frontend (MUI 7, Cartridge Controller)
+├── client/            # React frontend (MUI 7, Cartridge Controller)
+├── docker-compose.yml # PostgreSQL, indexer, API services
+├── package.json       # npm workspaces root (indexer, api)
+├── railway.toml       # Railway deployment config
+└── render.yaml        # Render deployment config
 ```
 
 ## Quick Commands
+
+Commands can be run from the root via workspace scripts or from each package directory.
+
+### Root (workspace scripts)
+
+```bash
+npm run build                   # Build contracts + indexer + API
+npm run test                    # Run contract tests
+npm run fmt                     # Format Cairo code
+npm run dev:api                 # Start API dev server
+npm run dev:indexer              # Start indexer dev mode
+npm run dev:client               # Start client dev server
+npm run db:migrate               # Run database migrations
+npm run db:generate              # Generate migrations from schema
+```
 
 ### Contracts
 
@@ -51,6 +70,13 @@ npm run dev                     # Start Vite dev server
 npm run build                   # Production build
 ```
 
+### Docker
+
+```bash
+docker-compose up -d postgres   # Start PostgreSQL only
+docker-compose up -d            # Start all services (postgres, indexer, API)
+```
+
 ## Architecture
 
 ### Contracts (`contracts/`)
@@ -66,8 +92,17 @@ The token contract uses the **game-components** library for modular composition:
 
 **Key Files:**
 - `src/denshokan.cairo` - Main token contract (ERC721 + game components)
+- `src/denshokan_viewer.cairo` - Filter/query API contract
+- `src/filter.cairo` - Token filtering utilities
 - `src/minigame_registry.cairo` - Game registration contract
-- `src/tic_tac_toe.cairo`, `src/number_guess.cairo` - Example minigames
+- `src/number_guess.cairo` - Number guessing minigame
+- `src/tic_tac_toe.cairo` - Tic-tac-toe minigame
+
+**Deployment Scripts (`scripts/`):**
+- `deploy_denshokan.sh` - Deploy Denshokan token + registry + viewer
+- `deploy_number_guess.sh` - Deploy number guess minigame
+- `deploy_tic_tac_toe.sh` - Deploy tic-tac-toe minigame
+- `deploy_template_games.sh` - Deploy template games
 
 **Packed Token ID:**
 Token IDs are felt252 values with immutable data packed into the ID itself:
@@ -97,6 +132,7 @@ Apibara-based indexer using `@apibara/indexer` with Drizzle ORM:
 - `minters` - Minter registry cache
 - `token_events` - Audit log of all events
 - `game_leaderboards` - Pre-computed rankings
+- `game_stats` - Aggregated per-game statistics
 - `objectives`, `settings` - Game configuration
 
 **Configuration:** Set via `apibara.config.ts`:
@@ -107,17 +143,20 @@ Apibara-based indexer using `@apibara/indexer` with Drizzle ORM:
 
 ### API (`api/`)
 
-Hono-based REST API with WebSocket support:
+Hono-based REST API with WebSocket support. Supports optional TLS (auto-detects certs).
 
 **Routes:**
-- `GET /tokens` - List tokens with filtering
+- `GET /tokens` - List tokens with filtering and pagination
 - `GET /tokens/:id` - Token details
-- `GET /games` - List registered games
+- `GET /games` - List registered games with pagination
 - `GET /games/:id` - Game details with stats
 - `GET /players/:address` - Player portfolio
 - `GET /activity/*` - Recent activity and stats
 - `GET /minters` - List registered minters
+- `GET /health` - Health check (includes DB status)
 - `WS /ws` - Real-time event subscriptions
+
+**Middleware:** CORS, rate limiting (100 req/window default, 30 for `/activity/stats`)
 
 **Stack:** Hono, Drizzle ORM, PostgreSQL, Node WebSocket
 
@@ -127,16 +166,29 @@ React frontend with Cartridge Controller integration:
 
 **Stack:**
 - React 18 with TypeScript
-- MUI 7 for components
+- MUI 7 (`@mui/material` + `@mui/icons-material`) for components
 - Framer Motion for animations
 - `@starknet-react/core` + `@cartridge/controller` for wallet
 - `@provable-games/denshokan-sdk` for contract interactions
+- notistack for notifications
+- Vite with WASM + top-level await + mkcert plugins
+
+**Pages (routes):**
+- `/` - Home page
+- `/games` - Game browser
+- `/games/:gameId` - Game detail
+- `/mint` - Mint new token
+- `/tokens/:tokenId` - Token detail
+- `/tokens/:tokenId/play` - Number guess play page
+- `/portfolio` - Player's token collection
 
 **Key Patterns:**
 - `contexts/` - StarknetProvider, ControllerContext
-- `hooks/` - useGameList, useTokenDetail, useLeaderboard, etc.
-- `components/` - Organized by feature (games/, tokens/, mint/, etc.)
+- `hooks/` - useGameList, useGameDetail, useTokenDetail, usePlayerPortfolio, useMint, useNumberGuess, useNumberGuessConfig, useWebSocket
+- `components/` - Organized by feature (games/, tokens/, mint/, leaderboard/, numberguess/, common/)
 - `pages/` - Route components
+- `abi/` - Contract ABIs (denshokan.json, numberGuess.json)
+- `utils/` - packed-token-id decoder, starknet helpers
 
 ## Dependencies
 
@@ -149,16 +201,27 @@ game_components_token = { git = "...", branch = "next" }
 game_components_metagame = { git = "...", branch = "next" }
 game_components_minigame = { git = "...", branch = "next" }
 game_components_registry = { git = "...", branch = "next" }
+game_components_utils = { git = "...", branch = "next" }
+game_components_test_common = { git = "...", branch = "next" }  # dev
 ```
 
 Use Context7 MCP to query current documentation when working with these.
 
-### OpenZeppelin Cairo
+### OpenZeppelin Cairo (v3.0.0)
 
 ```toml
 openzeppelin_token = { git = "...", tag = "v3.0.0" }
 openzeppelin_introspection = { git = "...", tag = "v3.0.0" }
+openzeppelin_interfaces = { git = "...", tag = "v3.0.0" }
+openzeppelin_access = { git = "...", tag = "v3.0.0" }
+openzeppelin_upgrades = { git = "...", tag = "v3.0.0" }
 ```
+
+### Starknet Foundry
+
+- `snforge_std` v0.55.0 (dev dependency)
+- Fuzzer runs: 256
+- Fork configs: `MAINNET_LATEST`, `SEPOLIA_LATEST`
 
 ## Testing
 
@@ -171,6 +234,8 @@ snforge test unit::              # Run all unit tests
 snforge test test_mint           # Run specific test
 ```
 
+**Test files:** test_erc721_hooks, test_filter, test_number_guess, test_royalties, test_tic_tac_toe, test_token_uri
+
 ### Integration Tests (`contracts/tests/integration/`)
 
 Test contract interactions, often using fork testing:
@@ -178,6 +243,8 @@ Test contract interactions, often using fork testing:
 ```bash
 snforge test integration::       # Run integration tests
 ```
+
+**Test files:** test_full_workflow
 
 ### Fork Testing
 
@@ -188,9 +255,14 @@ Configured in `snfoundry.toml`:
 name = "MAINNET_LATEST"
 url = "https://api.cartridge.gg/x/starknet/mainnet/rpc/v0_10"
 block_id.tag = "latest"
+
+[[tool.snforge.fork]]
+name = "SEPOLIA_LATEST"
+url = "https://api.cartridge.gg/x/starknet/sepolia/rpc/v0_10"
+block_id.tag = "latest"
 ```
 
-Use `#[fork("MAINNET_LATEST")]` attribute on tests.
+Use `#[fork("MAINNET_LATEST")]` or `#[fork("SEPOLIA_LATEST")]` attribute on tests.
 
 ## Deployment
 
@@ -205,6 +277,11 @@ cp .env.example .env
 
 Deployments saved to `contracts/deployments/`.
 
+Additional deployment scripts:
+- `./scripts/deploy_number_guess.sh`
+- `./scripts/deploy_tic_tac_toe.sh`
+- `./scripts/deploy_template_games.sh`
+
 ### Indexer Deployment
 
 Configure environment variables:
@@ -214,11 +291,30 @@ Configure environment variables:
 - `APIBARA_STREAM_URL` - DNA stream URL
 - `STARTING_BLOCK` - Block number to start from
 
+### API Deployment
+
+Configure environment variables:
+- `DATABASE_URL` - PostgreSQL connection string
+- `PORT` - Server port (default: 3001)
+- `CORS_ORIGIN` - Allowed CORS origin
+- `TLS_CERT`, `TLS_KEY` - Optional TLS certificate paths
+
+### Client Deployment
+
+Configure environment variables:
+- `VITE_NETWORK` - `mainnet` or `sepolia`
+- `VITE_API_URL` - API server URL
+- `VITE_WS_URL` - WebSocket server URL
+- `VITE_DENSHOKAN_ADDRESS` - Denshokan token contract address
+- `VITE_REGISTRY_ADDRESS` - MinigameRegistry contract address
+- `VITE_VIEWER_ADDRESS` - DenshokanViewer contract address
+- `VITE_RPC_URL` - Optional RPC URL (defaults to Cartridge)
+
 ## RPC Endpoints
 
 Use Cartridge's RPC:
-- Mainnet: `https://api.cartridge.gg/x/starknet/mainnet/rpc/v0_10`
-- Sepolia: `https://api.cartridge.gg/x/starknet/sepolia/rpc/v0_10`
+- Mainnet: `https://api.cartridge.gg/x/starknet/mainnet`
+- Sepolia: `https://api.cartridge.gg/x/starknet/sepolia`
 
 ## Key Patterns
 
@@ -241,14 +337,14 @@ Use Cartridge's RPC:
 1. Create hook in `client/src/hooks/` for data fetching
 2. Create components in `client/src/components/`
 3. Wire up in page component under `client/src/pages/`
+4. Add route in `client/src/App.tsx`
 
 ## Environment Files
 
 Each package has `.env.example` templates:
-- `contracts/.env.example` - Deployment config
-- `indexer/.env` - Database and stream config
-- `api/.env` - Port and TLS config
-- `client/.env.example` - API URL and contract addresses
+- `contracts/.env.example` - Deployment config (profile, royalty receiver, token params)
+- `api/.env.example` - Database URL, port, CORS origin
+- `client/.env.example` - Network, API URL, contract addresses
 
 ## Agent Usage
 
@@ -258,4 +354,4 @@ For Cairo contract development tasks (`contracts/`), prefer using the `cairo-dev
 - Gas optimization
 - Component integration
 
-The `cairo-dev` agent has specialized knowledge of Cairo 2.13.1+, Scarb, OpenZeppelin Cairo contracts, and Starknet patterns.
+The `cairo-dev` agent has specialized knowledge of Cairo 2.15.0, Scarb, OpenZeppelin Cairo contracts, and Starknet patterns.

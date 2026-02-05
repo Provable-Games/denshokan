@@ -6,20 +6,35 @@ Game token contracts and indexer for Starknet. Denshokan (伝承館) means "Hall
 
 ```
 denshokan/
-├── contracts/               # Cairo smart contracts (imports game-components)
-│   ├── Scarb.toml               # Package config with game-components deps
-│   ├── snfoundry.toml           # Starknet Foundry config (profiles, fork testing)
-│   ├── deploy_denshokan.sh      # Deployment script using sncast
-│   └── src/
-│       ├── lib.cairo            # Module exports
-│       ├── denshokan.cairo      # Main token contract
-│       └── minigame_registry.cairo  # Game registry contract
+├── contracts/               # Cairo smart contracts (Scarb 2.15.0, Cairo 2.15.0)
+│   ├── src/
+│   │   ├── denshokan.cairo          # Main ERC721 token contract
+│   │   ├── denshokan_viewer.cairo   # Filter/query API contract
+│   │   ├── filter.cairo             # Token filtering utilities
+│   │   ├── minigame_registry.cairo  # Game registry contract
+│   │   ├── number_guess.cairo       # Number guessing minigame
+│   │   └── tic_tac_toe.cairo        # Tic-tac-toe minigame
+│   ├── tests/                       # Unit and integration tests
+│   └── scripts/                     # Deployment scripts (sncast)
 ├── indexer/                 # Apibara indexer (TypeScript)
 │   ├── indexers/                # Indexer definitions
 │   ├── src/lib/                 # Schema and decoders
 │   ├── migrations/              # PostgreSQL migrations
-│   └── api/                     # API specifications
-└── docs/                    # Documentation
+│   └── api/                     # API specifications (OpenAPI, GraphQL, gRPC)
+├── api/                     # Hono REST API + WebSocket server
+│   └── src/
+│       ├── routes/              # tokens, games, activity, players, minters
+│       ├── ws/                  # WebSocket subscriptions
+│       ├── middleware/          # Rate limiting
+│       └── db/                  # Database client
+├── client/                  # React frontend (MUI 7, Cartridge Controller)
+│   └── src/
+│       ├── pages/               # Route components
+│       ├── components/          # Feature-organized components
+│       ├── hooks/               # Data fetching and game logic
+│       ├── contexts/            # Starknet and Controller providers
+│       └── abi/                 # Contract ABIs
+└── docker-compose.yml       # PostgreSQL, indexer, API services
 ```
 
 ## Dependencies
@@ -28,16 +43,38 @@ The contracts import from the [game-components](https://github.com/Provable-Game
 - `game_components_token` - ERC721 token with modular components
 - `game_components_metagame` - High-level game management
 - `game_components_minigame` - Game logic interfaces
+- `game_components_registry` - Game registry
 - `game_components_utils` - Shared utilities (renderer, etc.)
+
+OpenZeppelin Cairo v3.0.0 for token standards, access control, and upgrades.
 
 ## Prerequisites
 
-- [Scarb](https://docs.swmansion.com/scarb/) 2.13.1+
-- [Starknet Foundry](https://foundry-rs.github.io/starknet-foundry/) 0.53.0+
+- [Scarb](https://docs.swmansion.com/scarb/) 2.15.0+
+- [Starknet Foundry](https://foundry-rs.github.io/starknet-foundry/) 0.55.0+
 - Node.js 20+
-- PostgreSQL 15+
+- PostgreSQL 16+ (or Docker)
 
 ## Quick Start
+
+### Local Development
+
+```bash
+# Start PostgreSQL
+docker-compose up -d postgres
+
+# Install dependencies
+npm install
+
+# Run database migrations
+npm run db:migrate
+
+# Start API server (watch mode)
+npm run dev:api
+
+# Start client dev server (separate terminal)
+npm run dev:client
+```
 
 ### Contracts
 
@@ -48,8 +85,9 @@ cd contracts && scarb build
 # Run tests
 snforge test
 
-# Run tests with coverage
-snforge test --coverage
+# Run specific test category
+snforge test unit::
+snforge test integration::
 
 # Format code
 scarb fmt -w
@@ -68,27 +106,29 @@ cp .env.example .env
 #   PROFILE=sepolia           # Profile from snfoundry.toml (default, sepolia, mainnet)
 #   ROYALTY_RECEIVER=0x123... # Required: address to receive royalties
 
-# Configure your account in snfoundry.toml (add account name to the profile)
-# See: https://foundry-rs.github.io/starknet-foundry/starknet/account.html
+# Deploy Denshokan token + registry + viewer
+./scripts/deploy_denshokan.sh
 
-# Run deployment
-./deploy_denshokan.sh
+# Deploy minigames
+./scripts/deploy_number_guess.sh
+./scripts/deploy_tic_tac_toe.sh
 ```
 
 The script will:
 1. Build contracts with `scarb build`
 2. Declare and deploy MinigameRegistry (unless `GAME_REGISTRY_ADDRESS` is set)
 3. Declare and deploy Denshokan token contract
-4. Save deployment info to `contracts/deployments/`
+4. Declare and deploy DenshokanViewer contract
+5. Save deployment info to `contracts/deployments/`
 
 ### Indexer
 
 ```bash
-# Install dependencies
-cd indexer && npm install
+cd indexer
 
-# Start local PostgreSQL
-docker-compose up -d
+# Configure environment
+# Set DATABASE_URL, DENSHOKAN_CONTRACT_ADDRESS, DENSHOKAN_REGISTRY_ADDRESS,
+# APIBARA_STREAM_URL, STARTING_BLOCK in .env
 
 # Run migrations
 npm run db:migrate
@@ -96,6 +136,22 @@ npm run db:migrate
 # Start indexer (development)
 npm run dev
 ```
+
+## API
+
+Hono-based REST API with WebSocket support:
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /tokens` | List tokens with filtering and pagination |
+| `GET /tokens/:id` | Token details |
+| `GET /games` | List registered games |
+| `GET /games/:id` | Game details with stats |
+| `GET /players/:address` | Player portfolio |
+| `GET /activity/*` | Recent activity and stats |
+| `GET /minters` | List registered minters |
+| `GET /health` | Health check |
+| `WS /ws` | Real-time event subscriptions |
 
 ## API Specifications
 
@@ -128,6 +184,40 @@ pub trait IMetagameCallback<TState> {
 ```
 
 Callbacks are SRC5-gated - only invoked if the minter contract explicitly supports the interface.
+
+## Environment Configuration
+
+### Contracts (`contracts/.env.example`)
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `PROFILE` | Yes | snfoundry.toml profile (default, sepolia, mainnet) |
+| `ROYALTY_RECEIVER` | Yes | Address to receive royalties |
+| `ROYALTY_FRACTION` | No | Basis points, default 250 (2.5%) |
+| `TOKEN_NAME` | No | Token name (default: Denshokan) |
+| `TOKEN_SYMBOL` | No | Token symbol (default: DNSH) |
+| `GAME_REGISTRY_ADDRESS` | No | Skip registry deployment |
+| `SKIP_CONFIRMATION` | No | Skip deployment prompts |
+
+### API (`api/.env.example`)
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `PORT` | No | Server port (default: 3001) |
+| `CORS_ORIGIN` | No | Allowed CORS origin |
+
+### Client (`client/.env.example`)
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `VITE_NETWORK` | Yes | `mainnet` or `sepolia` |
+| `VITE_API_URL` | Yes | API server URL |
+| `VITE_WS_URL` | Yes | WebSocket server URL |
+| `VITE_DENSHOKAN_ADDRESS` | Yes | Token contract address |
+| `VITE_REGISTRY_ADDRESS` | Yes | Registry contract address |
+| `VITE_VIEWER_ADDRESS` | Yes | Viewer contract address |
+| `VITE_RPC_URL` | No | RPC URL (defaults to Cartridge) |
 
 ## License
 
