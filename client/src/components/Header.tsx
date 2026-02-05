@@ -5,6 +5,7 @@ import WalletButton from "./WalletButton";
 const navItems = [
   { label: "Home", path: "/" },
   { label: "Games", path: "/games" },
+  { label: "Minters", path: "/minters" },
   { label: "Mint", path: "/mint" },
   { label: "Game Tokens", path: "/portfolio" },
 ];

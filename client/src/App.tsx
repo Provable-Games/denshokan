@@ -8,6 +8,7 @@ import MintTokenPage from "./pages/MintTokenPage";
 import TokenDetailPage from "./pages/TokenDetailPage";
 import PortfolioPage from "./pages/PortfolioPage";
 import NumberGuessPlayPage from "./pages/NumberGuessPlayPage";
+import MintersPage from "./pages/MintersPage";
 
 export default function App() {
   return (
@@ -20,6 +21,7 @@ export default function App() {
         <Route path="/mint" element={<MintTokenPage />} />
         <Route path="/tokens/:tokenId" element={<TokenDetailPage />} />
         <Route path="/tokens/:tokenId/play" element={<NumberGuessPlayPage />} />
+        <Route path="/minters" element={<MintersPage />} />
         <Route path="/portfolio" element={<PortfolioPage />} />
       </Route>
     </Routes>
