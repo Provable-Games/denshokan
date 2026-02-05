@@ -1,8 +1,17 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { Box, Typography, Grid, Card, CardContent, Button, Stack } from "@mui/material";
+import {
+  Box,
+  Typography,
+  Grid,
+  Card,
+  CardContent,
+  Button,
+  Stack,
+} from "@mui/material";
 import { useGameDetail } from "../hooks/useGameDetail";
 import { useLeaderboard } from "../hooks/useLeaderboard";
 import LeaderboardTable from "../components/leaderboard/LeaderboardTable";
+import { GameConfigSection } from "../components/numberguess";
 import LoadingSpinner from "../components/common/LoadingSpinner";
 
 export default function GameDetailPage() {
@@ -11,6 +20,7 @@ export default function GameDetailPage() {
   const id = parseInt(gameId || "0");
   const { game, stats } = useGameDetail(id);
   const { entries, loading: lbLoading } = useLeaderboard(id, 10);
+  console.log(game, stats, entries);
 
   if (!game) return <LoadingSpinner message="Loading game..." />;
 
@@ -29,7 +39,10 @@ export default function GameDetailPage() {
         <Button variant="contained" onClick={() => navigate("/mint")}>
           Mint Token
         </Button>
-        <Button variant="outlined" onClick={() => navigate(`/games/${id}/leaderboard`)}>
+        <Button
+          variant="outlined"
+          onClick={() => navigate(`/games/${id}/leaderboard`)}
+        >
           Full Leaderboard
         </Button>
       </Stack>
@@ -58,6 +71,16 @@ export default function GameDetailPage() {
         Top Players
       </Typography>
       {lbLoading ? <LoadingSpinner /> : <LeaderboardTable entries={entries} />}
+
+      {/* Game Configuration Section */}
+      {game.contractAddress && (
+        <Box sx={{ mt: 4 }}>
+          <GameConfigSection
+            gameAddress={game.contractAddress}
+            gameName={game.name || undefined}
+          />
+        </Box>
+      )}
     </Box>
   );
 }
