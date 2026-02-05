@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, and } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { games, gameStats, objectives, settings } from "../db/schema.js";
 import { parseGameId, parsePositiveInt } from "../utils/validation.js";
@@ -10,24 +10,25 @@ const app = new Hono();
  * Resolve a raw path param (numeric gameId or hex address) to gameId + gameAddress.
  */
 async function resolveGameId(rawId: string): Promise<{ gameId: number; gameAddress: string } | null> {
+  let where;
   const numericId = parseGameId(rawId);
   if (numericId !== null) {
-    const result = await db
-      .select({ gameId: games.gameId, contractAddress: games.contractAddress })
-      .from(games)
-      .where(eq(games.gameId, numericId))
-      .limit(1);
-    return result.length
-      ? { gameId: result[0].gameId, gameAddress: result[0].contractAddress.toLowerCase() }
-      : null;
+    where = eq(games.gameId, numericId);
+  } else {
+    try {
+      const normalized = `0x${BigInt(rawId).toString(16)}`;
+      where = eq(games.contractAddress, normalized);
+    } catch {
+      return null;
+    }
   }
-  // Hex address
-  const normalized = `0x${BigInt(rawId).toString(16)}`;
+
   const result = await db
     .select({ gameId: games.gameId, contractAddress: games.contractAddress })
     .from(games)
-    .where(eq(games.contractAddress, normalized))
+    .where(where)
     .limit(1);
+
   return result.length
     ? { gameId: result[0].gameId, gameAddress: result[0].contractAddress.toLowerCase() }
     : null;
@@ -93,15 +94,17 @@ app.get("/:id/objectives/:objectiveId", async (c) => {
     return c.json({ error: "Invalid objective ID" }, 400);
   }
 
-  const result = await db
+  const [match] = await db
     .select()
     .from(objectives)
     .where(
-      eq(objectives.gameAddress, resolved.gameAddress)
+      and(
+        eq(objectives.gameAddress, resolved.gameAddress),
+        eq(objectives.objectiveId, objectiveId),
+      ),
     )
-    .orderBy(objectives.objectiveId);
+    .limit(1);
 
-  const match = result.find((r) => r.objectiveId === objectiveId);
   if (!match) {
     return c.json({ error: "Objective not found" }, 404);
   }
@@ -147,15 +150,17 @@ app.get("/:id/settings/:settingsId", async (c) => {
     return c.json({ error: "Invalid settings ID" }, 400);
   }
 
-  const result = await db
+  const [match] = await db
     .select()
     .from(settings)
     .where(
-      eq(settings.gameAddress, resolved.gameAddress)
+      and(
+        eq(settings.gameAddress, resolved.gameAddress),
+        eq(settings.settingsId, settingsId),
+      ),
     )
-    .orderBy(settings.settingsId);
+    .limit(1);
 
-  const match = result.find((r) => r.settingsId === settingsId);
   if (!match) {
     return c.json({ error: "Setting not found" }, 404);
   }
