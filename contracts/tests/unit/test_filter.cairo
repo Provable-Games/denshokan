@@ -1285,3 +1285,4 @@ fn test_upgrade_as_owner() {
 // constructor:
 // assert!(!owner.is_zero(), "DenshokanViewer: owner address cannot be zero");
 
+
