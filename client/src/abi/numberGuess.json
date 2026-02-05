@@ -478,6 +478,24 @@
     ]
   },
   {
+    "type": "struct",
+    "name": "game_components_interfaces::structs::minigame::GameObjectiveDetails",
+    "members": [
+      {
+        "name": "name",
+        "type": "core::byte_array::ByteArray"
+      },
+      {
+        "name": "description",
+        "type": "core::byte_array::ByteArray"
+      },
+      {
+        "name": "objectives",
+        "type": "core::array::Span::<game_components_interfaces::structs::minigame::GameObjective>"
+      }
+    ]
+  },
+  {
     "type": "interface",
     "name": "game_components_interfaces::minigame::objectives::IMinigameObjectivesDetails",
     "items": [
@@ -486,13 +504,13 @@
         "name": "objectives_details",
         "inputs": [
           {
-            "name": "token_id",
-            "type": "core::felt252"
+            "name": "objective_id",
+            "type": "core::integer::u32"
           }
         ],
         "outputs": [
           {
-            "type": "core::array::Span::<game_components_interfaces::structs::minigame::GameObjective>"
+            "type": "game_components_interfaces::structs::minigame::GameObjectiveDetails"
           }
         ],
         "state_mutability": "view"
@@ -502,13 +520,13 @@
         "name": "objectives_details_batch",
         "inputs": [
           {
-            "name": "token_ids",
-            "type": "core::array::Span::<core::felt252>"
+            "name": "objective_ids",
+            "type": "core::array::Span::<core::integer::u32>"
           }
         ],
         "outputs": [
           {
-            "type": "core::array::Array::<core::array::Span::<game_components_interfaces::structs::minigame::GameObjective>>"
+            "type": "core::array::Array::<game_components_interfaces::structs::minigame::GameObjectiveDetails>"
           }
         ],
         "state_mutability": "view"

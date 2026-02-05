@@ -178,7 +178,7 @@ pub mod NumberGuess {
         IMinigameObjectives, IMinigameObjectivesDetails,
     };
     use game_components_minigame::extensions::objectives::objectives::ObjectivesComponent;
-    use game_components_minigame::extensions::objectives::structs::GameObjective;
+    use game_components_minigame::extensions::objectives::structs::{GameObjective, GameObjectiveDetails};
     use game_components_minigame::extensions::settings::interface::{
         IMinigameSettings, IMinigameSettingsDetails,
     };
@@ -540,43 +540,30 @@ pub mod NumberGuess {
 
     #[abi(embed_v0)]
     impl GameObjectivesDetailsImpl of IMinigameObjectivesDetails<ContractState> {
-        fn objectives_details(self: @ContractState, token_id: felt252) -> Span<GameObjective> {
-            let count = self.objective_count.read();
+        fn objectives_details(self: @ContractState, objective_id: u32) -> GameObjectiveDetails {
+            let (objective_type, threshold, exists) = self.objective_data.entry(objective_id).read();
+            assert!(exists, "Objective does not exist");
+
+            let (name, description) = self.objective_metadata.entry(objective_id).read();
+
+            // Build objectives array with type and threshold info
             let mut objectives = array![];
-            let mut i: u32 = 1;
-            while i <= count {
-                let (_, _, exists) = self.objective_data.entry(i).read();
-                if exists {
-                    let completed = self.completed_objective(token_id, i);
-                    let completed_str: ByteArray = if completed {
-                        "Yes"
-                    } else {
-                        "No"
-                    };
+            objectives.append(GameObjective { name: "type", value: format!("{}", objective_type) });
+            objectives.append(GameObjective { name: "threshold", value: format!("{}", threshold) });
 
-                    // Get name from metadata
-                    let (name, _) = self.objective_metadata.entry(i).read();
-
-                    objectives
-                        .append(
-                            GameObjective { name, value: format!("Completed: {}", completed_str) },
-                        );
-                }
-                i += 1;
-            }
-            objectives.span()
+            GameObjectiveDetails { name, description, objectives: objectives.span() }
         }
 
         fn objectives_details_batch(
-            self: @ContractState, token_ids: Span<felt252>,
-        ) -> Array<Span<GameObjective>> {
+            self: @ContractState, objective_ids: Span<u32>,
+        ) -> Array<GameObjectiveDetails> {
             let mut results = array![];
             let mut i = 0;
             loop {
-                if i >= token_ids.len() {
+                if i >= objective_ids.len() {
                     break;
                 }
-                results.append(self.objectives_details(*token_ids.at(i)));
+                results.append(self.objectives_details(*objective_ids.at(i)));
                 i += 1;
             }
             results

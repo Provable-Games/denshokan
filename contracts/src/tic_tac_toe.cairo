@@ -235,7 +235,7 @@ pub mod TicTacToe {
         IMinigameObjectives, IMinigameObjectivesDetails,
     };
     use game_components_minigame::extensions::objectives::objectives::ObjectivesComponent;
-    use game_components_minigame::extensions::objectives::structs::GameObjective;
+    use game_components_minigame::extensions::objectives::structs::{GameObjective, GameObjectiveDetails};
     use game_components_minigame::extensions::settings::interface::{
         IMinigameSettings, IMinigameSettingsDetails,
     };
@@ -552,42 +552,31 @@ pub mod TicTacToe {
 
     #[abi(embed_v0)]
     impl GameObjectivesDetailsImpl of IMinigameObjectivesDetails<ContractState> {
-        fn objectives_details(self: @ContractState, token_id: felt252) -> Span<GameObjective> {
-            let count = self.objective_count.read();
+        fn objectives_details(self: @ContractState, objective_id: u32) -> GameObjectiveDetails {
+            let (target_wins, exists) = self.objective_data.entry(objective_id).read();
+            assert!(exists, "Objective does not exist");
+
+            // Build name and description from target_wins
+            let name: ByteArray = format!("Win {} games", target_wins);
+            let description: ByteArray = format!("Win {} games of Tic Tac Toe", target_wins);
+
+            // Build objectives array with target info
             let mut objectives = array![];
-            let mut i: u32 = 1;
-            while i <= count {
-                let (target_wins, exists) = self.objective_data.entry(i).read();
-                if exists {
-                    let player_wins = self.games_won.entry(token_id).read();
-                    let completed: ByteArray = if player_wins >= target_wins {
-                        "Yes"
-                    } else {
-                        "No"
-                    };
-                    objectives
-                        .append(
-                            GameObjective {
-                                name: format!("Win {} games", target_wins),
-                                value: format!("Completed: {}", completed),
-                            },
-                        );
-                }
-                i += 1;
-            }
-            objectives.span()
+            objectives.append(GameObjective { name: "target_wins", value: format!("{}", target_wins) });
+
+            GameObjectiveDetails { name, description, objectives: objectives.span() }
         }
 
         fn objectives_details_batch(
-            self: @ContractState, token_ids: Span<felt252>,
-        ) -> Array<Span<GameObjective>> {
+            self: @ContractState, objective_ids: Span<u32>,
+        ) -> Array<GameObjectiveDetails> {
             let mut results = array![];
             let mut i = 0;
             loop {
-                if i >= token_ids.len() {
+                if i >= objective_ids.len() {
                     break;
                 }
-                results.append(self.objectives_details(*token_ids.at(i)));
+                results.append(self.objectives_details(*objective_ids.at(i)));
                 i += 1;
             }
             results

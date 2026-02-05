@@ -707,11 +707,19 @@ fn test_objective_lucky_guess() {
 #[test]
 fn test_objectives_details() {
     let (_, address) = setup_number_guess();
-    let token_id: felt252 = 1;
     let objectives_details = IMinigameObjectivesDetailsDispatcher { contract_address: address };
 
-    let details = objectives_details.objectives_details(token_id);
-    assert!(details.len() == 3, "Should have 3 objectives");
+    // Test fetching details for objective 1 (First Win)
+    let details = objectives_details.objectives_details(1);
+    assert!(details.name == "First Win", "Objective 1 should be First Win");
+
+    // Test fetching details for objective 2 (Quick Thinker)
+    let details2 = objectives_details.objectives_details(2);
+    assert!(details2.name == "Quick Thinker", "Objective 2 should be Quick Thinker");
+
+    // Test fetching details for objective 3 (Lucky Guess)
+    let details3 = objectives_details.objectives_details(3);
+    assert!(details3.name == "Lucky Guess", "Objective 3 should be Lucky Guess");
 }
 
 // ==========================================================================

@@ -168,16 +168,26 @@ export function useNumberGuessConfig(
 
         for (let id = 1; id <= count; id++) {
           try {
-            const result = await contract.call("get_objective", [id]);
-            // Result is (name, description, objective_type, threshold)
-            const [name, description, objectiveType, threshold] = result as any;
+            const result = await contract.call("objectives_details", [id]);
+            // Result is GameObjectiveDetails: { name, description, objectives }
+            const details = result as any;
+
+            // Parse objectives array to extract type and threshold
+            let objectiveType = 1, threshold = 1;
+            const objectivesArr = details.objectives || [];
+            for (const o of objectivesArr) {
+              const name = o.name?.toString?.() || o.name || "";
+              const value = o.value?.toString?.() || o.value || "0";
+              if (name === "type") objectiveType = parseInt(value) || 1;
+              if (name === "threshold") threshold = parseInt(value) || 1;
+            }
 
             items.push({
               id,
-              name: name?.toString?.() || name || `Objective #${id}`,
-              description: description?.toString?.() || description || "",
-              objectiveType: Number(objectiveType) || 1,
-              threshold: Number(threshold) || 1,
+              name: details.name?.toString?.() || details.name || `Objective #${id}`,
+              description: details.description?.toString?.() || details.description || "",
+              objectiveType,
+              threshold,
             });
           } catch (e) {
             console.error(`Failed to fetch objective ${id}:`, e);
