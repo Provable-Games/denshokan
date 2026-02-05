@@ -59,6 +59,10 @@ pub trait INumberGuessConfig<TContractState> {
 
     /// Get total objectives count.
     fn objective_count(self: @TContractState) -> u32;
+
+    /// Get objective metadata by ID.
+    /// Returns (name, description, objective_type, threshold).
+    fn get_objective(self: @TContractState, objective_id: u32) -> (ByteArray, ByteArray, u8, u32);
 }
 
 #[starknet::interface]
@@ -776,6 +780,13 @@ pub mod NumberGuess {
 
         fn objective_count(self: @ContractState) -> u32 {
             self.objective_count.read()
+        }
+
+        fn get_objective(self: @ContractState, objective_id: u32) -> (ByteArray, ByteArray, u8, u32) {
+            let (objective_type, threshold, exists) = self.objective_data.entry(objective_id).read();
+            assert(exists, 'Objective does not exist');
+            let (name, description) = self.objective_metadata.entry(objective_id).read();
+            (name, description, objective_type, threshold)
         }
     }
 

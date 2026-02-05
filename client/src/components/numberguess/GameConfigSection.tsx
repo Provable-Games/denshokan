@@ -9,6 +9,11 @@ import {
   CardContent,
   Divider,
   Alert,
+  List,
+  ListItem,
+  ListItemText,
+  Chip,
+  CircularProgress,
 } from "@mui/material";
 import { Add, Settings, EmojiEvents } from "@mui/icons-material";
 import { useNumberGuessConfig } from "../../hooks/useNumberGuessConfig";
@@ -28,13 +33,26 @@ export default function GameConfigSection({ gameAddress, gameName }: Props) {
   const {
     createSettings,
     createObjective,
+    settings,
+    objectives,
     settingsCount,
     objectiveCount,
     isCreatingSettings,
     isCreatingObjective,
+    isLoadingSettings,
+    isLoadingObjectives,
     error,
     refetch,
   } = useNumberGuessConfig(gameAddress);
+
+  const getObjectiveTypeLabel = (type: number) => {
+    switch (type) {
+      case 1: return "Win";
+      case 2: return "Win Within N";
+      case 3: return "Perfect Game";
+      default: return `Type ${type}`;
+    }
+  };
 
   const handleCreateSettings = async (params: Parameters<typeof createSettings>[0]) => {
     const newId = await createSettings(params);
@@ -100,14 +118,36 @@ export default function GameConfigSection({ gameAddress, gameName }: Props) {
 
               <Divider sx={{ my: 2 }} />
 
-              <Box sx={{ bgcolor: "background.default", p: 2, borderRadius: 1, mb: 2 }}>
-                <Typography variant="subtitle2" gutterBottom>Default Settings:</Typography>
-                <Typography variant="body2" color="text.secondary">
-                  1. Easy (1-10, unlimited)<br />
-                  2. Medium (1-100, 10 attempts)<br />
-                  3. Hard (1-1000, 10 attempts)
-                </Typography>
-              </Box>
+              {isLoadingSettings ? (
+                <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}>
+                  <CircularProgress size={24} />
+                </Box>
+              ) : (
+                <List dense sx={{ bgcolor: "background.default", borderRadius: 1, mb: 2, maxHeight: 200, overflow: "auto" }}>
+                  {settings.map((s) => (
+                    <ListItem key={s.id} sx={{ py: 0.5 }}>
+                      <ListItemText
+                        primary={
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                            <Typography variant="body2" fontWeight="medium">
+                              {s.id}. {s.name}
+                            </Typography>
+                            {s.id <= 3 && (
+                              <Chip label="Default" size="small" variant="outlined" sx={{ height: 18, fontSize: "0.7rem" }} />
+                            )}
+                          </Box>
+                        }
+                        secondary={`Range: ${s.min}-${s.max}, ${s.maxAttempts === 0 ? "Unlimited" : `${s.maxAttempts} attempts`}`}
+                      />
+                    </ListItem>
+                  ))}
+                  {settings.length === 0 && (
+                    <ListItem>
+                      <ListItemText secondary="No settings available" />
+                    </ListItem>
+                  )}
+                </List>
+              )}
 
               <Button
                 variant="contained"
@@ -142,14 +182,41 @@ export default function GameConfigSection({ gameAddress, gameName }: Props) {
 
               <Divider sx={{ my: 2 }} />
 
-              <Box sx={{ bgcolor: "background.default", p: 2, borderRadius: 1, mb: 2 }}>
-                <Typography variant="subtitle2" gutterBottom>Default Objectives:</Typography>
-                <Typography variant="body2" color="text.secondary">
-                  1. First Win - Win any game<br />
-                  2. Quick Thinker - Win in 5 or fewer guesses<br />
-                  3. Lucky Guess - Win on first guess
-                </Typography>
-              </Box>
+              {isLoadingObjectives ? (
+                <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}>
+                  <CircularProgress size={24} />
+                </Box>
+              ) : (
+                <List dense sx={{ bgcolor: "background.default", borderRadius: 1, mb: 2, maxHeight: 200, overflow: "auto" }}>
+                  {objectives.map((o) => (
+                    <ListItem key={o.id} sx={{ py: 0.5 }}>
+                      <ListItemText
+                        primary={
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                            <Typography variant="body2" fontWeight="medium">
+                              {o.id}. {o.name}
+                            </Typography>
+                            {o.id <= 3 && (
+                              <Chip label="Default" size="small" variant="outlined" sx={{ height: 18, fontSize: "0.7rem" }} />
+                            )}
+                          </Box>
+                        }
+                        secondary={
+                          <>
+                            {o.description}
+                            {o.objectiveType === 2 && ` (${o.threshold} guesses)`}
+                          </>
+                        }
+                      />
+                    </ListItem>
+                  ))}
+                  {objectives.length === 0 && (
+                    <ListItem>
+                      <ListItemText secondary="No objectives available" />
+                    </ListItem>
+                  )}
+                </List>
+              )}
 
               <Button
                 variant="contained"

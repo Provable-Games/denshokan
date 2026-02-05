@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   useAccount,
   useContract,
@@ -22,10 +22,31 @@ export interface CreateObjectiveParams {
   threshold: number;
 }
 
+export interface SettingsItem {
+  id: number;
+  name: string;
+  description: string;
+  min: number;
+  max: number;
+  maxAttempts: number;
+}
+
+export interface ObjectiveItem {
+  id: number;
+  name: string;
+  description: string;
+  objectiveType: number;
+  threshold: number;
+}
+
 export interface UseNumberGuessConfigReturn {
   // Actions
   createSettings: (params: CreateSettingsParams) => Promise<number | null>;
   createObjective: (params: CreateObjectiveParams) => Promise<number | null>;
+
+  // Data
+  settings: SettingsItem[];
+  objectives: ObjectiveItem[];
 
   // Counts
   settingsCount: number;
@@ -34,6 +55,8 @@ export interface UseNumberGuessConfigReturn {
   // Loading states
   isCreatingSettings: boolean;
   isCreatingObjective: boolean;
+  isLoadingSettings: boolean;
+  isLoadingObjectives: boolean;
   error: string | null;
 
   // Refresh
@@ -46,6 +69,10 @@ export function useNumberGuessConfig(
   const { address } = useAccount();
   const [isCreatingSettings, setIsCreatingSettings] = useState(false);
   const [isCreatingObjective, setIsCreatingObjective] = useState(false);
+  const [isLoadingSettings, setIsLoadingSettings] = useState(false);
+  const [isLoadingObjectives, setIsLoadingObjectives] = useState(false);
+  const [settings, setSettings] = useState<SettingsItem[]>([]);
+  const [objectives, setObjectives] = useState<ObjectiveItem[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const { contract } = useContract({
@@ -77,6 +104,96 @@ export function useNumberGuessConfig(
     refetchSettingsCount();
     refetchObjectiveCount();
   }, [refetchSettingsCount, refetchObjectiveCount]);
+
+  // Fetch all settings details when count changes
+  useEffect(() => {
+    if (!contract || !settingsCountData) return;
+
+    const fetchSettings = async () => {
+      setIsLoadingSettings(true);
+      try {
+        const count = Number(settingsCountData);
+        const items: SettingsItem[] = [];
+
+        for (let id = 1; id <= count; id++) {
+          try {
+            const result = await contract.call("settings_details", [id]);
+            // Result is GameSettingDetails: { name, description, settings }
+            const details = result as any;
+
+            // Parse settings array to extract min, max, max_attempts
+            let min = 1, max = 100, maxAttempts = 0;
+            const settingsArr = details.settings || [];
+            for (const s of settingsArr) {
+              const name = s.name?.toString?.() || s.name || "";
+              const value = s.value?.toString?.() || s.value || "0";
+              if (name === "min") min = parseInt(value) || 1;
+              if (name === "max") max = parseInt(value) || 100;
+              if (name === "max_attempts") maxAttempts = parseInt(value) || 0;
+            }
+
+            items.push({
+              id,
+              name: details.name?.toString?.() || details.name || `Settings #${id}`,
+              description: details.description?.toString?.() || details.description || "",
+              min,
+              max,
+              maxAttempts,
+            });
+          } catch (e) {
+            console.error(`Failed to fetch settings ${id}:`, e);
+          }
+        }
+
+        setSettings(items);
+      } catch (e) {
+        console.error("Failed to fetch settings:", e);
+      } finally {
+        setIsLoadingSettings(false);
+      }
+    };
+
+    fetchSettings();
+  }, [contract, settingsCountData]);
+
+  // Fetch all objectives details when count changes
+  useEffect(() => {
+    if (!contract || !objectiveCountData) return;
+
+    const fetchObjectives = async () => {
+      setIsLoadingObjectives(true);
+      try {
+        const count = Number(objectiveCountData);
+        const items: ObjectiveItem[] = [];
+
+        for (let id = 1; id <= count; id++) {
+          try {
+            const result = await contract.call("get_objective", [id]);
+            // Result is (name, description, objective_type, threshold)
+            const [name, description, objectiveType, threshold] = result as any;
+
+            items.push({
+              id,
+              name: name?.toString?.() || name || `Objective #${id}`,
+              description: description?.toString?.() || description || "",
+              objectiveType: Number(objectiveType) || 1,
+              threshold: Number(threshold) || 1,
+            });
+          } catch (e) {
+            console.error(`Failed to fetch objective ${id}:`, e);
+          }
+        }
+
+        setObjectives(items);
+      } catch (e) {
+        console.error("Failed to fetch objectives:", e);
+      } finally {
+        setIsLoadingObjectives(false);
+      }
+    };
+
+    fetchObjectives();
+  }, [contract, objectiveCountData]);
 
   const createSettings = useCallback(
     async (params: CreateSettingsParams): Promise<number | null> => {
@@ -173,10 +290,14 @@ export function useNumberGuessConfig(
   return {
     createSettings,
     createObjective,
+    settings,
+    objectives,
     settingsCount,
     objectiveCount,
     isCreatingSettings,
     isCreatingObjective,
+    isLoadingSettings,
+    isLoadingObjectives,
     error,
     refetch,
   };
