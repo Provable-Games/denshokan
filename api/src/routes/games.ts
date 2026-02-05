@@ -11,14 +11,19 @@ const app = new Hono();
  */
 async function resolveGameId(rawId: string): Promise<{ gameId: number; gameAddress: string } | null> {
   let where;
-  const numericId = parseGameId(rawId);
-  if (numericId !== null) {
-    where = eq(games.gameId, numericId);
-  } else {
+  if (rawId.startsWith("0x")) {
+    // Hex address — skip parseGameId which would return 0 for "0x..."
     try {
       const normalized = `0x${BigInt(rawId).toString(16)}`;
       where = eq(games.contractAddress, normalized);
     } catch {
+      return null;
+    }
+  } else {
+    const numericId = parseGameId(rawId);
+    if (numericId !== null) {
+      where = eq(games.gameId, numericId);
+    } else {
       return null;
     }
   }
