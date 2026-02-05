@@ -790,14 +790,15 @@ fn test_objective_exists_batch() {
 fn test_create_settings() {
     let (_, address) = setup_number_guess();
     let config = INumberGuessConfigDispatcher { contract_address: address };
+    let settings_details = IMinigameSettingsDetailsDispatcher { contract_address: address };
 
     // Initial count is 3 (Easy, Medium, Hard)
-    assert!(config.settings_count() == 3, "Should have 3 initial settings");
+    assert!(settings_details.settings_count() == 3, "Should have 3 initial settings");
 
     // Create a new custom settings
     let new_id = config.create_settings("Custom", "Custom difficulty 1-50", 1, 50, 5);
     assert!(new_id == 4, "New settings ID should be 4");
-    assert!(config.settings_count() == 4, "Should have 4 settings now");
+    assert!(settings_details.settings_count() == 4, "Should have 4 settings now");
 
     // Verify the new settings works
     let settings = IMinigameSettingsDispatcher { contract_address: address };
@@ -818,14 +819,15 @@ fn test_create_settings_invalid_range() {
 fn test_create_objective() {
     let (_, address) = setup_number_guess();
     let config = INumberGuessConfigDispatcher { contract_address: address };
+    let objectives_details = IMinigameObjectivesDetailsDispatcher { contract_address: address };
 
     // Initial count is 3 (First Win, Quick Thinker, Lucky Guess)
-    assert!(config.objective_count() == 3, "Should have 3 initial objectives");
+    assert!(objectives_details.objectives_count() == 3, "Should have 3 initial objectives");
 
     // Create a new objective (type 2 = WinWithinN)
     let new_id = config.create_objective("Speed Demon", "Win in 3 or fewer guesses", 2, 3);
     assert!(new_id == 4, "New objective ID should be 4");
-    assert!(config.objective_count() == 4, "Should have 4 objectives now");
+    assert!(objectives_details.objectives_count() == 4, "Should have 4 objectives now");
 
     // Verify the new objective exists
     let objectives = IMinigameObjectivesDispatcher { contract_address: address };

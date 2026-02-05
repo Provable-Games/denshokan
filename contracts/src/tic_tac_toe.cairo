@@ -235,7 +235,9 @@ pub mod TicTacToe {
         IMinigameObjectives, IMinigameObjectivesDetails,
     };
     use game_components_minigame::extensions::objectives::objectives::ObjectivesComponent;
-    use game_components_minigame::extensions::objectives::structs::{GameObjective, GameObjectiveDetails};
+    use game_components_minigame::extensions::objectives::structs::{
+        GameObjective, GameObjectiveDetails,
+    };
     use game_components_minigame::extensions::settings::interface::{
         IMinigameSettings, IMinigameSettingsDetails,
     };
@@ -490,6 +492,10 @@ pub mod TicTacToe {
 
     #[abi(embed_v0)]
     impl GameSettingsDetailsImpl of IMinigameSettingsDetails<ContractState> {
+        fn settings_count(self: @ContractState) -> u32 {
+            self.settings_count.read()
+        }
+
         fn settings_details(self: @ContractState, settings_id: u32) -> GameSettingDetails {
             let (name, description, _) = self.settings_data.entry(settings_id).read();
             GameSettingDetails {
@@ -552,6 +558,10 @@ pub mod TicTacToe {
 
     #[abi(embed_v0)]
     impl GameObjectivesDetailsImpl of IMinigameObjectivesDetails<ContractState> {
+        fn objectives_count(self: @ContractState) -> u32 {
+            self.objective_count.read()
+        }
+
         fn objectives_details(self: @ContractState, objective_id: u32) -> GameObjectiveDetails {
             let (target_wins, exists) = self.objective_data.entry(objective_id).read();
             assert!(exists, "Objective does not exist");
@@ -562,7 +572,8 @@ pub mod TicTacToe {
 
             // Build objectives array with target info
             let mut objectives = array![];
-            objectives.append(GameObjective { name: "target_wins", value: format!("{}", target_wins) });
+            objectives
+                .append(GameObjective { name: "target_wins", value: format!("{}", target_wins) });
 
             GameObjectiveDetails { name, description, objectives: objectives.span() }
         }
@@ -746,7 +757,14 @@ pub mod TicTacToe {
             self
                 .objectives
                 .create_objective(
-                    1, "Win 3 Games", "Win 3 games against the AI", minigame_token_address,
+                    1,
+                    GameObjectiveDetails {
+                        name: "Win 3 Games",
+                        description: "Win 3 games against the AI",
+                        objectives: array![GameObjective { name: "target_wins", value: "3" }]
+                            .span(),
+                    },
+                    minigame_token_address,
                 );
 
             // Create default settings in the component
@@ -755,9 +773,11 @@ pub mod TicTacToe {
                 .create_settings(
                     get_contract_address(),
                     1,
-                    "Standard",
-                    "Standard AI opponent",
-                    array![GameSetting { name: "AI", value: "Standard" }].span(),
+                    GameSettingDetails {
+                        name: "Standard",
+                        description: "Standard AI opponent",
+                        settings: array![GameSetting { name: "AI", value: "Standard" }].span(),
+                    },
                     minigame_token_address,
                 );
         }

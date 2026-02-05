@@ -53,16 +53,6 @@ pub trait INumberGuessConfig<TContractState> {
         objective_type: u8,
         threshold: u32,
     ) -> u32;
-
-    /// Get total settings count.
-    fn settings_count(self: @TContractState) -> u32;
-
-    /// Get total objectives count.
-    fn objective_count(self: @TContractState) -> u32;
-
-    /// Get objective metadata by ID.
-    /// Returns (name, description, objective_type, threshold).
-    fn get_objective(self: @TContractState, objective_id: u32) -> (ByteArray, ByteArray, u8, u32);
 }
 
 #[starknet::interface]
@@ -178,7 +168,9 @@ pub mod NumberGuess {
         IMinigameObjectives, IMinigameObjectivesDetails,
     };
     use game_components_minigame::extensions::objectives::objectives::ObjectivesComponent;
-    use game_components_minigame::extensions::objectives::structs::{GameObjective, GameObjectiveDetails};
+    use game_components_minigame::extensions::objectives::structs::{
+        GameObjective, GameObjectiveDetails,
+    };
     use game_components_minigame::extensions::settings::interface::{
         IMinigameSettings, IMinigameSettingsDetails,
     };
@@ -496,6 +488,10 @@ pub mod NumberGuess {
             }
             results
         }
+
+        fn settings_count(self: @ContractState) -> u32 {
+            self.settings_count.read()
+        }
     }
 
     // ======================================================================
@@ -541,7 +537,10 @@ pub mod NumberGuess {
     #[abi(embed_v0)]
     impl GameObjectivesDetailsImpl of IMinigameObjectivesDetails<ContractState> {
         fn objectives_details(self: @ContractState, objective_id: u32) -> GameObjectiveDetails {
-            let (objective_type, threshold, exists) = self.objective_data.entry(objective_id).read();
+            let (objective_type, threshold, exists) = self
+                .objective_data
+                .entry(objective_id)
+                .read();
             assert!(exists, "Objective does not exist");
 
             let (name, description) = self.objective_metadata.entry(objective_id).read();
@@ -567,6 +566,10 @@ pub mod NumberGuess {
                 i += 1;
             }
             results
+        }
+
+        fn objectives_count(self: @ContractState) -> u32 {
+            self.objective_count.read()
         }
     }
 
@@ -760,21 +763,6 @@ pub mod NumberGuess {
 
             objective_id
         }
-
-        fn settings_count(self: @ContractState) -> u32 {
-            self.settings_count.read()
-        }
-
-        fn objective_count(self: @ContractState) -> u32 {
-            self.objective_count.read()
-        }
-
-        fn get_objective(self: @ContractState, objective_id: u32) -> (ByteArray, ByteArray, u8, u32) {
-            let (objective_type, threshold, exists) = self.objective_data.entry(objective_id).read();
-            assert(exists, 'Objective does not exist');
-            let (name, description) = self.objective_metadata.entry(objective_id).read();
-            (name, description, objective_type, threshold)
-        }
     }
 
     // ======================================================================
@@ -926,16 +914,36 @@ pub mod NumberGuess {
             // Register objectives with the component
             self
                 .objectives
-                .create_objective(1, "First Win", "Win your first game", minigame_token_address);
-            self
-                .objectives
                 .create_objective(
-                    2, "Quick Thinker", "Win a game in 5 or fewer guesses", minigame_token_address,
+                    1,
+                    GameObjectiveDetails {
+                        name: "First Win",
+                        description: "Win your first game",
+                        objectives: array![].span(),
+                    },
+                    minigame_token_address,
                 );
             self
                 .objectives
                 .create_objective(
-                    3, "Lucky Guess", "Win a game on your first guess", minigame_token_address,
+                    2,
+                    GameObjectiveDetails {
+                        name: "Quick Thinker",
+                        description: "Win a game in 5 or fewer guesses",
+                        objectives: array![].span(),
+                    },
+                    minigame_token_address,
+                );
+            self
+                .objectives
+                .create_objective(
+                    3,
+                    GameObjectiveDetails {
+                        name: "Lucky Guess",
+                        description: "Win a game on your first guess",
+                        objectives: array![].span(),
+                    },
+                    minigame_token_address,
                 );
 
             // Create settings in the component
@@ -944,14 +952,16 @@ pub mod NumberGuess {
                 .create_settings(
                     get_contract_address(),
                     1,
-                    "Easy",
-                    "Guess a number between 1 and 10",
-                    array![
-                        GameSetting { name: "Range Min", value: "1" },
-                        GameSetting { name: "Range Max", value: "10" },
-                        GameSetting { name: "Max Attempts", value: "Unlimited" },
-                    ]
-                        .span(),
+                    GameSettingDetails {
+                        name: "Easy",
+                        description: "Guess a number between 1 and 10",
+                        settings: array![
+                            GameSetting { name: "Range Min", value: "1" },
+                            GameSetting { name: "Range Max", value: "10" },
+                            GameSetting { name: "Max Attempts", value: "Unlimited" },
+                        ]
+                            .span(),
+                    },
                     minigame_token_address,
                 );
             self
@@ -959,14 +969,16 @@ pub mod NumberGuess {
                 .create_settings(
                     get_contract_address(),
                     2,
-                    "Medium",
-                    "Guess a number between 1 and 100",
-                    array![
-                        GameSetting { name: "Range Min", value: "1" },
-                        GameSetting { name: "Range Max", value: "100" },
-                        GameSetting { name: "Max Attempts", value: "10" },
-                    ]
-                        .span(),
+                    GameSettingDetails {
+                        name: "Medium",
+                        description: "Guess a number between 1 and 100",
+                        settings: array![
+                            GameSetting { name: "Range Min", value: "1" },
+                            GameSetting { name: "Range Max", value: "100" },
+                            GameSetting { name: "Max Attempts", value: "10" },
+                        ]
+                            .span(),
+                    },
                     minigame_token_address,
                 );
             self
@@ -974,14 +986,16 @@ pub mod NumberGuess {
                 .create_settings(
                     get_contract_address(),
                     3,
-                    "Hard",
-                    "Guess a number between 1 and 1000",
-                    array![
-                        GameSetting { name: "Range Min", value: "1" },
-                        GameSetting { name: "Range Max", value: "1000" },
-                        GameSetting { name: "Max Attempts", value: "10" },
-                    ]
-                        .span(),
+                    GameSettingDetails {
+                        name: "Hard",
+                        description: "Guess a number between 1 and 1000",
+                        settings: array![
+                            GameSetting { name: "Range Min", value: "1" },
+                            GameSetting { name: "Range Max", value: "1000" },
+                            GameSetting { name: "Max Attempts", value: "10" },
+                        ]
+                            .span(),
+                    },
                     minigame_token_address,
                 );
         }
