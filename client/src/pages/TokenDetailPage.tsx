@@ -1,19 +1,33 @@
-import { useParams } from "react-router-dom";
-import { Box, Typography, Grid, Card, CardContent, Chip, Stack } from "@mui/material";
+import { useParams, useNavigate } from "react-router-dom";
+import { Box, Typography, Grid, Card, CardContent, Chip, Stack, Button } from "@mui/material";
+import { PlayArrow } from "@mui/icons-material";
 import { useTokenDetail } from "../hooks/useTokenDetail";
 import LoadingSpinner from "../components/common/LoadingSpinner";
 
 export default function TokenDetailPage() {
   const { tokenId } = useParams<{ tokenId: string }>();
+  const navigate = useNavigate();
   const { token, scores } = useTokenDetail(tokenId || "");
 
   if (!token) return <LoadingSpinner message="Loading token..." />;
 
   return (
     <Box>
-      <Typography variant="h3" gutterBottom>
-        {token.playerName || `Token #${token.tokenId.slice(0, 12)}...`}
-      </Typography>
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 2 }}>
+        <Typography variant="h3" gutterBottom>
+          {token.playerName || `Token #${token.tokenId.slice(0, 12)}...`}
+        </Typography>
+        {!token.gameOver && (
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<PlayArrow />}
+            onClick={() => navigate(`/tokens/${tokenId}/play`)}
+          >
+            Play Game
+          </Button>
+        )}
+      </Box>
 
       <Stack direction="row" spacing={1} sx={{ mb: 3 }}>
         <Chip label={token.gameOver ? "Completed" : "Active"} color={token.gameOver ? "success" : "primary"} />
