@@ -19,7 +19,7 @@ export default function GameDetailPage() {
   const navigate = useNavigate();
   const id = parseInt(gameId || "0");
   const { game, stats } = useGameDetail(id);
-  const { entries, loading: lbLoading } = useLeaderboard(id, 10);
+  const { entries, loading: lbLoading } = useLeaderboard(id, { limit: 10 });
   console.log(game, stats, entries);
 
   if (!game) return <LoadingSpinner message="Loading game..." />;

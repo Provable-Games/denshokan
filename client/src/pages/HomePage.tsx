@@ -1,7 +1,6 @@
-import { useEffect, useState } from "react";
 import { Box, Typography, Grid, Card, CardContent, Button } from "@mui/material";
 import { useNavigate } from "react-router-dom";
-import { useDenshokanClient } from "@provable-games/denshokan-sdk/react";
+import { useActivity } from "@provable-games/denshokan-sdk/react";
 import { useGameList } from "../hooks/useGameList";
 import GameGrid from "../components/games/GameGrid";
 import LoadingSpinner from "../components/common/LoadingSpinner";
@@ -9,12 +8,8 @@ import LoadingSpinner from "../components/common/LoadingSpinner";
 export default function HomePage() {
   const navigate = useNavigate();
   const { games, loading } = useGameList();
-  const client = useDenshokanClient();
-  const [recentActivity, setRecentActivity] = useState<any[]>([]);
-
-  useEffect(() => {
-    client.getActivity({ limit: 5 }).then(setRecentActivity).catch(() => {});
-  }, [client]);
+  const { data: activityData } = useActivity({ limit: 5 });
+  const recentActivity = activityData?.data ?? [];
 
   return (
     <Box>

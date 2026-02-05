@@ -23,10 +23,10 @@ function adaptEntry(e: LeaderboardEntry): ClientLeaderboardEntry {
   };
 }
 
-export function useLeaderboard(gameId: number, limit = 50) {
+export function useLeaderboard(gameId: number, params?: { limit?: number; offset?: number }) {
   const { data, isLoading, refetch } = useSdkLeaderboard(
     gameId || undefined,
-    { limit },
+    params,
   );
 
   const handleWS = useCallback(
@@ -43,7 +43,8 @@ export function useLeaderboard(gameId: number, limit = 50) {
   );
 
   return {
-    entries: data?.map(adaptEntry) ?? [],
+    entries: data?.data.map(adaptEntry) ?? [],
+    total: data?.total ?? 0,
     loading: isLoading,
     refetch,
   };

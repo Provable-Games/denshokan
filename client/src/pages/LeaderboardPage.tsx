@@ -10,7 +10,7 @@ export default function LeaderboardPage() {
   const { gameId } = useParams<{ gameId: string }>();
   const id = parseInt(gameId || "0");
   const { game } = useGameDetail(id);
-  const { entries, loading } = useLeaderboard(id, 100);
+  const { entries, loading } = useLeaderboard(id, { limit: 100 });
 
   return (
     <Box>

@@ -31,7 +31,7 @@ export default function NumberGuessPlayPage() {
     return (
       <Box sx={{ p: 3 }}>
         <Alert severity="error" sx={{ mb: 2 }}>
-          {error || "Token not found"}
+          {error?.message || "Token not found"}
         </Alert>
         <Button
           variant="outlined"

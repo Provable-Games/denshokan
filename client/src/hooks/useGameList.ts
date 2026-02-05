@@ -1,6 +1,11 @@
 import { useGames } from "@provable-games/denshokan-sdk/react";
 import type { Game } from "@provable-games/denshokan-sdk";
 
+export interface GamesParams {
+  limit?: number;
+  offset?: number;
+}
+
 export interface ClientGame {
   gameId: number;
   contractAddress: string;
@@ -21,11 +26,12 @@ function adaptGame(g: Game): ClientGame {
   };
 }
 
-export function useGameList() {
-  const { data, isLoading, refetch } = useGames();
+export function useGameList(params?: GamesParams) {
+  const { data, isLoading, refetch } = useGames(params);
 
   return {
-    games: data?.map(adaptGame) ?? [],
+    games: data?.data.map(adaptGame) ?? [],
+    total: data?.total ?? 0,
     loading: isLoading,
     refetch,
   };
