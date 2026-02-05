@@ -7,7 +7,9 @@ import {
   Grid,
   Chip,
   CircularProgress,
+  Button,
 } from "@mui/material";
+import { Add } from "@mui/icons-material";
 import { motion } from "framer-motion";
 
 interface DifficultyOption {
@@ -48,12 +50,14 @@ const DEFAULT_DIFFICULTIES: DifficultyOption[] = [
 
 interface Props {
   onSelect: (settingsId: number) => void;
+  onCreateCustom?: () => void;
   isLoading?: boolean;
   disabled?: boolean;
 }
 
 export default function DifficultySelector({
   onSelect,
+  onCreateCustom,
   isLoading,
   disabled,
 }: Props) {
@@ -143,6 +147,19 @@ export default function DifficultySelector({
           </Grid>
         ))}
       </Grid>
+
+      {onCreateCustom && (
+        <Box sx={{ mt: 3, textAlign: "center" }}>
+          <Button
+            variant="outlined"
+            startIcon={<Add />}
+            onClick={onCreateCustom}
+            disabled={disabled || isLoading}
+          >
+            Create Custom Difficulty
+          </Button>
+        </Box>
+      )}
     </Box>
   );
 }
