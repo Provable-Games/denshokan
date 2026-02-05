@@ -7,6 +7,7 @@ import LeaderboardPage from "./pages/LeaderboardPage";
 import MintTokenPage from "./pages/MintTokenPage";
 import TokenDetailPage from "./pages/TokenDetailPage";
 import PortfolioPage from "./pages/PortfolioPage";
+import NumberGuessPlayPage from "./pages/NumberGuessPlayPage";
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
         <Route path="/games/:gameId/leaderboard" element={<LeaderboardPage />} />
         <Route path="/mint" element={<MintTokenPage />} />
         <Route path="/tokens/:tokenId" element={<TokenDetailPage />} />
+        <Route path="/tokens/:tokenId/play" element={<NumberGuessPlayPage />} />
         <Route path="/portfolio" element={<PortfolioPage />} />
       </Route>
     </Routes>

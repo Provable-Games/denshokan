@@ -35,7 +35,6 @@
   },
   "workspaces": [
     "indexer",
-    "api",
-    "client"
+    "api"
   ]
 }
