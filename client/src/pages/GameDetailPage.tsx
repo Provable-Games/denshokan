@@ -9,7 +9,6 @@ import {
   Stack,
 } from "@mui/material";
 import { useGameDetail } from "../hooks/useGameDetail";
-import { useLeaderboard } from "../hooks/useLeaderboard";
 import LeaderboardTable from "../components/leaderboard/LeaderboardTable";
 import { GameConfigSection } from "../components/numberguess";
 import LoadingSpinner from "../components/common/LoadingSpinner";
@@ -19,8 +18,7 @@ export default function GameDetailPage() {
   const navigate = useNavigate();
   const id = parseInt(gameId || "0");
   const { game, stats } = useGameDetail(id);
-  const { entries, loading: lbLoading } = useLeaderboard(id, { limit: 10 });
-  console.log(game, stats, entries);
+  console.log(game, stats);
 
   if (!game) return <LoadingSpinner message="Loading game..." />;
 
@@ -66,11 +64,6 @@ export default function GameDetailPage() {
           ))}
         </Grid>
       )}
-
-      <Typography variant="h5" gutterBottom>
-        Top Players
-      </Typography>
-      {lbLoading ? <LoadingSpinner /> : <LeaderboardTable entries={entries} />}
 
       {/* Game Configuration Section */}
       {game.contractAddress && (
