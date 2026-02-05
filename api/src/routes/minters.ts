@@ -1,19 +1,33 @@
 import { Hono } from "hono";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { minters } from "../db/schema.js";
+import { parsePositiveInt } from "../utils/validation.js";
 
 const app = new Hono();
 
-// GET /minters - List all minters
+// GET /minters - List all minters (paginated)
 app.get("/", async (c) => {
-  const results = await db
-    .select()
-    .from(minters)
-    .orderBy(desc(minters.createdAt));
+  const limit = parsePositiveInt(c.req.query("limit"), 50);
+  const offset = parsePositiveInt(c.req.query("offset"), 0);
+
+  const [results, countResult] = await Promise.all([
+    db
+      .select()
+      .from(minters)
+      .orderBy(desc(minters.createdAt))
+      .limit(Math.min(limit, 100))
+      .offset(Math.max(offset, 0)),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(minters),
+  ]);
 
   return c.json({
     data: results.map(serializeMinter),
+    total: countResult[0]?.count ?? 0,
+    limit,
+    offset: Math.max(offset, 0),
   });
 });
 

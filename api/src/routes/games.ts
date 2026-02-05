@@ -1,33 +1,78 @@
 import { Hono } from "hono";
-import { eq, desc, and, gte, lte } from "drizzle-orm";
+import { eq, desc, sql, and } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { games, gameLeaderboards, gameStats, objectives, settings } from "../db/schema.js";
-import { parseGameId, parseTokenId, parsePositiveInt } from "../utils/validation.js";
+import { games, gameStats, objectives, settings } from "../db/schema.js";
+import { parseGameId, parsePositiveInt } from "../utils/validation.js";
 
 const app = new Hono();
 
-// GET /games - List games
+/**
+ * Resolve a raw path param (numeric gameId or hex address) to gameId + gameAddress.
+ */
+async function resolveGameId(rawId: string): Promise<{ gameId: number; gameAddress: string } | null> {
+  let where;
+  const numericId = parseGameId(rawId);
+  if (numericId !== null) {
+    where = eq(games.gameId, numericId);
+  } else {
+    try {
+      const normalized = `0x${BigInt(rawId).toString(16)}`;
+      where = eq(games.contractAddress, normalized);
+    } catch {
+      return null;
+    }
+  }
+
+  const result = await db
+    .select({ gameId: games.gameId, contractAddress: games.contractAddress })
+    .from(games)
+    .where(where)
+    .limit(1);
+
+  return result.length
+    ? { gameId: result[0].gameId, gameAddress: result[0].contractAddress.toLowerCase() }
+    : null;
+}
+
+// GET /games - List games (paginated)
 app.get("/", async (c) => {
-  const results = await db.select().from(games).orderBy(desc(games.createdAt));
+  const limit = parsePositiveInt(c.req.query("limit"), 50);
+  const offset = parsePositiveInt(c.req.query("offset"), 0);
+
+  const [results, countResult] = await Promise.all([
+    db
+      .select()
+      .from(games)
+      .orderBy(desc(games.createdAt))
+      .limit(Math.min(limit, 100))
+      .offset(Math.max(offset, 0)),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(games),
+  ]);
+
   return c.json({
     data: results.map((r) => ({
       ...r,
       lastUpdatedBlock: r.lastUpdatedBlock?.toString() ?? null,
     })),
+    total: countResult[0]?.count ?? 0,
+    limit,
+    offset: Math.max(offset, 0),
   });
 });
 
 // GET /games/:id/stats - Game statistics
 app.get("/:id/stats", async (c) => {
-  const gameId = parseGameId(c.req.param("id"));
-  if (gameId === null) {
-    return c.json({ error: "Invalid game ID" }, 400);
+  const resolved = await resolveGameId(c.req.param("id"));
+  if (!resolved) {
+    return c.json({ error: "Game not found" }, 404);
   }
 
   const result = await db
     .select()
     .from(gameStats)
-    .where(eq(gameStats.gameId, gameId))
+    .where(eq(gameStats.gameId, resolved.gameId))
     .limit(1);
 
   if (result.length === 0) {
@@ -37,79 +82,129 @@ app.get("/:id/stats", async (c) => {
   return c.json({ data: result[0] });
 });
 
-// GET /games/:id/leaderboard/position/:tokenId - Token position in leaderboard
-app.get("/:id/leaderboard/position/:tokenId", async (c) => {
-  const gameId = parseGameId(c.req.param("id"));
-  if (gameId === null) {
-    return c.json({ error: "Invalid game ID" }, 400);
+// GET /games/:id/objectives/:objectiveId - Single objective
+app.get("/:id/objectives/:objectiveId", async (c) => {
+  const resolved = await resolveGameId(c.req.param("id"));
+  if (!resolved) {
+    return c.json({ error: "Game not found" }, 404);
   }
 
-  const tokenId = parseTokenId(c.req.param("tokenId"));
-  if (tokenId === null) {
-    return c.json({ error: "Invalid token ID" }, 400);
+  const objectiveId = parsePositiveInt(c.req.param("objectiveId"), -1);
+  if (objectiveId < 0) {
+    return c.json({ error: "Invalid objective ID" }, 400);
   }
 
-  const context = parsePositiveInt(c.req.query("context"), 5);
-
-  // Find the token's entry in the leaderboard
-  const tokenEntry = await db
+  const [match] = await db
     .select()
-    .from(gameLeaderboards)
+    .from(objectives)
     .where(
       and(
-        eq(gameLeaderboards.gameId, gameId),
-        eq(gameLeaderboards.tokenId, tokenId),
+        eq(objectives.gameAddress, resolved.gameAddress),
+        eq(objectives.objectiveId, objectiveId),
       ),
     )
     .limit(1);
 
-  if (tokenEntry.length === 0) {
-    return c.json({ error: "Token not found in leaderboard" }, 404);
+  if (!match) {
+    return c.json({ error: "Objective not found" }, 404);
   }
-
-  const rank = tokenEntry[0].rank;
-
-  // Get surrounding entries based on context
-  const minRank = Math.max(rank - context, 1);
-  const maxRank = rank + context;
-
-  const surrounding = await db
-    .select()
-    .from(gameLeaderboards)
-    .where(
-      and(
-        eq(gameLeaderboards.gameId, gameId),
-        gte(gameLeaderboards.rank, minRank),
-        lte(gameLeaderboards.rank, maxRank),
-      ),
-    )
-    .orderBy(gameLeaderboards.rank);
 
   return c.json({
     data: {
-      tokenId: tokenEntry[0].tokenId.toString(),
-      rank,
-      score: tokenEntry[0].score.toString(),
-      surrounding: surrounding.map((r) => ({
-        ...r,
-        tokenId: r.tokenId.toString(),
-        score: r.score.toString(),
-      })),
+      ...match,
+      blockNumber: match.blockNumber.toString(),
     },
   });
 });
 
-// GET /games/:id - Single game detail
+// GET /games/:id/objectives - Objectives for a game
+app.get("/:id/objectives", async (c) => {
+  const resolved = await resolveGameId(c.req.param("id"));
+  if (!resolved) {
+    return c.json({ error: "Game not found" }, 404);
+  }
+
+  const results = await db
+    .select()
+    .from(objectives)
+    .where(eq(objectives.gameAddress, resolved.gameAddress))
+    .orderBy(objectives.objectiveId);
+
+  return c.json({
+    data: results.map((r) => ({
+      ...r,
+      blockNumber: r.blockNumber.toString(),
+    })),
+  });
+});
+
+// GET /games/:id/settings/:settingsId - Single setting
+app.get("/:id/settings/:settingsId", async (c) => {
+  const resolved = await resolveGameId(c.req.param("id"));
+  if (!resolved) {
+    return c.json({ error: "Game not found" }, 404);
+  }
+
+  const settingsId = parsePositiveInt(c.req.param("settingsId"), -1);
+  if (settingsId < 0) {
+    return c.json({ error: "Invalid settings ID" }, 400);
+  }
+
+  const [match] = await db
+    .select()
+    .from(settings)
+    .where(
+      and(
+        eq(settings.gameAddress, resolved.gameAddress),
+        eq(settings.settingsId, settingsId),
+      ),
+    )
+    .limit(1);
+
+  if (!match) {
+    return c.json({ error: "Setting not found" }, 404);
+  }
+
+  return c.json({
+    data: {
+      ...match,
+      blockNumber: match.blockNumber.toString(),
+    },
+  });
+});
+
+// GET /games/:id/settings - Settings for a game
+app.get("/:id/settings", async (c) => {
+  const resolved = await resolveGameId(c.req.param("id"));
+  if (!resolved) {
+    return c.json({ error: "Game not found" }, 404);
+  }
+
+  const results = await db
+    .select()
+    .from(settings)
+    .where(eq(settings.gameAddress, resolved.gameAddress))
+    .orderBy(settings.settingsId);
+
+  return c.json({
+    data: results.map((r) => ({
+      ...r,
+      blockNumber: r.blockNumber.toString(),
+    })),
+  });
+});
+
+// GET /games/:id - Single game detail (MUST be last - catch-all)
 app.get("/:id", async (c) => {
-  const gameId = parseGameId(c.req.param("id"));
-  if (gameId === null) {
-    return c.json({ error: "Invalid game ID" }, 400);
+  const resolved = await resolveGameId(c.req.param("id"));
+  if (!resolved) {
+    return c.json({ error: "Game not found" }, 404);
   }
 
   const result = await db
     .select()
     .from(games)
-    .where(eq(games.gameId, gameId))
+    .where(eq(games.gameId, resolved.gameId))
     .limit(1);
 
   if (result.length === 0) {
@@ -122,75 +217,6 @@ app.get("/:id", async (c) => {
       ...game,
       lastUpdatedBlock: game.lastUpdatedBlock?.toString() ?? null,
     },
-  });
-});
-
-// GET /games/:id/leaderboard - Leaderboard for a game
-app.get("/:id/leaderboard", async (c) => {
-  const gameId = parseGameId(c.req.param("id"));
-  if (gameId === null) {
-    return c.json({ error: "Invalid game ID" }, 400);
-  }
-
-  const limit = parsePositiveInt(c.req.query("limit"), 50);
-  const offset = parsePositiveInt(c.req.query("offset"), 0) - 1;
-
-  const results = await db
-    .select()
-    .from(gameLeaderboards)
-    .where(eq(gameLeaderboards.gameId, gameId))
-    .orderBy(gameLeaderboards.rank)
-    .limit(Math.min(limit, 100))
-    .offset(Math.max(offset, 0));
-
-  return c.json({
-    data: results.map((r) => ({
-      ...r,
-      tokenId: r.tokenId.toString(),
-      score: r.score.toString(),
-    })),
-  });
-});
-
-// GET /games/:id/objectives - Objectives for a game
-app.get("/:id/objectives", async (c) => {
-  const gameAddress = c.req.param("id");
-  if (!gameAddress) {
-    return c.json({ error: "Game address required" }, 400);
-  }
-
-  const results = await db
-    .select()
-    .from(objectives)
-    .where(eq(objectives.gameAddress, gameAddress.toLowerCase()))
-    .orderBy(objectives.objectiveId);
-
-  return c.json({
-    data: results.map((r) => ({
-      ...r,
-      blockNumber: r.blockNumber.toString(),
-    })),
-  });
-});
-
-// GET /games/:id/settings - Settings for a game
-app.get("/:id/settings", async (c) => {
-  const gameAddress = c.req.param("id");
-  if (!gameAddress) {
-    return c.json({ error: "Game address required" }, 400);
-  }
-
-  const results = await db
-    .select()
-    .from(settings)
-    .where(eq(settings.gameAddress, gameAddress.toLowerCase()))
-    .orderBy(settings.settingsId);
-
-  return c.json({
-    data: results.map((r) => ({
-      ...r,
-      blockNumber: r.blockNumber.toString(),
-    })),
   });
 });
 
