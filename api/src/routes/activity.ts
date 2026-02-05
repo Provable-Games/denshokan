@@ -17,13 +17,19 @@ app.get("/", async (c) => {
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;
 
-  const results = await db
-    .select()
-    .from(tokenEvents)
-    .where(where)
-    .orderBy(desc(tokenEvents.blockTimestamp))
-    .limit(Math.min(limit, 100))
-    .offset(Math.max(offset, 0));
+  const [results, countResult] = await Promise.all([
+    db
+      .select()
+      .from(tokenEvents)
+      .where(where)
+      .orderBy(desc(tokenEvents.blockTimestamp))
+      .limit(Math.min(limit, 100))
+      .offset(Math.max(offset, 0)),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(tokenEvents)
+      .where(where),
+  ]);
 
   return c.json({
     data: results.map((r) => ({
@@ -31,6 +37,9 @@ app.get("/", async (c) => {
       tokenId: r.tokenId.toString(),
       blockNumber: r.blockNumber.toString(),
     })),
+    total: countResult[0]?.count ?? 0,
+    limit,
+    offset: Math.max(offset, 0),
   });
 });
 
