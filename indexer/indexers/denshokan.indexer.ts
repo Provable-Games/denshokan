@@ -36,7 +36,7 @@ import {
   drizzleStorage,
   useDrizzleStorage,
 } from "@apibara/plugin-drizzle";
-import { eq } from "drizzle-orm";
+import { eq, sql, and, ne } from "drizzle-orm";
 import type { ApibaraRuntimeConfig } from "apibara/types";
 
 import * as schema from "../src/lib/schema.js";
@@ -211,6 +211,42 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                     lastUpdatedAt: blockTimestamp,
                   },
                 });
+
+                // Check if this is a new unique player for this game
+                const existingPlayerTokens = await db
+                  .select({ count: sql<number>`count(*)` })
+                  .from(schema.tokens)
+                  .where(
+                    and(
+                      eq(schema.tokens.gameId, packed.gameId),
+                      eq(schema.tokens.ownerAddress, decoded.to),
+                      ne(schema.tokens.tokenId, toId(decoded.tokenId))
+                    )
+                  );
+                const isNewPlayer = existingPlayerTokens[0].count === 0;
+
+                // Update game stats: increment totalTokens, activeGames, and uniquePlayers if new
+                await db
+                  .insert(schema.gameStats)
+                  .values({
+                    gameId: packed.gameId,
+                    totalTokens: 1,
+                    activeGames: 1,
+                    completedGames: 0,
+                    uniquePlayers: isNewPlayer ? 1 : 0,
+                    lastUpdated: blockTimestamp,
+                  })
+                  .onConflictDoUpdate({
+                    target: schema.gameStats.gameId,
+                    set: {
+                      totalTokens: sql`${schema.gameStats.totalTokens} + 1`,
+                      activeGames: sql`${schema.gameStats.activeGames} + 1`,
+                      uniquePlayers: isNewPlayer
+                        ? sql`${schema.gameStats.uniquePlayers} + 1`
+                        : schema.gameStats.uniquePlayers,
+                      lastUpdated: blockTimestamp,
+                    },
+                  });
               } else {
                 // Regular transfer: update owner
                 logger.info(
@@ -357,6 +393,13 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
               const decoded = decodeGameOver(keys);
               logger.info(`GameOver: token_id=${decoded.tokenId}`);
 
+              // Get token to find its gameId
+              const token = await db
+                .select({ gameId: schema.tokens.gameId })
+                .from(schema.tokens)
+                .where(eq(schema.tokens.tokenId, toId(decoded.tokenId)))
+                .limit(1);
+
               await db
                 .update(schema.tokens)
                 .set({
@@ -365,6 +408,18 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                   lastUpdatedAt: blockTimestamp,
                 })
                 .where(eq(schema.tokens.tokenId, toId(decoded.tokenId)));
+
+              // Update game stats: decrement activeGames, increment completedGames
+              if (token.length > 0) {
+                await db
+                  .update(schema.gameStats)
+                  .set({
+                    activeGames: sql`GREATEST(${schema.gameStats.activeGames} - 1, 0)`,
+                    completedGames: sql`${schema.gameStats.completedGames} + 1`,
+                    lastUpdated: blockTimestamp,
+                  })
+                  .where(eq(schema.gameStats.gameId, token[0].gameId));
+              }
 
               // Log event for audit trail
               await db.insert(schema.tokenEvents).values({

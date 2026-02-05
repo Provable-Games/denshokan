@@ -249,3 +249,13 @@ Each package has `.env.example` templates:
 - `indexer/.env` - Database and stream config
 - `api/.env` - Port and TLS config
 - `client/.env.example` - API URL and contract addresses
+
+## Agent Usage
+
+For Cairo contract development tasks (`contracts/`), prefer using the `cairo-dev` agent:
+- Contract modifications and new features
+- Testing with snforge
+- Gas optimization
+- Component integration
+
+The `cairo-dev` agent has specialized knowledge of Cairo 2.13.1+, Scarb, OpenZeppelin Cairo contracts, and Starknet patterns.

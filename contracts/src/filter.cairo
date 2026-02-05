@@ -128,6 +128,88 @@ pub trait IDenshokanFilter<TState> {
     ) -> FilterResult;
 
     // ============================================================
+    // MINTER + OWNER FILTER
+    // ============================================================
+
+    /// Returns tokens owned by address that were minted by a specific minter
+    /// Use case: "Show my tokens from this arcade"
+    fn tokens_of_owner_by_minter(
+        self: @TState,
+        owner: ContractAddress,
+        minter_address: ContractAddress,
+        offset: u256,
+        limit: u256,
+    ) -> FilterResult;
+
+    // ============================================================
+    // MINTER + GAME FILTER
+    // ============================================================
+
+    /// Returns tokens minted by a specific minter for a specific game
+    /// Use case: "Show TicTacToe games from this minter"
+    fn tokens_by_minter_and_game(
+        self: @TState,
+        minter_address: ContractAddress,
+        game_address: ContractAddress,
+        offset: u256,
+        limit: u256,
+    ) -> FilterResult;
+
+    // ============================================================
+    // OWNER + GAME + SETTINGS FILTER
+    // ============================================================
+
+    /// Returns tokens owned by address for a specific game with specific settings
+    /// Use case: "My hard-mode TicTacToe games"
+    fn tokens_of_owner_by_game_and_settings(
+        self: @TState,
+        owner: ContractAddress,
+        game_address: ContractAddress,
+        settings_id: u32,
+        offset: u256,
+        limit: u256,
+    ) -> FilterResult;
+
+    // ============================================================
+    // OWNER + GAME + OBJECTIVE FILTER
+    // ============================================================
+
+    /// Returns tokens owned by address for a specific game with specific objective
+    /// Use case: "My speedrun TicTacToe games"
+    fn tokens_of_owner_by_game_and_objective(
+        self: @TState,
+        owner: ContractAddress,
+        game_address: ContractAddress,
+        objective_id: u32,
+        offset: u256,
+        limit: u256,
+    ) -> FilterResult;
+
+    // ============================================================
+    // OWNER + GAME + GAME_OVER FILTER
+    // ============================================================
+
+    /// Returns finished (game_over) tokens owned by address for a specific game
+    /// Use case: "My finished games for leaderboard"
+    fn tokens_of_owner_by_game_and_game_over(
+        self: @TState,
+        owner: ContractAddress,
+        game_address: ContractAddress,
+        offset: u256,
+        limit: u256,
+    ) -> FilterResult;
+
+    // ============================================================
+    // GAME + SOULBOUND FILTER
+    // ============================================================
+
+    /// Returns tokens for a specific game filtered by soulbound status
+    /// Use case: "Tradeable TicTacToe tokens"
+    fn tokens_by_game_and_soulbound(
+        self: @TState, game_address: ContractAddress, is_soulbound: bool, offset: u256, limit: u256,
+    ) -> FilterResult;
+
+    // ============================================================
     // COUNT FUNCTIONS (for pagination UI)
     // ============================================================
 
@@ -163,6 +245,34 @@ pub trait IDenshokanFilter<TState> {
 
     fn count_tokens_of_owner_by_soulbound(
         self: @TState, owner: ContractAddress, is_soulbound: bool,
+    ) -> u256;
+
+    // ============================================================
+    // COUNT FUNCTIONS FOR NEW FILTER COMBINATIONS
+    // ============================================================
+
+    fn count_tokens_of_owner_by_minter(
+        self: @TState, owner: ContractAddress, minter_address: ContractAddress,
+    ) -> u256;
+
+    fn count_tokens_by_minter_and_game(
+        self: @TState, minter_address: ContractAddress, game_address: ContractAddress,
+    ) -> u256;
+
+    fn count_tokens_of_owner_by_game_and_settings(
+        self: @TState, owner: ContractAddress, game_address: ContractAddress, settings_id: u32,
+    ) -> u256;
+
+    fn count_tokens_of_owner_by_game_and_objective(
+        self: @TState, owner: ContractAddress, game_address: ContractAddress, objective_id: u32,
+    ) -> u256;
+
+    fn count_tokens_of_owner_by_game_and_game_over(
+        self: @TState, owner: ContractAddress, game_address: ContractAddress,
+    ) -> u256;
+
+    fn count_tokens_by_game_and_soulbound(
+        self: @TState, game_address: ContractAddress, is_soulbound: bool,
     ) -> u256;
 
     // ============================================================

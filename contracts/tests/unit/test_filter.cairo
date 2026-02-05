@@ -2,6 +2,8 @@ use denshokan::filter::{IDenshokanFilterDispatcher, IDenshokanFilterDispatcherTr
 use game_components_registry::interface::IMinigameRegistryDispatcherTrait;
 use game_components_token::interface::IMinigameTokenMixinDispatcherTrait;
 use game_components_token::structs::{unpack_game_id, unpack_soulbound};
+use openzeppelin_interfaces::ownable::{IOwnableDispatcher, IOwnableDispatcherTrait};
+use openzeppelin_interfaces::upgrades::{IUpgradeableDispatcher, IUpgradeableDispatcherTrait};
 use snforge_std::{
     CheatSpan, ContractClassTrait, DeclareResultTrait, cheat_block_timestamp, cheat_caller_address,
     declare,
@@ -16,7 +18,9 @@ use crate::helpers::setup::{register_game, setup_with_registry};
 
 fn get_filter_dispatcher(denshokan_address: ContractAddress) -> IDenshokanFilterDispatcher {
     let contract = declare("DenshokanViewer").unwrap().contract_class();
+    let owner: ContractAddress = 'VIEWER_OWNER'.try_into().unwrap();
     let mut calldata = array![];
+    calldata.append(owner.into());
     calldata.append(denshokan_address.into());
     let (contract_address, _) = contract.deploy(@calldata).unwrap();
     IDenshokanFilterDispatcher { contract_address }
@@ -908,3 +912,376 @@ fn test_tokens_full_state_batch_empty() {
 
     assert!(states.len() == 0, "Should return empty array");
 }
+
+// ================================================================================================
+// NEW FILTER COMBINATION TESTS
+// ================================================================================================
+
+// ================================================================================================
+// MINTER + OWNER FILTER TESTS
+// ================================================================================================
+
+#[test]
+fn test_tokens_of_owner_by_minter() {
+    let tc = setup_with_registry();
+    let filter = get_filter_dispatcher(tc.denshokan_address);
+
+    // Register a game
+    let (game_id, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "TestGame", Option::None,
+    );
+    let game_metadata = tc.registry.game_metadata(game_id);
+
+    // ALICE mints tokens for herself and for BOB
+    mint_token_with_salt(@tc, game_metadata.contract_address, ALICE(), false, 1);
+    mint_token_with_salt(@tc, game_metadata.contract_address, ALICE(), false, 2);
+
+    // BOB mints token for himself (different minter)
+    mint_token_with_salt(@tc, game_metadata.contract_address, BOB(), false, 3);
+
+    // Query ALICE's tokens that were minted by ALICE
+    let result = filter.tokens_of_owner_by_minter(ALICE(), ALICE(), 0, 100);
+    assert!(result.token_ids.len() == 2, "ALICE should have 2 tokens minted by ALICE");
+    assert!(result.total == 2, "Total should be 2");
+
+    // Query BOB's tokens that were minted by ALICE (should be 0)
+    let result2 = filter.tokens_of_owner_by_minter(BOB(), ALICE(), 0, 100);
+    assert!(result2.token_ids.len() == 0, "BOB should have 0 tokens minted by ALICE");
+    assert!(result2.total == 0, "Total should be 0");
+
+    // Query BOB's tokens that were minted by BOB
+    let result3 = filter.tokens_of_owner_by_minter(BOB(), BOB(), 0, 100);
+    assert!(result3.token_ids.len() == 1, "BOB should have 1 token minted by BOB");
+    assert!(result3.total == 1, "Total should be 1");
+
+    // Count should match
+    let count = filter.count_tokens_of_owner_by_minter(ALICE(), ALICE());
+    assert!(count == result.total, "Count should match filter total");
+}
+
+#[test]
+fn test_tokens_of_owner_by_minter_unknown_minter() {
+    let tc = setup_with_registry();
+    let filter = get_filter_dispatcher(tc.denshokan_address);
+
+    // Query with unknown minter
+    let unknown_minter: ContractAddress = 'UNKNOWN_MINTER'.try_into().unwrap();
+    let result = filter.tokens_of_owner_by_minter(ALICE(), unknown_minter, 0, 100);
+    assert!(result.token_ids.len() == 0, "Should return empty for unknown minter");
+    assert!(result.total == 0, "Total should be 0");
+}
+
+// ================================================================================================
+// MINTER + GAME FILTER TESTS
+// ================================================================================================
+
+#[test]
+fn test_tokens_by_minter_and_game() {
+    let tc = setup_with_registry();
+    let filter = get_filter_dispatcher(tc.denshokan_address);
+
+    // Register two games
+    let (game_id1, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "Game1", Option::None,
+    );
+    let game1_metadata = tc.registry.game_metadata(game_id1);
+
+    let (game_id2, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "Game2", Option::None,
+    );
+    let game2_metadata = tc.registry.game_metadata(game_id2);
+
+    // ALICE mints tokens for both games
+    mint_token_with_salt(@tc, game1_metadata.contract_address, ALICE(), false, 1);
+    mint_token_with_salt(@tc, game1_metadata.contract_address, ALICE(), false, 2);
+    mint_token_with_salt(@tc, game2_metadata.contract_address, ALICE(), false, 1);
+
+    // BOB mints tokens for game1
+    mint_token_with_salt(@tc, game1_metadata.contract_address, BOB(), false, 3);
+
+    // Query ALICE's game1 tokens
+    let result = filter.tokens_by_minter_and_game(ALICE(), game1_metadata.contract_address, 0, 100);
+    assert!(result.token_ids.len() == 2, "ALICE should have minted 2 game1 tokens");
+    assert!(result.total == 2, "Total should be 2");
+
+    // Query ALICE's game2 tokens
+    let result2 = filter
+        .tokens_by_minter_and_game(ALICE(), game2_metadata.contract_address, 0, 100);
+    assert!(result2.token_ids.len() == 1, "ALICE should have minted 1 game2 token");
+    assert!(result2.total == 1, "Total should be 1");
+
+    // Query BOB's game1 tokens
+    let result3 = filter.tokens_by_minter_and_game(BOB(), game1_metadata.contract_address, 0, 100);
+    assert!(result3.token_ids.len() == 1, "BOB should have minted 1 game1 token");
+    assert!(result3.total == 1, "Total should be 1");
+
+    // Count should match
+    let count = filter.count_tokens_by_minter_and_game(ALICE(), game1_metadata.contract_address);
+    assert!(count == result.total, "Count should match filter total");
+}
+
+#[test]
+fn test_tokens_by_minter_and_game_unknown_minter_or_game() {
+    let tc = setup_with_registry();
+    let filter = get_filter_dispatcher(tc.denshokan_address);
+
+    // Register a game
+    let (game_id, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "TestGame", Option::None,
+    );
+    let game_metadata = tc.registry.game_metadata(game_id);
+
+    // Unknown minter
+    let unknown_minter: ContractAddress = 'UNKNOWN_MINTER'.try_into().unwrap();
+    let result = filter
+        .tokens_by_minter_and_game(unknown_minter, game_metadata.contract_address, 0, 100);
+    assert!(result.token_ids.len() == 0, "Should return empty for unknown minter");
+    assert!(result.total == 0, "Total should be 0");
+
+    // Unknown game
+    let fake_game: ContractAddress = 'FAKE_GAME'.try_into().unwrap();
+    let result2 = filter.tokens_by_minter_and_game(ALICE(), fake_game, 0, 100);
+    assert!(result2.token_ids.len() == 0, "Should return empty for unknown game");
+    assert!(result2.total == 0, "Total should be 0");
+}
+
+// ================================================================================================
+// OWNER + GAME + SETTINGS FILTER TESTS
+// ================================================================================================
+
+#[test]
+fn test_tokens_of_owner_by_game_and_settings() {
+    let tc = setup_with_registry();
+    let filter = get_filter_dispatcher(tc.denshokan_address);
+
+    // Register a game
+    let (game_id, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "TestGame", Option::None,
+    );
+    let game_metadata = tc.registry.game_metadata(game_id);
+
+    // Mint tokens with default settings (settings_id = 0)
+    mint_token_with_salt(@tc, game_metadata.contract_address, ALICE(), false, 1);
+    mint_token_with_salt(@tc, game_metadata.contract_address, ALICE(), false, 2);
+    mint_token_with_salt(@tc, game_metadata.contract_address, BOB(), false, 3);
+
+    // Query ALICE's tokens with settings_id = 0
+    let result = filter
+        .tokens_of_owner_by_game_and_settings(ALICE(), game_metadata.contract_address, 0, 0, 100);
+    assert!(result.token_ids.len() == 2, "ALICE should have 2 tokens with settings_id=0");
+    assert!(result.total == 2, "Total should be 2");
+
+    // Query ALICE's tokens with non-existent settings
+    let result2 = filter
+        .tokens_of_owner_by_game_and_settings(ALICE(), game_metadata.contract_address, 99, 0, 100);
+    assert!(result2.token_ids.len() == 0, "Should return 0 for unknown settings");
+    assert!(result2.total == 0, "Total should be 0");
+
+    // Count should match
+    let count = filter
+        .count_tokens_of_owner_by_game_and_settings(ALICE(), game_metadata.contract_address, 0);
+    assert!(count == result.total, "Count should match filter total");
+}
+
+// ================================================================================================
+// OWNER + GAME + OBJECTIVE FILTER TESTS
+// ================================================================================================
+
+#[test]
+fn test_tokens_of_owner_by_game_and_objective() {
+    let tc = setup_with_registry();
+    let filter = get_filter_dispatcher(tc.denshokan_address);
+
+    // Register a game
+    let (game_id, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "TestGame", Option::None,
+    );
+    let game_metadata = tc.registry.game_metadata(game_id);
+
+    // Mint tokens with default objective (objective_id = 0)
+    mint_token_with_salt(@tc, game_metadata.contract_address, ALICE(), false, 1);
+    mint_token_with_salt(@tc, game_metadata.contract_address, ALICE(), false, 2);
+    mint_token_with_salt(@tc, game_metadata.contract_address, BOB(), false, 3);
+
+    // Query ALICE's tokens with objective_id = 0
+    let result = filter
+        .tokens_of_owner_by_game_and_objective(ALICE(), game_metadata.contract_address, 0, 0, 100);
+    assert!(result.token_ids.len() == 2, "ALICE should have 2 tokens with objective_id=0");
+    assert!(result.total == 2, "Total should be 2");
+
+    // Query ALICE's tokens with non-existent objective
+    let result2 = filter
+        .tokens_of_owner_by_game_and_objective(ALICE(), game_metadata.contract_address, 99, 0, 100);
+    assert!(result2.token_ids.len() == 0, "Should return 0 for unknown objective");
+    assert!(result2.total == 0, "Total should be 0");
+
+    // Count should match
+    let count = filter
+        .count_tokens_of_owner_by_game_and_objective(ALICE(), game_metadata.contract_address, 0);
+    assert!(count == result.total, "Count should match filter total");
+}
+
+// ================================================================================================
+// OWNER + GAME + GAME_OVER FILTER TESTS
+// ================================================================================================
+
+#[test]
+fn test_tokens_of_owner_by_game_and_game_over() {
+    let tc = setup_with_registry();
+    let filter = get_filter_dispatcher(tc.denshokan_address);
+
+    // Register a game
+    let (game_id, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "TestGame", Option::None,
+    );
+    let game_metadata = tc.registry.game_metadata(game_id);
+
+    // Mint tokens - newly minted tokens are NOT game_over
+    mint_token_with_salt(@tc, game_metadata.contract_address, ALICE(), false, 1);
+    mint_token_with_salt(@tc, game_metadata.contract_address, ALICE(), false, 2);
+
+    // Query ALICE's game_over tokens (should be 0 since none are game_over yet)
+    let result = filter
+        .tokens_of_owner_by_game_and_game_over(ALICE(), game_metadata.contract_address, 0, 100);
+    assert!(result.token_ids.len() == 0, "ALICE should have 0 game_over tokens");
+    assert!(result.total == 0, "Total should be 0");
+
+    // Count should match
+    let count = filter
+        .count_tokens_of_owner_by_game_and_game_over(ALICE(), game_metadata.contract_address);
+    assert!(count == result.total, "Count should match filter total");
+}
+
+// ================================================================================================
+// GAME + SOULBOUND FILTER TESTS
+// ================================================================================================
+
+#[test]
+fn test_tokens_by_game_and_soulbound() {
+    let tc = setup_with_registry();
+    let filter = get_filter_dispatcher(tc.denshokan_address);
+
+    // Register two games
+    let (game_id1, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "Game1", Option::None,
+    );
+    let game1_metadata = tc.registry.game_metadata(game_id1);
+
+    let (game_id2, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "Game2", Option::None,
+    );
+    let game2_metadata = tc.registry.game_metadata(game_id2);
+
+    // Mint soulbound and non-soulbound tokens for game1
+    mint_token_with_salt(@tc, game1_metadata.contract_address, ALICE(), true, 1); // soulbound
+    mint_token_with_salt(@tc, game1_metadata.contract_address, BOB(), true, 2); // soulbound
+    mint_token_with_salt(@tc, game1_metadata.contract_address, CHARLIE(), false, 3); // transferable
+
+    // Mint tokens for game2
+    mint_token_with_salt(@tc, game2_metadata.contract_address, ALICE(), false, 1);
+
+    // Query game1 soulbound tokens
+    let result = filter.tokens_by_game_and_soulbound(game1_metadata.contract_address, true, 0, 100);
+    assert!(result.token_ids.len() == 2, "Game1 should have 2 soulbound tokens");
+    assert!(result.total == 2, "Total should be 2");
+
+    // Query game1 transferable tokens
+    let result2 = filter
+        .tokens_by_game_and_soulbound(game1_metadata.contract_address, false, 0, 100);
+    assert!(result2.token_ids.len() == 1, "Game1 should have 1 transferable token");
+    assert!(result2.total == 1, "Total should be 1");
+
+    // Query game2 soulbound tokens (should be 0)
+    let result3 = filter
+        .tokens_by_game_and_soulbound(game2_metadata.contract_address, true, 0, 100);
+    assert!(result3.token_ids.len() == 0, "Game2 should have 0 soulbound tokens");
+    assert!(result3.total == 0, "Total should be 0");
+
+    // Count should match
+    let count = filter.count_tokens_by_game_and_soulbound(game1_metadata.contract_address, true);
+    assert!(count == result.total, "Count should match filter total");
+}
+
+#[test]
+fn test_tokens_by_game_and_soulbound_unregistered_game() {
+    let tc = setup_with_registry();
+    let filter = get_filter_dispatcher(tc.denshokan_address);
+
+    // Query with unregistered game
+    let fake_game: ContractAddress = 'FAKE_GAME'.try_into().unwrap();
+    let result = filter.tokens_by_game_and_soulbound(fake_game, true, 0, 100);
+    assert!(result.token_ids.len() == 0, "Should return empty for unregistered game");
+    assert!(result.total == 0, "Total should be 0");
+}
+
+// ================================================================================================
+// UPGRADE FUNCTIONALITY TESTS
+// ================================================================================================
+
+#[test]
+fn test_viewer_has_owner() {
+    let tc = setup_with_registry();
+    let contract = declare("DenshokanViewer").unwrap().contract_class();
+    let owner: ContractAddress = 'VIEWER_OWNER'.try_into().unwrap();
+    let mut calldata = array![];
+    calldata.append(owner.into());
+    calldata.append(tc.denshokan_address.into());
+    let (contract_address, _) = contract.deploy(@calldata).unwrap();
+
+    let ownable = IOwnableDispatcher { contract_address };
+    let retrieved_owner = ownable.owner();
+    assert!(retrieved_owner == owner, "Owner should be set correctly");
+}
+
+#[test]
+#[should_panic(expected: 'Caller is not the owner')]
+fn test_upgrade_only_owner() {
+    let tc = setup_with_registry();
+    let contract = declare("DenshokanViewer").unwrap().contract_class();
+    let owner: ContractAddress = 'VIEWER_OWNER'.try_into().unwrap();
+    let mut calldata = array![];
+    calldata.append(owner.into());
+    calldata.append(tc.denshokan_address.into());
+    let (contract_address, _) = contract.deploy(@calldata).unwrap();
+
+    let upgradeable = IUpgradeableDispatcher { contract_address };
+
+    // Try to upgrade as non-owner (should fail)
+    let non_owner: ContractAddress = 'NOT_OWNER'.try_into().unwrap();
+    cheat_caller_address(contract_address, non_owner, CheatSpan::TargetCalls(1));
+
+    // Get the class hash of the viewer contract itself (just for testing)
+    let new_class_hash = *contract.class_hash;
+    upgradeable.upgrade(new_class_hash);
+}
+
+#[test]
+fn test_upgrade_as_owner() {
+    let tc = setup_with_registry();
+    let contract = declare("DenshokanViewer").unwrap().contract_class();
+    let owner: ContractAddress = 'VIEWER_OWNER'.try_into().unwrap();
+    let mut calldata = array![];
+    calldata.append(owner.into());
+    calldata.append(tc.denshokan_address.into());
+    let (contract_address, _) = contract.deploy(@calldata).unwrap();
+
+    let upgradeable = IUpgradeableDispatcher { contract_address };
+
+    // Upgrade as owner (should succeed)
+    cheat_caller_address(contract_address, owner, CheatSpan::TargetCalls(1));
+
+    // Get the class hash of the viewer contract itself (just for testing)
+    let new_class_hash = *contract.class_hash;
+    upgradeable.upgrade(new_class_hash);
+
+    // If we reach here, the upgrade succeeded
+    // Verify the contract still works after upgrade
+    let filter = IDenshokanFilterDispatcher { contract_address };
+    let result = filter.tokens_by_playable(0, 100);
+    assert!(result.token_ids.len() == 0, "Contract should still work after upgrade");
+}
+// Note: Constructor validation for zero owner is tested implicitly via the assert in the contract.
+// Snforge doesn't easily support testing deploy-time panics. The validation exists in the
+// constructor:
+// assert!(!owner.is_zero(), "DenshokanViewer: owner address cannot be zero");
+
