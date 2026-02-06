@@ -15,7 +15,6 @@ import { config, networkName } from "./config";
 const denshokanConfig = {
   chain: networkName as "mainnet" | "sepolia",
   apiUrl: config.apiUrl,
-  wsUrl: config.wsUrl,
   rpcUrl: config.rpcUrl,
   denshokanAddress: config.denshokanAddress,
   registryAddress: config.registryAddress,
