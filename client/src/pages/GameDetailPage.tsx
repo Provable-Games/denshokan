@@ -1,3 +1,4 @@
+import { useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   Box,
@@ -8,6 +9,12 @@ import {
   Button,
   Stack,
 } from "@mui/material";
+import {
+  useScoreUpdates,
+  useMintEvents,
+  useGameOverEvents,
+  useConnectionStatus,
+} from "@provable-games/denshokan-sdk/react";
 import { useGameDetail } from "../hooks/useGameDetail";
 import LeaderboardTable from "../components/leaderboard/LeaderboardTable";
 import { GameConfigSection } from "../components/numberguess";
@@ -17,8 +24,37 @@ export default function GameDetailPage() {
   const { gameId } = useParams<{ gameId: string }>();
   const navigate = useNavigate();
   const id = parseInt(gameId || "0");
-  const { game, stats } = useGameDetail(id);
-  console.log(game, stats);
+  const { game, stats, isLoading, refetch } = useGameDetail(id);
+  const { isConnected } = useConnectionStatus();
+
+  const refetchingRef = useRef(false);
+
+  const debouncedRefetch = useCallback(() => {
+    if (refetchingRef.current) return;
+    refetchingRef.current = true;
+    refetch();
+    setTimeout(() => {
+      refetchingRef.current = false;
+    }, 2000);
+  }, [refetch]);
+
+  useScoreUpdates({
+    gameIds: [id],
+    enabled: id > 0,
+    onEvent: debouncedRefetch,
+  });
+
+  useMintEvents({
+    gameIds: [id],
+    enabled: id > 0,
+    onEvent: debouncedRefetch,
+  });
+
+  useGameOverEvents({
+    gameIds: [id],
+    enabled: id > 0,
+    onEvent: debouncedRefetch,
+  });
 
   if (!game) return <LoadingSpinner message="Loading game..." />;
 
@@ -46,23 +82,43 @@ export default function GameDetailPage() {
       </Stack>
 
       {stats && (
-        <Grid container spacing={2} sx={{ mb: 4 }}>
-          {[
-            { label: "Total Tokens", value: stats.totalTokens },
-            { label: "Active Games", value: stats.activeGames },
-            { label: "Completed", value: stats.completedGames },
-            { label: "Players", value: stats.uniquePlayers },
-          ].map(({ label, value }) => (
-            <Grid size={{ xs: 6, sm: 3 }} key={label}>
-              <Card variant="outlined">
-                <CardContent sx={{ textAlign: "center" }}>
-                  <Typography variant="h4">{value}</Typography>
-                  <Typography color="text.secondary">{label}</Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
+        <>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+            <Typography variant="h5">Stats</Typography>
+            {isConnected && (
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                <Box
+                  sx={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: "50%",
+                    bgcolor: "success.main",
+                  }}
+                />
+                <Typography variant="caption" color="success.main">
+                  Live
+                </Typography>
+              </Box>
+            )}
+          </Box>
+          <Grid container spacing={2} sx={{ mb: 4 }}>
+            {[
+              { label: "Total Tokens", value: stats.totalTokens },
+              { label: "Active Games", value: stats.activeGames },
+              { label: "Completed", value: stats.completedGames },
+              { label: "Players", value: stats.uniquePlayers },
+            ].map(({ label, value }) => (
+              <Grid size={{ xs: 6, sm: 3 }} key={label}>
+                <Card variant="outlined">
+                  <CardContent sx={{ textAlign: "center" }}>
+                    <Typography variant="h4">{value}</Typography>
+                    <Typography color="text.secondary">{label}</Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        </>
       )}
 
       {/* Game Configuration Section */}

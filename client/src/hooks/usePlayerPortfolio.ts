@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useCallback } from "react";
 import {
   usePlayerStats,
   usePlayerTokens,
@@ -40,14 +40,12 @@ export function usePlayerPortfolio() {
     refetch: refetchTokens,
   } = usePlayerTokens(isConnected ? address : undefined);
 
-  console.log(sdkTokens);
-
   const stats: ClientPlayerStats | null = sdkStats
     ? {
         totalTokens: sdkStats.totalTokens,
         gamesPlayed: sdkStats.gamesPlayed,
-        completedGames: sdkStats.totalTokens - sdkStats.activeTokens,
-        activeGames: sdkStats.activeTokens,
+        completedGames: sdkStats.completedGames,
+        activeGames: sdkStats.activeGames,
       }
     : null;
 

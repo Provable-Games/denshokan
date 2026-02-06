@@ -1,6 +1,13 @@
+import { useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Box, Typography, Grid, Card, CardContent, Chip, Stack, Button } from "@mui/material";
 import { PlayArrow } from "@mui/icons-material";
+import {
+  useScoreUpdates,
+  useGameOverEvents,
+  useConnectionStatus,
+} from "@provable-games/denshokan-sdk/react";
+import type { ScoreEvent, GameOverEvent } from "@provable-games/denshokan-sdk";
 import { useTokenDetail } from "../hooks/useTokenDetail";
 import LoadingSpinner from "../components/common/LoadingSpinner";
 
@@ -8,8 +15,38 @@ export default function TokenDetailPage() {
   const { tokenId } = useParams<{ tokenId: string }>();
   const navigate = useNavigate();
   const { token, scores } = useTokenDetail(tokenId || "");
+  const { isConnected } = useConnectionStatus();
+
+  const [liveScore, setLiveScore] = useState<number | null>(null);
+  const [liveGameOver, setLiveGameOver] = useState(false);
+
+  const gameIds = token ? [token.gameId] : undefined;
+
+  useScoreUpdates({
+    gameIds,
+    enabled: !!token,
+    onEvent: useCallback((e: ScoreEvent) => {
+      if (e.tokenId === tokenId) {
+        setLiveScore(e.score);
+      }
+    }, [tokenId]),
+  });
+
+  useGameOverEvents({
+    gameIds,
+    enabled: !!token,
+    onEvent: useCallback((e: GameOverEvent) => {
+      if (e.tokenId === tokenId) {
+        setLiveGameOver(true);
+        setLiveScore(e.score);
+      }
+    }, [tokenId]),
+  });
 
   if (!token) return <LoadingSpinner message="Loading token..." />;
+
+  const displayScore = liveScore !== null ? liveScore : Number(token.currentScore);
+  const isGameOver = liveGameOver || token.gameOver;
 
   return (
     <Box>
@@ -17,7 +54,7 @@ export default function TokenDetailPage() {
         <Typography variant="h3" gutterBottom>
           {token.playerName || `Token #${token.tokenId.slice(0, 12)}...`}
         </Typography>
-        {!token.gameOver && (
+        {!isGameOver && (
           <Button
             variant="contained"
             color="primary"
@@ -30,7 +67,8 @@ export default function TokenDetailPage() {
       </Box>
 
       <Stack direction="row" spacing={1} sx={{ mb: 3 }}>
-        <Chip label={token.gameOver ? "Completed" : "Active"} color={token.gameOver ? "success" : "primary"} />
+        <Chip label={isGameOver ? "Completed" : "Active"} color={isGameOver ? "success" : "primary"} />
+        {liveGameOver && !token.gameOver && <Chip label="Game Over" color="warning" />}
         {token.soulbound && <Chip label="Soulbound" variant="outlined" />}
         <Chip label={`Game #${token.gameId}`} variant="outlined" />
       </Stack>
@@ -39,8 +77,25 @@ export default function TokenDetailPage() {
         <Grid size={{ xs: 12, md: 6 }}>
           <Card variant="outlined">
             <CardContent>
-              <Typography color="text.secondary" gutterBottom>Current Score</Typography>
-              <Typography variant="h3">{Number(token.currentScore).toLocaleString()}</Typography>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <Typography color="text.secondary" gutterBottom>Current Score</Typography>
+                {isConnected && (
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 0.5 }}>
+                    <Box
+                      sx={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: "50%",
+                        bgcolor: "success.main",
+                      }}
+                    />
+                    <Typography variant="caption" color="success.main">
+                      Live
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
+              <Typography variant="h3">{displayScore.toLocaleString()}</Typography>
             </CardContent>
           </Card>
         </Grid>

@@ -5,8 +5,8 @@ interface Props {
     id: string;
     name: string | null;
     address: string;
-    gameId: number;
-    active: boolean;
+    minterId: string;
+    blockNumber: string;
   };
 }
 
@@ -26,12 +26,8 @@ export default function MinterCard({ minter }: Props) {
           {truncateAddress(minter.address)}
         </Typography>
         <Box sx={{ display: "flex", gap: 1 }}>
-          <Chip label={`Game: ${minter.gameId}`} size="small" variant="outlined" />
-          <Chip
-            label={minter.active ? "Active" : "Inactive"}
-            size="small"
-            color={minter.active ? "success" : "default"}
-          />
+          <Chip label={`Minter: ${minter.minterId}`} size="small" variant="outlined" />
+          <Chip label={`Block: ${minter.blockNumber}`} size="small" variant="outlined" />
         </Box>
       </CardContent>
     </Card>

@@ -10,17 +10,17 @@ export interface ClientMinter {
   id: string;
   name: string | null;
   address: string;
-  gameId: number;
-  active: boolean;
+  minterId: string;
+  blockNumber: string;
 }
 
 function adaptMinter(m: Minter): ClientMinter {
   return {
     id: m.id,
     name: m.name || null,
-    address: m.address,
-    gameId: m.gameId,
-    active: m.active,
+    address: m.contractAddress,
+    minterId: m.minterId,
+    blockNumber: m.blockNumber,
   };
 }
 

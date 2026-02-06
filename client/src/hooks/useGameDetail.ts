@@ -11,8 +11,9 @@ interface ClientGameStats {
 }
 
 export function useGameDetail(gameId: number) {
-  const { data: gameData, isLoading: gameLoading, refetch: refetchGame } = useGame(gameId || undefined);
-  const { data: statsData, isLoading: statsLoading, refetch: refetchStats } = useGameStats(gameId || undefined);
+  const gameAddress = gameId ? String(gameId) : undefined;
+  const { data: gameData, isLoading: gameLoading, refetch: refetchGame } = useGame(gameAddress);
+  const { data: statsData, isLoading: statsLoading, refetch: refetchStats } = useGameStats(gameAddress);
 
   const game: ClientGame | null = gameData
     ? {
@@ -29,9 +30,9 @@ export function useGameDetail(gameId: number) {
     ? {
         gameId: statsData.gameId,
         totalTokens: statsData.totalTokens,
-        completedGames: statsData.totalTokens - statsData.activeTokens,
-        activeGames: statsData.activeTokens,
-        uniquePlayers: statsData.totalPlayers,
+        completedGames: statsData.completedGames,
+        activeGames: statsData.activeGames,
+        uniquePlayers: statsData.uniquePlayers,
         lastUpdated: new Date().toISOString(),
       }
     : null;
