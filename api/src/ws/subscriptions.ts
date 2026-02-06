@@ -7,12 +7,14 @@ interface Subscription {
   gameIds: Set<string>;
 }
 
-// Valid PG LISTEN channels (from 004_functions.sql)
+// Valid PG LISTEN channels (from 004_functions.sql + 0002_websocket_triggers.sql)
 const VALID_CHANNELS = new Set([
   "token_updates",
   "score_updates",
   "game_over_events",
   "new_tokens",
+  "new_games",
+  "new_minters",
 ]);
 
 // Map friendly names to PG channels
@@ -21,7 +23,15 @@ const CHANNEL_MAP: Record<string, string> = {
   scores: "score_updates",
   game_over: "game_over_events",
   mints: "new_tokens",
+  games: "new_games",
+  minters: "new_minters",
 };
+
+// Reverse map: PG channel names back to friendly names
+const REVERSE_CHANNEL_MAP: Record<string, string> = {};
+for (const [friendly, pg] of Object.entries(CHANNEL_MAP)) {
+  REVERSE_CHANNEL_MAP[pg] = friendly;
+}
 
 const clients = new Map<WSContext, Subscription>();
 let pgClient: pg.PoolClient | null = null;
@@ -54,9 +64,10 @@ async function initPgListener() {
 }
 
 function broadcast(channel: string, payload: unknown) {
+  const friendlyName = REVERSE_CHANNEL_MAP[channel] ?? channel;
   const now = Date.now();
   const message = JSON.stringify({
-    channel,
+    channel: friendlyName,
     data: payload,
     _timing: { serverTs: now },
   });
