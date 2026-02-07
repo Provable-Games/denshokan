@@ -29,6 +29,8 @@
     "build:client": "cd client && npm run build",
     "db:migrate": "cd indexer && npm run db:migrate",
     "db:generate": "cd indexer && npm run db:generate",
+    "db:seed": "cd api && npm run db:seed",
+    "stress-test": "cd api && npm run stress-test",
     "test": "npm run test:contracts",
     "build": "npm run build:contracts && npm run build:indexer && npm run build:api",
     "fmt": "npm run fmt:contracts"

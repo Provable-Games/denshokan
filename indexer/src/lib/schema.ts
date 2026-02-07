@@ -88,13 +88,11 @@ export const tokens = pgTable(
   (table) => [
     // Leaderboard queries: top scores per game
     index("tokens_game_score_idx").on(table.gameId, table.currentScore),
-    // Active games lookup
-    index("tokens_game_active_idx").on(table.gameId, table.gameOver),
-    // Player portfolio queries
-    index("tokens_owner_idx").on(table.ownerAddress),
+    // Filter by game + game_over, sorted by lastUpdatedAt (covers GET /tokens?game_id=X&game_over=Y)
+    index("tokens_game_over_updated_idx").on(table.gameId, table.gameOver, table.lastUpdatedAt),
+    // Player portfolio sorted by lastUpdatedAt (covers GET /players/:address/tokens)
+    index("tokens_owner_updated_idx").on(table.ownerAddress, table.lastUpdatedAt),
     index("tokens_owner_game_idx").on(table.ownerAddress, table.gameId),
-    // Recent activity
-    index("tokens_updated_idx").on(table.lastUpdatedAt),
     // Objective queries
     index("tokens_objective_idx").on(table.objectiveId),
     // Minter queries
@@ -214,9 +212,9 @@ export const tokenEvents = pgTable(
     // Token event history
     index("token_events_token_idx").on(table.tokenId),
     index("token_events_token_time_idx").on(table.tokenId, table.blockTimestamp),
-    // Event type filtering
-    index("token_events_type_idx").on(table.eventType),
-    // Recent events
+    // Filter by event type, sorted by time (covers GET /activity?type=X)
+    index("token_events_type_time_idx").on(table.eventType, table.blockTimestamp),
+    // Recent events (unfiltered GET /activity)
     index("token_events_time_idx").on(table.blockTimestamp),
   ]
 );
