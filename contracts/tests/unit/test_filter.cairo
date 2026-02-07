@@ -1,5 +1,6 @@
 use denshokan::filter::{IDenshokanFilterDispatcher, IDenshokanFilterDispatcherTrait};
 use game_components_registry::interface::IMinigameRegistryDispatcherTrait;
+
 use game_components_token::interface::IMinigameTokenMixinDispatcherTrait;
 use game_components_token::structs::{unpack_game_id, unpack_soulbound};
 use openzeppelin_interfaces::ownable::{IOwnableDispatcher, IOwnableDispatcherTrait};
@@ -1280,9 +1281,280 @@ fn test_upgrade_as_owner() {
     let result = filter.tokens_by_playable(0, 100);
     assert!(result.token_ids.len() == 0, "Contract should still work after upgrade");
 }
-// Note: Constructor validation for zero owner is tested implicitly via the assert in the contract.
-// Snforge doesn't easily support testing deploy-time panics. The validation exists in the
-// constructor:
-// assert!(!owner.is_zero(), "DenshokanViewer: owner address cannot be zero");
+// ================================================================================================
+// CONSTRUCTOR VALIDATION TESTS
+// ================================================================================================
 
+// ================================================================================================
+// STANDALONE COUNT FUNCTION TESTS (functions not tested alongside filters)
+// ================================================================================================
 
+#[test]
+fn test_count_tokens_by_game_and_settings_standalone() {
+    let tc = setup_with_registry();
+    let filter = get_filter_dispatcher(tc.denshokan_address);
+
+    let (game_id, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "TestGame", Option::None,
+    );
+    let game_metadata = tc.registry.game_metadata(game_id);
+
+    mint_token_with_salt(@tc, game_metadata.contract_address, ALICE(), false, 1);
+    mint_token_with_salt(@tc, game_metadata.contract_address, ALICE(), false, 2);
+
+    let count = filter.count_tokens_by_game_and_settings(game_metadata.contract_address, 0);
+    assert!(count == 2, "Should count 2 tokens with settings_id=0");
+
+    let count_none = filter.count_tokens_by_game_and_settings(game_metadata.contract_address, 99);
+    assert!(count_none == 0, "Should count 0 tokens for unknown settings");
+}
+
+#[test]
+fn test_count_tokens_by_game_and_objective_standalone() {
+    let tc = setup_with_registry();
+    let filter = get_filter_dispatcher(tc.denshokan_address);
+
+    let (game_id, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "TestGame", Option::None,
+    );
+    let game_metadata = tc.registry.game_metadata(game_id);
+
+    mint_token_with_salt(@tc, game_metadata.contract_address, ALICE(), false, 1);
+    mint_token_with_salt(@tc, game_metadata.contract_address, BOB(), false, 2);
+
+    let count = filter.count_tokens_by_game_and_objective(game_metadata.contract_address, 0);
+    assert!(count == 2, "Should count 2 tokens with objective_id=0");
+
+    let count_none = filter.count_tokens_by_game_and_objective(game_metadata.contract_address, 99);
+    assert!(count_none == 0, "Should count 0 tokens for unknown objective");
+}
+
+#[test]
+fn test_count_tokens_by_minter_address_standalone() {
+    let tc = setup_with_registry();
+    let filter = get_filter_dispatcher(tc.denshokan_address);
+
+    let (game_id, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "TestGame", Option::None,
+    );
+    let game_metadata = tc.registry.game_metadata(game_id);
+
+    mint_token_with_salt(@tc, game_metadata.contract_address, ALICE(), false, 1);
+    mint_token_with_salt(@tc, game_metadata.contract_address, ALICE(), false, 2);
+    mint_token_with_salt(@tc, game_metadata.contract_address, BOB(), false, 3);
+
+    let count_alice = filter.count_tokens_by_minter_address(ALICE());
+    assert!(count_alice == 2, "ALICE should have minted 2 tokens");
+
+    let count_bob = filter.count_tokens_by_minter_address(BOB());
+    assert!(count_bob == 1, "BOB should have minted 1 token");
+}
+
+#[test]
+fn test_count_tokens_by_minted_at_range_standalone() {
+    let tc = setup_with_registry();
+    let filter = get_filter_dispatcher(tc.denshokan_address);
+
+    let (game_id, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "TestGame", Option::None,
+    );
+    let game_metadata = tc.registry.game_metadata(game_id);
+
+    cheat_block_timestamp(tc.denshokan_address, 1000, CheatSpan::TargetCalls(1));
+    mint_token_with_salt(@tc, game_metadata.contract_address, ALICE(), false, 1);
+
+    cheat_block_timestamp(tc.denshokan_address, 2000, CheatSpan::TargetCalls(1));
+    mint_token_with_salt(@tc, game_metadata.contract_address, ALICE(), false, 2);
+
+    cheat_block_timestamp(tc.denshokan_address, 3000, CheatSpan::TargetCalls(1));
+    mint_token_with_salt(@tc, game_metadata.contract_address, ALICE(), false, 3);
+
+    let count_all = filter.count_tokens_by_minted_at_range(500, 3500);
+    assert!(count_all == 3, "Should count 3 tokens in full range");
+
+    let count_partial = filter.count_tokens_by_minted_at_range(500, 2500);
+    assert!(count_partial == 2, "Should count 2 tokens in partial range");
+
+    let count_none = filter.count_tokens_by_minted_at_range(5000, 6000);
+    assert!(count_none == 0, "Should count 0 tokens outside range");
+
+    // Invalid range
+    let count_invalid = filter.count_tokens_by_minted_at_range(3000, 1000);
+    assert!(count_invalid == 0, "Should count 0 for invalid range");
+}
+
+// ================================================================================================
+// UNREGISTERED GAME/MINTER EARLY RETURN TESTS FOR COUNT FUNCTIONS
+// ================================================================================================
+
+#[test]
+fn test_count_functions_unregistered_game_returns_zero() {
+    let tc = setup_with_registry();
+    let filter = get_filter_dispatcher(tc.denshokan_address);
+    let fake_game: ContractAddress = 'FAKE_GAME'.try_into().unwrap();
+
+    assert!(filter.count_tokens_by_game_address(fake_game) == 0, "game_address count");
+    assert!(filter.count_tokens_by_game_and_settings(fake_game, 0) == 0, "game+settings count");
+    assert!(filter.count_tokens_by_game_and_objective(fake_game, 0) == 0, "game+objective count");
+    assert!(filter.count_tokens_of_owner_by_game(ALICE(), fake_game) == 0, "owner+game count");
+    assert!(filter.count_tokens_by_game_and_playable(fake_game) == 0, "game+playable count");
+    assert!(filter.count_tokens_by_game_and_game_over(fake_game) == 0, "game+game_over count");
+    assert!(
+        filter.count_tokens_of_owner_by_game_and_playable(ALICE(), fake_game) == 0,
+        "owner+game+playable count",
+    );
+    assert!(
+        filter.count_tokens_of_owner_by_game_and_settings(ALICE(), fake_game, 0) == 0,
+        "owner+game+settings count",
+    );
+    assert!(
+        filter.count_tokens_of_owner_by_game_and_objective(ALICE(), fake_game, 0) == 0,
+        "owner+game+objective count",
+    );
+    assert!(
+        filter.count_tokens_of_owner_by_game_and_game_over(ALICE(), fake_game) == 0,
+        "owner+game+game_over count",
+    );
+    assert!(filter.count_tokens_by_game_and_soulbound(fake_game, true) == 0, "game+soulbound count");
+}
+
+#[test]
+fn test_count_functions_unknown_minter_returns_zero() {
+    let tc = setup_with_registry();
+    let filter = get_filter_dispatcher(tc.denshokan_address);
+    let unknown_minter: ContractAddress = 'UNKNOWN_MINTER'.try_into().unwrap();
+
+    assert!(filter.count_tokens_by_minter_address(unknown_minter) == 0, "minter count");
+    assert!(
+        filter.count_tokens_of_owner_by_minter(ALICE(), unknown_minter) == 0, "owner+minter count",
+    );
+}
+
+#[test]
+fn test_count_minter_and_game_unknown_minter_or_game() {
+    let tc = setup_with_registry();
+    let filter = get_filter_dispatcher(tc.denshokan_address);
+    let unknown_minter: ContractAddress = 'UNKNOWN_MINTER'.try_into().unwrap();
+    let fake_game: ContractAddress = 'FAKE_GAME'.try_into().unwrap();
+
+    // Register a game so we can test unknown minter with known game
+    let (game_id, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "TestGame", Option::None,
+    );
+    let game_metadata = tc.registry.game_metadata(game_id);
+
+    // Unknown minter, known game
+    assert!(
+        filter.count_tokens_by_minter_and_game(unknown_minter, game_metadata.contract_address) == 0,
+        "unknown minter + known game count",
+    );
+
+    // Known minter (ALICE), unknown game
+    assert!(
+        filter.count_tokens_by_minter_and_game(ALICE(), fake_game) == 0,
+        "known minter + unknown game count",
+    );
+}
+
+// ================================================================================================
+// UNREGISTERED GAME EARLY RETURN TESTS FOR FILTER FUNCTIONS
+// ================================================================================================
+
+#[test]
+fn test_filter_functions_unregistered_game_returns_empty() {
+    let tc = setup_with_registry();
+    let filter = get_filter_dispatcher(tc.denshokan_address);
+    let fake_game: ContractAddress = 'FAKE_GAME'.try_into().unwrap();
+
+    let r1 = filter.tokens_by_game_and_settings(fake_game, 0, 0, 100);
+    assert!(r1.total == 0, "game+settings filter");
+
+    let r2 = filter.tokens_by_game_and_objective(fake_game, 0, 0, 100);
+    assert!(r2.total == 0, "game+objective filter");
+
+    let r3 = filter.tokens_of_owner_by_game(ALICE(), fake_game, 0, 100);
+    assert!(r3.total == 0, "owner+game filter");
+
+    let r4 = filter.tokens_by_game_and_game_over(fake_game, 0, 100);
+    assert!(r4.total == 0, "game+game_over filter");
+
+    let r5 = filter.tokens_of_owner_by_game_and_playable(ALICE(), fake_game, 0, 100);
+    assert!(r5.total == 0, "owner+game+playable filter");
+
+    let r6 = filter.tokens_of_owner_by_game_and_settings(ALICE(), fake_game, 0, 0, 100);
+    assert!(r6.total == 0, "owner+game+settings filter");
+
+    let r7 = filter.tokens_of_owner_by_game_and_objective(ALICE(), fake_game, 0, 0, 100);
+    assert!(r7.total == 0, "owner+game+objective filter");
+
+    let r8 = filter.tokens_of_owner_by_game_and_game_over(ALICE(), fake_game, 0, 100);
+    assert!(r8.total == 0, "owner+game+game_over filter");
+}
+
+// ================================================================================================
+// MINTER + GAME FILTER WITH ACTUAL MINTED TOKENS
+// ================================================================================================
+
+#[test]
+fn test_count_tokens_by_minter_and_game_with_tokens() {
+    let tc = setup_with_registry();
+    let filter = get_filter_dispatcher(tc.denshokan_address);
+
+    let (game_id1, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "Game1", Option::None,
+    );
+    let game1_metadata = tc.registry.game_metadata(game_id1);
+
+    let (game_id2, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "Game2", Option::None,
+    );
+    let game2_metadata = tc.registry.game_metadata(game_id2);
+
+    // ALICE mints in game1 and game2
+    mint_token_with_salt(@tc, game1_metadata.contract_address, ALICE(), false, 1);
+    mint_token_with_salt(@tc, game1_metadata.contract_address, ALICE(), false, 2);
+    mint_token_with_salt(@tc, game2_metadata.contract_address, ALICE(), false, 1);
+
+    // BOB mints in game1
+    mint_token_with_salt(@tc, game1_metadata.contract_address, BOB(), false, 3);
+
+    let count = filter.count_tokens_by_minter_and_game(ALICE(), game1_metadata.contract_address);
+    assert!(count == 2, "ALICE minted 2 tokens in game1");
+
+    let count2 = filter.count_tokens_by_minter_and_game(ALICE(), game2_metadata.contract_address);
+    assert!(count2 == 1, "ALICE minted 1 token in game2");
+
+    let count3 = filter.count_tokens_by_minter_and_game(BOB(), game1_metadata.contract_address);
+    assert!(count3 == 1, "BOB minted 1 token in game1");
+}
+
+// ================================================================================================
+// OWNER + MINTER FILTER WITH MULTIPLE OWNERS
+// ================================================================================================
+
+#[test]
+fn test_count_tokens_of_owner_by_minter_with_tokens() {
+    let tc = setup_with_registry();
+    let filter = get_filter_dispatcher(tc.denshokan_address);
+
+    let (game_id, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "TestGame", Option::None,
+    );
+    let game_metadata = tc.registry.game_metadata(game_id);
+
+    // ALICE mints for herself
+    mint_token_with_salt(@tc, game_metadata.contract_address, ALICE(), false, 1);
+    mint_token_with_salt(@tc, game_metadata.contract_address, ALICE(), false, 2);
+
+    // BOB mints for himself
+    mint_token_with_salt(@tc, game_metadata.contract_address, BOB(), false, 3);
+
+    let count = filter.count_tokens_of_owner_by_minter(ALICE(), ALICE());
+    assert!(count == 2, "ALICE owns 2 tokens minted by ALICE");
+
+    let count2 = filter.count_tokens_of_owner_by_minter(BOB(), BOB());
+    assert!(count2 == 1, "BOB owns 1 token minted by BOB");
+
+    let count3 = filter.count_tokens_of_owner_by_minter(ALICE(), BOB());
+    assert!(count3 == 0, "ALICE owns 0 tokens minted by BOB");
+}
