@@ -26,6 +26,8 @@ flag_management:
 
 ignore:
   - "**/tests/**"
+  - "contracts/src/denshokan.cairo"
+  - "contracts/src/minigame_registry.cairo"
 
 github_checks:
   annotations: false
