@@ -12,6 +12,10 @@ on:
       requests:
         description: "Requests per endpoint"
         default: "100"
+  pull_request:
+    paths:
+      - "api/**"
+      - "indexer/src/lib/schema.ts"
 
 jobs:
   benchmark:
@@ -33,6 +37,9 @@ jobs:
 
     env:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/denshokan
+      SEED_COUNT: ${{ inputs.seed_count || '10000' }}
+      CONCURRENCY: ${{ inputs.concurrency || '50' }}
+      REQUESTS: ${{ inputs.requests || '100' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -48,7 +55,7 @@ jobs:
         run: npm run db:migrate
 
       - name: Seed database
-        run: npm run db:seed -- --count ${{ inputs.seed_count }}
+        run: npm run db:seed -- --count $SEED_COUNT
 
       - name: Start API server
         run: npm run dev:api &
@@ -67,8 +74,8 @@ jobs:
         run: |
           npm run stress-test -- \
             --url http://localhost:3001 \
-            --concurrency ${{ inputs.concurrency }} \
-            --requests ${{ inputs.requests }} \
+            --concurrency $CONCURRENCY \
+            --requests $REQUESTS \
             --output /tmp/benchmark-results.txt
 
       - name: Post results to summary
@@ -81,7 +88,7 @@ jobs:
             cat /tmp/benchmark-results.txt >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
             echo '' >> $GITHUB_STEP_SUMMARY
-            echo "**Config:** ${{ inputs.seed_count }} tokens, concurrency=${{ inputs.concurrency }}, ${{ inputs.requests }} req/endpoint" >> $GITHUB_STEP_SUMMARY
+            echo "**Config:** $SEED_COUNT tokens, concurrency=$CONCURRENCY, $REQUESTS req/endpoint" >> $GITHUB_STEP_SUMMARY
           else
             echo '## Benchmark Results' >> $GITHUB_STEP_SUMMARY
             echo '' >> $GITHUB_STEP_SUMMARY
