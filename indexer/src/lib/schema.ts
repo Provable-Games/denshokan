@@ -276,6 +276,7 @@ export const objectives = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     gameAddress: text("game_address").notNull(),
     objectiveId: integer("objective_id").notNull(),
+    settingsId: integer("settings_id").notNull().default(0),
     creatorAddress: text("creator_address").notNull(),
     objectiveData: text("objective_data"),
     blockNumber: bigint("block_number", { mode: "bigint" }).notNull(),
@@ -283,6 +284,7 @@ export const objectives = pgTable(
   },
   (table) => [
     uniqueIndex("objectives_game_objective_idx").on(table.gameAddress, table.objectiveId),
+    index("objectives_settings_idx").on(table.gameAddress, table.settingsId),
   ]
 );
 

@@ -30,7 +30,7 @@ use openzeppelin_upgrades::UpgradeableComponent;
 use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
 use starknet::{ClassHash, ContractAddress};
 use crate::filter::{
-    FilterResult, IDenshokanFilter, IDenshokanSettingsObjectives, MAX_FILTER_LIMIT, ObjectiveEntry,
+    FilterResult, IDenshokanFilter, IDenshokanSettingsObjectives, ObjectiveEntry,
     ObjectivesResult, SettingsEntry, SettingsResult, TokenFullState,
 };
 
@@ -803,28 +803,22 @@ pub mod DenshokanViewer {
 
     #[abi(embed_v0)]
     impl DenshokanSettingsObjectivesImpl of IDenshokanSettingsObjectives<ContractState> {
-        fn all_settings(self: @ContractState, offset: u32, limit: u32) -> SettingsResult {
-            let effective_limit = if limit == 0 || limit > 100 {
-                100_u32
-            } else {
-                limit
-            };
-            let registry = self._get_registry();
-            let game_count: u64 = registry.game_count();
+        fn all_settings(
+            self: @ContractState, game_address: ContractAddress, offset: u32, limit: u32,
+        ) -> SettingsResult {
+            let filter_by_game = game_address.is_non_zero();
 
-            let mut entries: Array<SettingsEntry> = array![];
-            let mut total: u32 = 0;
-            let mut game_index: u64 = 1;
-
-            while game_index <= game_count {
-                let game_metadata = registry.game_metadata(game_index);
-                let game_address = game_metadata.contract_address;
+            if filter_by_game {
+                // Single-game query
                 let settings_disp = self._get_settings_dispatcher(game_address);
                 let settings_count = settings_disp.settings_count();
 
+                let mut entries: Array<SettingsEntry> = array![];
+                let mut total: u32 = 0;
                 let mut settings_index: u32 = 1;
+
                 while settings_index <= settings_count {
-                    if total >= offset && entries.len() < effective_limit {
+                    if total >= offset && (limit == 0 || entries.len() < limit) {
                         let details = settings_disp.settings_details(settings_index);
                         entries
                             .append(
@@ -835,118 +829,154 @@ pub mod DenshokanViewer {
                     }
                     total += 1;
                     settings_index += 1;
-                }
+                };
 
-                game_index += 1;
+                SettingsResult { entries, total }
+            } else {
+                // Cross-game query
+                let registry = self._get_registry();
+                let game_count: u64 = registry.game_count();
+
+                let mut entries: Array<SettingsEntry> = array![];
+                let mut total: u32 = 0;
+                let mut game_index: u64 = 1;
+
+                while game_index <= game_count {
+                    let game_metadata = registry.game_metadata(game_index);
+                    let ga = game_metadata.contract_address;
+                    let settings_disp = self._get_settings_dispatcher(ga);
+                    let settings_count = settings_disp.settings_count();
+
+                    let mut settings_index: u32 = 1;
+                    while settings_index <= settings_count {
+                        if total >= offset && (limit == 0 || entries.len() < limit) {
+                            let details = settings_disp.settings_details(settings_index);
+                            entries
+                                .append(
+                                    SettingsEntry {
+                                        game_address: ga, settings_id: settings_index, details,
+                                    },
+                                );
+                        }
+                        total += 1;
+                        settings_index += 1;
+                    };
+
+                    game_index += 1;
+                };
+
+                SettingsResult { entries, total }
             }
-
-            SettingsResult { entries, total }
         }
 
-        fn all_objectives(self: @ContractState, offset: u32, limit: u32) -> ObjectivesResult {
-            let effective_limit = if limit == 0 || limit > 100 {
-                100_u32
-            } else {
-                limit
-            };
-            let registry = self._get_registry();
-            let game_count: u64 = registry.game_count();
+        fn all_objectives(
+            self: @ContractState, game_address: ContractAddress, offset: u32, limit: u32,
+        ) -> ObjectivesResult {
+            let filter_by_game = game_address.is_non_zero();
 
-            let mut entries: Array<ObjectiveEntry> = array![];
-            let mut total: u32 = 0;
-            let mut game_index: u64 = 1;
-
-            while game_index <= game_count {
-                let game_metadata = registry.game_metadata(game_index);
-                let game_address = game_metadata.contract_address;
+            if filter_by_game {
+                // Single-game query
                 let objectives_disp = self._get_objectives_dispatcher(game_address);
                 let objectives_count = objectives_disp.objectives_count();
 
+                let mut entries: Array<ObjectiveEntry> = array![];
+                let mut total: u32 = 0;
                 let mut obj_index: u32 = 1;
+
                 while obj_index <= objectives_count {
-                    if total >= offset && entries.len() < effective_limit {
+                    if total >= offset && (limit == 0 || entries.len() < limit) {
                         let details = objectives_disp.objectives_details(obj_index);
                         entries
                             .append(
-                                ObjectiveEntry { game_address, objective_id: obj_index, details },
+                                ObjectiveEntry {
+                                    game_address, objective_id: obj_index, details,
+                                },
                             );
                     }
                     total += 1;
                     obj_index += 1;
-                }
+                };
 
-                game_index += 1;
-            }
-
-            ObjectivesResult { entries, total }
-        }
-
-        fn settings_for_game(
-            self: @ContractState, game_address: ContractAddress, offset: u32, limit: u32,
-        ) -> SettingsResult {
-            let effective_limit = if limit == 0 || limit > 100 {
-                100_u32
+                ObjectivesResult { entries, total }
             } else {
-                limit
-            };
-            let settings_disp = self._get_settings_dispatcher(game_address);
-            let settings_count = settings_disp.settings_count();
+                // Cross-game query
+                let registry = self._get_registry();
+                let game_count: u64 = registry.game_count();
 
-            let mut entries: Array<SettingsEntry> = array![];
-            let mut total: u32 = 0;
-            let mut settings_index: u32 = 1;
+                let mut entries: Array<ObjectiveEntry> = array![];
+                let mut total: u32 = 0;
+                let mut game_index: u64 = 1;
 
-            while settings_index <= settings_count {
-                if total >= offset && entries.len() < effective_limit {
-                    let details = settings_disp.settings_details(settings_index);
-                    entries
-                        .append(
-                            SettingsEntry { game_address, settings_id: settings_index, details },
-                        );
-                }
-                total += 1;
-                settings_index += 1;
+                while game_index <= game_count {
+                    let game_metadata = registry.game_metadata(game_index);
+                    let ga = game_metadata.contract_address;
+                    let objectives_disp = self._get_objectives_dispatcher(ga);
+                    let objectives_count = objectives_disp.objectives_count();
+
+                    let mut obj_index: u32 = 1;
+                    while obj_index <= objectives_count {
+                        if total >= offset && (limit == 0 || entries.len() < limit) {
+                            let details = objectives_disp.objectives_details(obj_index);
+                            entries
+                                .append(
+                                    ObjectiveEntry {
+                                        game_address: ga, objective_id: obj_index, details,
+                                    },
+                                );
+                        }
+                        total += 1;
+                        obj_index += 1;
+                    };
+
+                    game_index += 1;
+                };
+
+                ObjectivesResult { entries, total }
             }
-
-            SettingsResult { entries, total }
         }
 
-        fn objectives_for_game(
-            self: @ContractState, game_address: ContractAddress, offset: u32, limit: u32,
-        ) -> ObjectivesResult {
-            let effective_limit = if limit == 0 || limit > 100 {
-                100_u32
+        fn count_settings(self: @ContractState, game_address: ContractAddress) -> u32 {
+            if game_address.is_non_zero() {
+                let settings_disp = self._get_settings_dispatcher(game_address);
+                settings_disp.settings_count()
             } else {
-                limit
-            };
-            let objectives_disp = self._get_objectives_dispatcher(game_address);
-            let objectives_count = objectives_disp.objectives_count();
+                let registry = self._get_registry();
+                let game_count: u64 = registry.game_count();
+                let mut total: u32 = 0;
+                let mut game_index: u64 = 1;
 
-            let mut entries: Array<ObjectiveEntry> = array![];
-            let mut total: u32 = 0;
-            let mut obj_index: u32 = 1;
+                while game_index <= game_count {
+                    let game_metadata = registry.game_metadata(game_index);
+                    let settings_disp = self
+                        ._get_settings_dispatcher(game_metadata.contract_address);
+                    total += settings_disp.settings_count();
+                    game_index += 1;
+                };
 
-            while obj_index <= objectives_count {
-                if total >= offset && entries.len() < effective_limit {
-                    let details = objectives_disp.objectives_details(obj_index);
-                    entries
-                        .append(ObjectiveEntry { game_address, objective_id: obj_index, details });
-                }
-                total += 1;
-                obj_index += 1;
+                total
             }
-
-            ObjectivesResult { entries, total }
         }
 
-        fn count_settings_for_game(self: @ContractState, game_address: ContractAddress) -> u32 {
-            let settings_disp = self._get_settings_dispatcher(game_address);
-            settings_disp.settings_count()
-        }
+        fn count_objectives(self: @ContractState, game_address: ContractAddress) -> u32 {
+            if game_address.is_non_zero() {
+                let objectives_disp = self._get_objectives_dispatcher(game_address);
+                objectives_disp.objectives_count()
+            } else {
+                let registry = self._get_registry();
+                let game_count: u64 = registry.game_count();
+                let mut total: u32 = 0;
+                let mut game_index: u64 = 1;
 
-        fn count_objectives_for_game(self: @ContractState, game_address: ContractAddress) -> u32 {
-            let objectives_disp = self._get_objectives_dispatcher(game_address);
-            objectives_disp.objectives_count()
+                while game_index <= game_count {
+                    let game_metadata = registry.game_metadata(game_index);
+                    let objectives_disp = self
+                        ._get_objectives_dispatcher(game_metadata.contract_address);
+                    total += objectives_disp.objectives_count();
+                    game_index += 1;
+                };
+
+                total
+            }
         }
     }
 
@@ -963,8 +993,8 @@ pub mod DenshokanViewer {
         fn _filter_all_tokens_by_game(
             self: @ContractState, target_game_id: u32, offset: u256, limit: u256,
         ) -> FilterResult {
-            let effective_limit = if limit == 0 || limit > MAX_FILTER_LIMIT {
-                MAX_FILTER_LIMIT
+            let effective_limit = if limit == 0 {
+                0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
             } else {
                 limit
             };
@@ -1000,8 +1030,8 @@ pub mod DenshokanViewer {
             offset: u256,
             limit: u256,
         ) -> FilterResult {
-            let effective_limit = if limit == 0 || limit > MAX_FILTER_LIMIT {
-                MAX_FILTER_LIMIT
+            let effective_limit = if limit == 0 {
+                0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
             } else {
                 limit
             };
@@ -1038,8 +1068,8 @@ pub mod DenshokanViewer {
             offset: u256,
             limit: u256,
         ) -> FilterResult {
-            let effective_limit = if limit == 0 || limit > MAX_FILTER_LIMIT {
-                MAX_FILTER_LIMIT
+            let effective_limit = if limit == 0 {
+                0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
             } else {
                 limit
             };
@@ -1076,8 +1106,8 @@ pub mod DenshokanViewer {
         fn _filter_all_tokens_by_minter(
             self: @ContractState, target_minter_id: u64, offset: u256, limit: u256,
         ) -> FilterResult {
-            let effective_limit = if limit == 0 || limit > MAX_FILTER_LIMIT {
-                MAX_FILTER_LIMIT
+            let effective_limit = if limit == 0 {
+                0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
             } else {
                 limit
             };
@@ -1117,8 +1147,8 @@ pub mod DenshokanViewer {
             offset: u256,
             limit: u256,
         ) -> FilterResult {
-            let effective_limit = if limit == 0 || limit > MAX_FILTER_LIMIT {
-                MAX_FILTER_LIMIT
+            let effective_limit = if limit == 0 {
+                0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
             } else {
                 limit
             };
@@ -1155,8 +1185,8 @@ pub mod DenshokanViewer {
         fn _filter_all_tokens_by_soulbound(
             self: @ContractState, target_soulbound: bool, offset: u256, limit: u256,
         ) -> FilterResult {
-            let effective_limit = if limit == 0 || limit > MAX_FILTER_LIMIT {
-                MAX_FILTER_LIMIT
+            let effective_limit = if limit == 0 {
+                0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
             } else {
                 limit
             };
@@ -1192,8 +1222,8 @@ pub mod DenshokanViewer {
         fn _filter_all_tokens_by_minted_at_range(
             self: @ContractState, start_time: u64, end_time: u64, offset: u256, limit: u256,
         ) -> FilterResult {
-            let effective_limit = if limit == 0 || limit > MAX_FILTER_LIMIT {
-                MAX_FILTER_LIMIT
+            let effective_limit = if limit == 0 {
+                0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
             } else {
                 limit
             };
@@ -1371,8 +1401,8 @@ pub mod DenshokanViewer {
         fn _filter_all_tokens_by_game_and_playable(
             self: @ContractState, target_game_id: u32, offset: u256, limit: u256,
         ) -> FilterResult {
-            let effective_limit = if limit == 0 || limit > MAX_FILTER_LIMIT {
-                MAX_FILTER_LIMIT
+            let effective_limit = if limit == 0 {
+                0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
             } else {
                 limit
             };
@@ -1405,8 +1435,8 @@ pub mod DenshokanViewer {
         fn _filter_all_tokens_by_game_and_game_over(
             self: @ContractState, target_game_id: u32, offset: u256, limit: u256,
         ) -> FilterResult {
-            let effective_limit = if limit == 0 || limit > MAX_FILTER_LIMIT {
-                MAX_FILTER_LIMIT
+            let effective_limit = if limit == 0 {
+                0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
             } else {
                 limit
             };
@@ -1444,8 +1474,8 @@ pub mod DenshokanViewer {
             offset: u256,
             limit: u256,
         ) -> FilterResult {
-            let effective_limit = if limit == 0 || limit > MAX_FILTER_LIMIT {
-                MAX_FILTER_LIMIT
+            let effective_limit = if limit == 0 {
+                0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
             } else {
                 limit
             };
@@ -1479,8 +1509,8 @@ pub mod DenshokanViewer {
         fn _filter_all_tokens_by_playable(
             self: @ContractState, offset: u256, limit: u256,
         ) -> FilterResult {
-            let effective_limit = if limit == 0 || limit > MAX_FILTER_LIMIT {
-                MAX_FILTER_LIMIT
+            let effective_limit = if limit == 0 {
+                0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
             } else {
                 limit
             };
@@ -1516,8 +1546,8 @@ pub mod DenshokanViewer {
             offset: u256,
             limit: u256,
         ) -> FilterResult {
-            let effective_limit = if limit == 0 || limit > MAX_FILTER_LIMIT {
-                MAX_FILTER_LIMIT
+            let effective_limit = if limit == 0 {
+                0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
             } else {
                 limit
             };
@@ -1659,8 +1689,8 @@ pub mod DenshokanViewer {
         fn _filter_owner_tokens(
             self: @ContractState, owner: ContractAddress, offset: u256, limit: u256,
         ) -> FilterResult {
-            let effective_limit = if limit == 0 || limit > MAX_FILTER_LIMIT {
-                MAX_FILTER_LIMIT
+            let effective_limit = if limit == 0 {
+                0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
             } else {
                 limit
             };
@@ -1692,8 +1722,8 @@ pub mod DenshokanViewer {
         fn _filter_owner_tokens_by_playable(
             self: @ContractState, owner: ContractAddress, offset: u256, limit: u256,
         ) -> FilterResult {
-            let effective_limit = if limit == 0 || limit > MAX_FILTER_LIMIT {
-                MAX_FILTER_LIMIT
+            let effective_limit = if limit == 0 {
+                0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
             } else {
                 limit
             };
@@ -1726,8 +1756,8 @@ pub mod DenshokanViewer {
         fn _filter_owner_tokens_by_game_over(
             self: @ContractState, owner: ContractAddress, offset: u256, limit: u256,
         ) -> FilterResult {
-            let effective_limit = if limit == 0 || limit > MAX_FILTER_LIMIT {
-                MAX_FILTER_LIMIT
+            let effective_limit = if limit == 0 {
+                0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
             } else {
                 limit
             };
@@ -1810,8 +1840,8 @@ pub mod DenshokanViewer {
             offset: u256,
             limit: u256,
         ) -> FilterResult {
-            let effective_limit = if limit == 0 || limit > MAX_FILTER_LIMIT {
-                MAX_FILTER_LIMIT
+            let effective_limit = if limit == 0 {
+                0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
             } else {
                 limit
             };
@@ -1873,8 +1903,8 @@ pub mod DenshokanViewer {
             offset: u256,
             limit: u256,
         ) -> FilterResult {
-            let effective_limit = if limit == 0 || limit > MAX_FILTER_LIMIT {
-                MAX_FILTER_LIMIT
+            let effective_limit = if limit == 0 {
+                0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
             } else {
                 limit
             };
@@ -1937,8 +1967,8 @@ pub mod DenshokanViewer {
             offset: u256,
             limit: u256,
         ) -> FilterResult {
-            let effective_limit = if limit == 0 || limit > MAX_FILTER_LIMIT {
-                MAX_FILTER_LIMIT
+            let effective_limit = if limit == 0 {
+                0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
             } else {
                 limit
             };
@@ -2006,8 +2036,8 @@ pub mod DenshokanViewer {
             offset: u256,
             limit: u256,
         ) -> FilterResult {
-            let effective_limit = if limit == 0 || limit > MAX_FILTER_LIMIT {
-                MAX_FILTER_LIMIT
+            let effective_limit = if limit == 0 {
+                0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
             } else {
                 limit
             };
@@ -2074,8 +2104,8 @@ pub mod DenshokanViewer {
             offset: u256,
             limit: u256,
         ) -> FilterResult {
-            let effective_limit = if limit == 0 || limit > MAX_FILTER_LIMIT {
-                MAX_FILTER_LIMIT
+            let effective_limit = if limit == 0 {
+                0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
             } else {
                 limit
             };
@@ -2141,8 +2171,8 @@ pub mod DenshokanViewer {
             offset: u256,
             limit: u256,
         ) -> FilterResult {
-            let effective_limit = if limit == 0 || limit > MAX_FILTER_LIMIT {
-                MAX_FILTER_LIMIT
+            let effective_limit = if limit == 0 {
+                0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
             } else {
                 limit
             };

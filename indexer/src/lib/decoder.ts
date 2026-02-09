@@ -332,12 +332,13 @@ export interface TokenContextUpdateEvent {
 
 /**
  * ObjectiveCreated event
- * Keys: [selector, game_address, objective_id(u32)]
+ * Keys: [selector, game_address, objective_id(u32), settings_id(u32)]
  * Data: [creator_address, objective_data(ByteArray)]
  */
 export interface ObjectiveCreatedEvent {
   gameAddress: string;
   objectiveId: number;
+  settingsId: number;
   creatorAddress: string;
   objectiveData: string;
 }
@@ -506,7 +507,7 @@ export function decodeTokenContextUpdate(keys: readonly string[], data: readonly
 
 /**
  * Decode ObjectiveCreated event
- * Keys: [selector, game_address, objective_id(u32)]
+ * Keys: [selector, game_address, objective_id(u32), settings_id(u32)]
  * Data: [creator_address, objective_data(ByteArray)]
  */
 export function decodeObjectiveCreated(keys: readonly string[], data: readonly string[]): ObjectiveCreatedEvent {
@@ -514,6 +515,7 @@ export function decodeObjectiveCreated(keys: readonly string[], data: readonly s
   return {
     gameAddress: feltToHex(keys[1]),
     objectiveId: Number(hexToBigInt(keys[2])),
+    settingsId: Number(hexToBigInt(keys[3])),
     creatorAddress: feltToHex(data[0]),
     objectiveData,
   };
