@@ -1,6 +1,5 @@
 use denshokan::filter::{IDenshokanFilterDispatcher, IDenshokanFilterDispatcherTrait};
 use game_components_registry::interface::IMinigameRegistryDispatcherTrait;
-
 use game_components_token::interface::IMinigameTokenMixinDispatcherTrait;
 use game_components_token::structs::{unpack_game_id, unpack_soulbound};
 use openzeppelin_interfaces::ownable::{IOwnableDispatcher, IOwnableDispatcherTrait};
@@ -1415,7 +1414,9 @@ fn test_count_functions_unregistered_game_returns_zero() {
         filter.count_tokens_of_owner_by_game_and_game_over(ALICE(), fake_game) == 0,
         "owner+game+game_over count",
     );
-    assert!(filter.count_tokens_by_game_and_soulbound(fake_game, true) == 0, "game+soulbound count");
+    assert!(
+        filter.count_tokens_by_game_and_soulbound(fake_game, true) == 0, "game+soulbound count",
+    );
 }
 
 #[test]

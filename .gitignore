@@ -4,6 +4,8 @@ node_modules/
 
 # Build outputs
 contracts/target/
+contracts/.snfoundry_cache/
+contracts/snfoundry_trace/
 indexer/dist/
 api/dist/
 client/dist/

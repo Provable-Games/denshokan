@@ -975,7 +975,7 @@ fn discover_secret_and_win(
             break;
         }
         guess_val += 1;
-    };
+    }
     found
 }
 
@@ -1021,7 +1021,7 @@ fn win_perfect_game(
             };
         }
         attempt += 1;
-    };
+    }
     success
 }
 
@@ -1057,8 +1057,7 @@ fn test_calculate_score_efficiency_bonus() {
         // If every game scored exactly BASE_SCORE (100), total would be 100 * games_won.
         // Because at least the last game had efficiency bonus, total > 100 * games_won.
         assert!(
-            score > 100_u64 * games_won.into(),
-            "Score should exceed base due to efficiency bonus",
+            score > 100_u64 * games_won.into(), "Score should exceed base due to efficiency bonus",
         );
     }
 }
@@ -1122,7 +1121,7 @@ fn test_objective_type2_failure_win_with_too_many_guesses() {
             break;
         }
         guess_val += 1;
-    };
+    }
 
     let guess_count = ng.guess_count(token_id);
     if won && guess_count > 2 {
@@ -1133,7 +1132,7 @@ fn test_objective_type2_failure_win_with_too_many_guesses() {
         );
     }
     // If we happened to win in <= 2 guesses (unlikely but possible), the test is still valid -
-    // we just cannot assert the negative case. The objective would be correctly completed.
+// we just cannot assert the negative case. The objective would be correctly completed.
 }
 
 // --------------------------------------------------------------------------
@@ -1164,7 +1163,7 @@ fn test_objective_type3_failure_not_perfect_game() {
             break;
         }
         guess_val += 1;
-    };
+    }
 
     let guess_count = ng.guess_count(token_id);
     if won && guess_count > 1 {
@@ -1174,10 +1173,7 @@ fn test_objective_type3_failure_not_perfect_game() {
             "PerfectGame objective should NOT be completed with >1 guess",
         );
         // But First Win (objective 1) SHOULD be completed
-        assert!(
-            objectives.completed_objective(token_id, 1),
-            "First Win should still be completed",
-        );
+        assert!(objectives.completed_objective(token_id, 1), "First Win should still be completed");
     }
 }
 
@@ -1209,7 +1205,7 @@ fn test_already_completed_objective_stays_completed() {
         } else {
             high = mid - 1;
         }
-    };
+    }
 
     assert!(
         objectives.completed_objective(token_id, 1), "First Win should be completed after game 1",
@@ -1232,7 +1228,7 @@ fn test_already_completed_objective_stays_completed() {
         } else {
             high = mid - 1;
         }
-    };
+    }
 
     // First Win should STILL be completed after second win
     assert!(
@@ -1274,7 +1270,7 @@ fn test_token_description_after_gameplay() {
         } else {
             high = mid - 1;
         }
-    };
+    }
 
     let desc_after_win = details.token_description(token_id);
     assert!(desc_after_win.len() > 0, "Description should not be empty after win");
@@ -1294,7 +1290,7 @@ fn test_token_description_after_gameplay() {
         };
         ng.guess(token_id, guess);
         attempts += 1;
-    };
+    }
 
     let desc_after_loss = details.token_description(token_id);
     assert!(desc_after_loss.len() > 0, "Description should not be empty after loss");
@@ -1354,7 +1350,7 @@ fn test_game_details_status_won() {
         } else {
             high = mid - 1;
         }
-    };
+    }
 
     let game_details = details.game_details(token_id);
     let status_detail = game_details.at(5);
@@ -1382,7 +1378,7 @@ fn test_game_details_status_lost() {
         };
         ng.guess(token_id, guess);
         attempts += 1;
-    };
+    }
 
     let game_details = details.game_details(token_id);
     let status_detail = game_details.at(5);
@@ -1458,7 +1454,7 @@ fn test_token_description_batch() {
         } else {
             high = mid - 1;
         }
-    };
+    }
 
     let descriptions = details.token_description_batch(array![token1, token2].span());
     assert!(descriptions.len() == 2, "Should return 2 descriptions");
@@ -1575,7 +1571,7 @@ fn test_game_status_returns_won() {
         } else {
             high = mid - 1;
         }
-    };
+    }
 
     // Won: status should be 2 (STATUS_WON)
     assert!(ng.game_status(token_id) == 2, "Status should be 2 (won)");
@@ -1600,7 +1596,7 @@ fn test_game_status_returns_lost() {
         };
         ng.guess(token_id, guess);
         attempts += 1;
-    };
+    }
 
     // Lost: status should be 3 (STATUS_LOST)
     assert!(ng.game_status(token_id) == 3, "Status should be 3 (lost)");
@@ -1705,7 +1701,7 @@ fn test_score_batch_with_gameplay() {
         } else {
             high = mid - 1;
         }
-    };
+    }
 
     // token2 has no game
     let scores = token_data.score_batch(array![token1, token2].span());
@@ -1737,7 +1733,7 @@ fn test_game_over_batch_mixed_states() {
         } else {
             high = mid - 1;
         }
-    };
+    }
 
     // token2 is still playing
     ng.new_game(token2, 1);

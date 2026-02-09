@@ -649,8 +649,10 @@ fn test_token_description_after_games() {
     // Description should contain "1 wins" since player won once
     // Format: "Tic Tac Toe on-chain. Record: {won} wins, {lost} losses, {drawn} draws out of
     // {played} games."
-    assert!(desc == "Tic Tac Toe on-chain. Record: 1 wins, 0 losses, 0 draws out of 1 games.",
-        "Description should reflect 1 win");
+    assert!(
+        desc == "Tic Tac Toe on-chain. Record: 1 wins, 0 losses, 0 draws out of 1 games.",
+        "Description should reflect 1 win",
+    );
 }
 
 /// Verify game_details reports "Player Won" status after a player win.
@@ -726,7 +728,7 @@ fn test_game_details_draw_status() {
             ttt.make_move(token_id, i);
         }
         i += 1;
-    };
+    }
 
     // If the game resulted in a draw, verify the status
     if ttt.games_drawn(token_id) > 0 {
@@ -751,8 +753,10 @@ fn test_token_description_after_ai_win() {
     ttt.make_move(token_id, 6); // X:6, O:7 -> AI wins
 
     let desc = details.token_description(token_id);
-    assert!(desc == "Tic Tac Toe on-chain. Record: 0 wins, 1 losses, 0 draws out of 1 games.",
-        "Description should reflect AI win as a loss");
+    assert!(
+        desc == "Tic Tac Toe on-chain. Record: 0 wins, 1 losses, 0 draws out of 1 games.",
+        "Description should reflect AI win as a loss",
+    );
 }
 
 /// Verify token_description_batch works.
@@ -793,7 +797,9 @@ fn test_objective_completed_after_3_wins() {
     let token_id: felt252 = 130;
     let objectives = IMinigameObjectivesDispatcher { contract_address: address };
 
-    assert!(!objectives.completed_objective(token_id, 1), "Objective should not be completed initially");
+    assert!(
+        !objectives.completed_objective(token_id, 1), "Objective should not be completed initially",
+    );
 
     // Win 3 games using the proven winning sequence: 0, 8, 6, 7
     let mut game: u32 = 0;
@@ -807,10 +813,12 @@ fn test_objective_completed_after_3_wins() {
         ttt.make_move(token_id, 6);
         ttt.make_move(token_id, 7); // Player wins
         game += 1;
-    };
+    }
 
     assert!(ttt.games_won(token_id) == 3, "Should have 3 wins");
-    assert!(objectives.completed_objective(token_id, 1), "Objective 1 should be completed after 3 wins");
+    assert!(
+        objectives.completed_objective(token_id, 1), "Objective 1 should be completed after 3 wins",
+    );
 }
 
 /// Verify objectives_details returns correct data for objective 1.
@@ -821,10 +829,14 @@ fn test_objectives_details() {
 
     let details = objectives_details.objectives_details(1);
     assert!(details.name == "Win 3 games", "Objective name should be 'Win 3 games'");
-    assert!(details.description == "Win 3 games of Tic Tac Toe",
-        "Objective description should match");
+    assert!(
+        details.description == "Win 3 games of Tic Tac Toe", "Objective description should match",
+    );
     assert!(details.objectives.len() == 1, "Should have 1 objective entry");
-    assert!(details.objectives.at(0).name == @"target_wins", "Objective entry name should be 'target_wins'");
+    assert!(
+        details.objectives.at(0).name == @"target_wins",
+        "Objective entry name should be 'target_wins'",
+    );
     assert!(details.objectives.at(0).value == @"3", "Objective entry value should be '3'");
 }
 
@@ -940,7 +952,7 @@ fn test_full_game_to_completion_draw_path() {
             ttt.make_move(token_id, i);
         }
         i += 1;
-    };
+    }
 
     assert!(token_data.game_over(token_id), "Game should be over");
     assert!(ttt.games_played(token_id) == 1, "Should have 1 game played");
@@ -981,9 +993,9 @@ fn test_games_drawn_accumulation() {
                 ttt.make_move(token_id, i);
             }
             i += 1;
-        };
+        }
         game += 1;
-    };
+    }
 
     assert!(ttt.games_played(token_id) == 5, "Should have 5 games played");
     // Verify consistency: won + drawn + lost = played

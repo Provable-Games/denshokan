@@ -1,5 +1,5 @@
 use game_components_registry::interface::{
-    IMinigameRegistryDispatcher, IMinigameRegistryDispatcherTrait, IMINIGAME_REGISTRY_ID,
+    IMINIGAME_REGISTRY_ID, IMinigameRegistryDispatcher, IMinigameRegistryDispatcherTrait,
 };
 use openzeppelin_interfaces::erc721::{
     IERC721Dispatcher, IERC721DispatcherTrait, IERC721MetadataDispatcher,
@@ -143,7 +143,10 @@ fn test_creator_token_transfer() {
     // so after transferring 1 of their 2 tokens, they should have 1 remaining
     let creator_balance = erc721.balance_of(GAME_CREATOR());
     let bob_balance = erc721.balance_of(BOB());
-    assert!(creator_balance == 1, "GAME_CREATOR balance should be 1 after transfer (1 remaining from setup)");
+    assert!(
+        creator_balance == 1,
+        "GAME_CREATOR balance should be 1 after transfer (1 remaining from setup)",
+    );
     assert!(bob_balance == 1, "BOB balance should be 1 after receiving transfer");
 }
 
@@ -242,7 +245,8 @@ fn test_supports_interface() {
     let supports_registry = src5.supports_interface(IMINIGAME_REGISTRY_ID);
     assert!(supports_registry, "Registry should support IMINIGAME_REGISTRY_ID interface");
 
-    // Should also support SRC5 itself (interface ID 0x3f918d17e5ee77373b56385708f855659a07f75997f365cf87748628532a055)
+    // Should also support SRC5 itself (interface ID
+    // 0x3f918d17e5ee77373b56385708f855659a07f75997f365cf87748628532a055)
     let isrc5_id: felt252 = 0x3f918d17e5ee77373b56385708f855659a07f75997f365cf87748628532a055;
     let supports_src5 = src5.supports_interface(isrc5_id);
     assert!(supports_src5, "Registry should support ISRC5 interface");
