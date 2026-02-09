@@ -6,6 +6,8 @@ const navItems = [
   { label: "Home", path: "/" },
   { label: "Games", path: "/games" },
   { label: "Minters", path: "/minters" },
+  { label: "Settings", path: "/settings" },
+  { label: "Objectives", path: "/objectives" },
   { label: "Mint", path: "/mint" },
   { label: "Game Tokens", path: "/portfolio" },
 ];

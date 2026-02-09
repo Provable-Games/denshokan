@@ -1,0 +1,96 @@
+name: API Benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      seed_count:
+        description: "Number of tokens to seed"
+        default: "10000"
+      concurrency:
+        description: "Concurrent requests"
+        default: "50"
+      requests:
+        description: "Requests per endpoint"
+        default: "100"
+  pull_request:
+    paths:
+      - "api/**"
+      - "indexer/src/lib/schema.ts"
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: denshokan
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/denshokan
+      SEED_COUNT: ${{ inputs.seed_count || '10000' }}
+      CONCURRENCY: ${{ inputs.concurrency || '50' }}
+      REQUESTS: ${{ inputs.requests || '100' }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run migrations
+        run: npm run db:migrate
+
+      - name: Seed database
+        run: npm run db:seed -- --count $SEED_COUNT
+
+      - name: Start API server
+        run: npm run dev:api &
+        env:
+          PORT: 3001
+          CORS_ORIGIN: "*"
+
+      - name: Wait for API
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:3001/health && break
+            sleep 1
+          done
+
+      - name: Run stress test
+        run: |
+          npm run stress-test -- \
+            --url http://localhost:3001 \
+            --concurrency $CONCURRENCY \
+            --requests $REQUESTS \
+            --output /tmp/benchmark-results.txt
+
+      - name: Post results to summary
+        if: always()
+        run: |
+          if [ -f /tmp/benchmark-results.txt ]; then
+            echo '## Benchmark Results' >> $GITHUB_STEP_SUMMARY
+            echo '' >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat /tmp/benchmark-results.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo '' >> $GITHUB_STEP_SUMMARY
+            echo "**Config:** $SEED_COUNT tokens, concurrency=$CONCURRENCY, $REQUESTS req/endpoint" >> $GITHUB_STEP_SUMMARY
+          else
+            echo '## Benchmark Results' >> $GITHUB_STEP_SUMMARY
+            echo '' >> $GITHUB_STEP_SUMMARY
+            echo '> No results file found — stress test may have failed.' >> $GITHUB_STEP_SUMMARY
+          fi
