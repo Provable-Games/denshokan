@@ -30,8 +30,8 @@ use openzeppelin_upgrades::UpgradeableComponent;
 use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
 use starknet::{ClassHash, ContractAddress};
 use crate::filter::{
-    FilterResult, IDenshokanFilter, IDenshokanSettingsObjectives, ObjectiveEntry,
-    ObjectivesResult, SettingsEntry, SettingsResult, TokenFullState,
+    FilterResult, IDenshokanFilter, IDenshokanSettingsObjectives, ObjectiveEntry, ObjectivesResult,
+    SettingsEntry, SettingsResult, TokenFullState,
 };
 
 // ================================================================================================
@@ -829,7 +829,7 @@ pub mod DenshokanViewer {
                     }
                     total += 1;
                     settings_index += 1;
-                };
+                }
 
                 SettingsResult { entries, total }
             } else {
@@ -860,10 +860,10 @@ pub mod DenshokanViewer {
                         }
                         total += 1;
                         settings_index += 1;
-                    };
+                    }
 
                     game_index += 1;
-                };
+                }
 
                 SettingsResult { entries, total }
             }
@@ -888,14 +888,12 @@ pub mod DenshokanViewer {
                         let details = objectives_disp.objectives_details(obj_index);
                         entries
                             .append(
-                                ObjectiveEntry {
-                                    game_address, objective_id: obj_index, details,
-                                },
+                                ObjectiveEntry { game_address, objective_id: obj_index, details },
                             );
                     }
                     total += 1;
                     obj_index += 1;
-                };
+                }
 
                 ObjectivesResult { entries, total }
             } else {
@@ -926,10 +924,10 @@ pub mod DenshokanViewer {
                         }
                         total += 1;
                         obj_index += 1;
-                    };
+                    }
 
                     game_index += 1;
-                };
+                }
 
                 ObjectivesResult { entries, total }
             }
@@ -951,7 +949,7 @@ pub mod DenshokanViewer {
                         ._get_settings_dispatcher(game_metadata.contract_address);
                     total += settings_disp.settings_count();
                     game_index += 1;
-                };
+                }
 
                 total
             }
@@ -973,7 +971,7 @@ pub mod DenshokanViewer {
                         ._get_objectives_dispatcher(game_metadata.contract_address);
                     total += objectives_disp.objectives_count();
                     game_index += 1;
-                };
+                }
 
                 total
             }
