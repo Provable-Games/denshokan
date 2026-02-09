@@ -347,14 +347,17 @@ pub struct ObjectivesResult {
 
 #[starknet::interface]
 pub trait IDenshokanSettingsObjectives<TState> {
-    fn all_settings(self: @TState, offset: u32, limit: u32) -> SettingsResult;
-    fn all_objectives(self: @TState, offset: u32, limit: u32) -> ObjectivesResult;
-    fn settings_for_game(
+    /// Returns settings across all games, or filtered to a single game if game_address is non-zero.
+    /// Pass limit=0 to return all results (no cap).
+    fn all_settings(
         self: @TState, game_address: ContractAddress, offset: u32, limit: u32,
     ) -> SettingsResult;
-    fn objectives_for_game(
+    /// Returns objectives across all games, or filtered to a single game if game_address is
+    /// non-zero.
+    /// Pass limit=0 to return all results (no cap).
+    fn all_objectives(
         self: @TState, game_address: ContractAddress, offset: u32, limit: u32,
     ) -> ObjectivesResult;
-    fn count_settings_for_game(self: @TState, game_address: ContractAddress) -> u32;
-    fn count_objectives_for_game(self: @TState, game_address: ContractAddress) -> u32;
+    fn count_settings(self: @TState, game_address: ContractAddress) -> u32;
+    fn count_objectives(self: @TState, game_address: ContractAddress) -> u32;
 }

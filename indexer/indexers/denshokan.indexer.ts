@@ -515,18 +515,20 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
             case EVENT_SELECTORS.ObjectiveCreated: {
               const decoded = decodeObjectiveCreated(keys, data);
               logger.info(
-                `ObjectiveCreated: game=${decoded.gameAddress}, objective_id=${decoded.objectiveId}`
+                `ObjectiveCreated: game=${decoded.gameAddress}, objective_id=${decoded.objectiveId}, settings_id=${decoded.settingsId}`
               );
 
               await db.insert(schema.objectives).values({
                 gameAddress: decoded.gameAddress,
                 objectiveId: decoded.objectiveId,
+                settingsId: decoded.settingsId,
                 creatorAddress: decoded.creatorAddress,
                 objectiveData: decoded.objectiveData,
                 blockNumber,
               }).onConflictDoUpdate({
                 target: [schema.objectives.gameAddress, schema.objectives.objectiveId],
                 set: {
+                  settingsId: decoded.settingsId,
                   creatorAddress: decoded.creatorAddress,
                   objectiveData: decoded.objectiveData,
                   blockNumber,
