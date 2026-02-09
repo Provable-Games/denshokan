@@ -14,6 +14,8 @@ import gamesRouter from "./routes/games.js";
 import activityRouter from "./routes/activity.js";
 import playersRouter from "./routes/players.js";
 import mintersRouter from "./routes/minters.js";
+import settingsRouter from "./routes/settings.js";
+import objectivesRouter from "./routes/objectives.js";
 
 const app = new Hono();
 const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app });
@@ -35,6 +37,8 @@ app.route("/games", gamesRouter);
 app.route("/activity", activityRouter);
 app.route("/players", playersRouter);
 app.route("/minters", mintersRouter);
+app.route("/settings", settingsRouter);
+app.route("/objectives", objectivesRouter);
 
 // WebSocket
 app.get("/ws", upgradeWebSocket(() => createWSEvents()));

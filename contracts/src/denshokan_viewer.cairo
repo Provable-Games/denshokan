@@ -4,6 +4,12 @@
 // Now includes OwnableComponent and UpgradeableComponent for access control and upgradability.
 
 use core::num::traits::Zero;
+use game_components_minigame::extensions::objectives::interface::{
+    IMinigameObjectivesDetailsDispatcher, IMinigameObjectivesDetailsDispatcherTrait,
+};
+use game_components_minigame::extensions::settings::interface::{
+    IMinigameSettingsDetailsDispatcher, IMinigameSettingsDetailsDispatcherTrait,
+};
 use game_components_registry::interface::{
     IMinigameRegistryDispatcher, IMinigameRegistryDispatcherTrait,
 };
@@ -23,7 +29,10 @@ use openzeppelin_interfaces::upgrades::IUpgradeable;
 use openzeppelin_upgrades::UpgradeableComponent;
 use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
 use starknet::{ClassHash, ContractAddress};
-use crate::filter::{FilterResult, IDenshokanFilter, MAX_FILTER_LIMIT, TokenFullState};
+use crate::filter::{
+    FilterResult, IDenshokanFilter, IDenshokanSettingsObjectives, MAX_FILTER_LIMIT, ObjectiveEntry,
+    ObjectivesResult, SettingsEntry, SettingsResult, TokenFullState,
+};
 
 // ================================================================================================
 // CONTRACT
@@ -129,6 +138,18 @@ pub mod DenshokanViewer {
         fn _get_registry(self: @ContractState) -> IMinigameRegistryDispatcher {
             let game_registry_address = self._get_token().game_registry_address();
             IMinigameRegistryDispatcher { contract_address: game_registry_address }
+        }
+
+        fn _get_settings_dispatcher(
+            self: @ContractState, game_address: ContractAddress,
+        ) -> IMinigameSettingsDetailsDispatcher {
+            IMinigameSettingsDetailsDispatcher { contract_address: game_address }
+        }
+
+        fn _get_objectives_dispatcher(
+            self: @ContractState, game_address: ContractAddress,
+        ) -> IMinigameObjectivesDetailsDispatcher {
+            IMinigameObjectivesDetailsDispatcher { contract_address: game_address }
         }
     }
 
@@ -773,6 +794,159 @@ pub mod DenshokanViewer {
             }
 
             result
+        }
+    }
+
+    // ================================================================================================
+    // SETTINGS/OBJECTIVES IMPLEMENTATION
+    // ================================================================================================
+
+    #[abi(embed_v0)]
+    impl DenshokanSettingsObjectivesImpl of IDenshokanSettingsObjectives<ContractState> {
+        fn all_settings(self: @ContractState, offset: u32, limit: u32) -> SettingsResult {
+            let effective_limit = if limit == 0 || limit > 100 {
+                100_u32
+            } else {
+                limit
+            };
+            let registry = self._get_registry();
+            let game_count: u64 = registry.game_count();
+
+            let mut entries: Array<SettingsEntry> = array![];
+            let mut total: u32 = 0;
+            let mut game_index: u64 = 1;
+
+            while game_index <= game_count {
+                let game_metadata = registry.game_metadata(game_index);
+                let game_address = game_metadata.contract_address;
+                let settings_disp = self._get_settings_dispatcher(game_address);
+                let settings_count = settings_disp.settings_count();
+
+                let mut settings_index: u32 = 1;
+                while settings_index <= settings_count {
+                    if total >= offset && entries.len() < effective_limit {
+                        let details = settings_disp.settings_details(settings_index);
+                        entries
+                            .append(
+                                SettingsEntry {
+                                    game_address, settings_id: settings_index, details,
+                                },
+                            );
+                    }
+                    total += 1;
+                    settings_index += 1;
+                }
+
+                game_index += 1;
+            }
+
+            SettingsResult { entries, total }
+        }
+
+        fn all_objectives(self: @ContractState, offset: u32, limit: u32) -> ObjectivesResult {
+            let effective_limit = if limit == 0 || limit > 100 {
+                100_u32
+            } else {
+                limit
+            };
+            let registry = self._get_registry();
+            let game_count: u64 = registry.game_count();
+
+            let mut entries: Array<ObjectiveEntry> = array![];
+            let mut total: u32 = 0;
+            let mut game_index: u64 = 1;
+
+            while game_index <= game_count {
+                let game_metadata = registry.game_metadata(game_index);
+                let game_address = game_metadata.contract_address;
+                let objectives_disp = self._get_objectives_dispatcher(game_address);
+                let objectives_count = objectives_disp.objectives_count();
+
+                let mut obj_index: u32 = 1;
+                while obj_index <= objectives_count {
+                    if total >= offset && entries.len() < effective_limit {
+                        let details = objectives_disp.objectives_details(obj_index);
+                        entries
+                            .append(
+                                ObjectiveEntry { game_address, objective_id: obj_index, details },
+                            );
+                    }
+                    total += 1;
+                    obj_index += 1;
+                }
+
+                game_index += 1;
+            }
+
+            ObjectivesResult { entries, total }
+        }
+
+        fn settings_for_game(
+            self: @ContractState, game_address: ContractAddress, offset: u32, limit: u32,
+        ) -> SettingsResult {
+            let effective_limit = if limit == 0 || limit > 100 {
+                100_u32
+            } else {
+                limit
+            };
+            let settings_disp = self._get_settings_dispatcher(game_address);
+            let settings_count = settings_disp.settings_count();
+
+            let mut entries: Array<SettingsEntry> = array![];
+            let mut total: u32 = 0;
+            let mut settings_index: u32 = 1;
+
+            while settings_index <= settings_count {
+                if total >= offset && entries.len() < effective_limit {
+                    let details = settings_disp.settings_details(settings_index);
+                    entries
+                        .append(
+                            SettingsEntry { game_address, settings_id: settings_index, details },
+                        );
+                }
+                total += 1;
+                settings_index += 1;
+            }
+
+            SettingsResult { entries, total }
+        }
+
+        fn objectives_for_game(
+            self: @ContractState, game_address: ContractAddress, offset: u32, limit: u32,
+        ) -> ObjectivesResult {
+            let effective_limit = if limit == 0 || limit > 100 {
+                100_u32
+            } else {
+                limit
+            };
+            let objectives_disp = self._get_objectives_dispatcher(game_address);
+            let objectives_count = objectives_disp.objectives_count();
+
+            let mut entries: Array<ObjectiveEntry> = array![];
+            let mut total: u32 = 0;
+            let mut obj_index: u32 = 1;
+
+            while obj_index <= objectives_count {
+                if total >= offset && entries.len() < effective_limit {
+                    let details = objectives_disp.objectives_details(obj_index);
+                    entries
+                        .append(ObjectiveEntry { game_address, objective_id: obj_index, details });
+                }
+                total += 1;
+                obj_index += 1;
+            }
+
+            ObjectivesResult { entries, total }
+        }
+
+        fn count_settings_for_game(self: @ContractState, game_address: ContractAddress) -> u32 {
+            let settings_disp = self._get_settings_dispatcher(game_address);
+            settings_disp.settings_count()
+        }
+
+        fn count_objectives_for_game(self: @ContractState, game_address: ContractAddress) -> u32 {
+            let objectives_disp = self._get_objectives_dispatcher(game_address);
+            objectives_disp.objectives_count()
         }
     }
 

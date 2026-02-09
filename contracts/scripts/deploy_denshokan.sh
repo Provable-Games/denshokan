@@ -226,7 +226,7 @@ print_info "Denshokan deployed at: $CONTRACT_ADDRESS"
 # Get viewer owner address (use deployer account if not specified)
 if [ -z "$VIEWER_OWNER" ]; then
     print_info "Fetching deployer account address for viewer owner..."
-    VIEWER_OWNER=$(sncast --profile "$PROFILE" account list 2>&1 | grep -oE '0x[0-9a-fA-F]+' | head -1)
+    VIEWER_OWNER=$(sncast --profile "$PROFILE" account list 2>&1 | grep "address:" | head -1 | grep -oE '0x[0-9a-fA-F]+')
     if [ -z "$VIEWER_OWNER" ]; then
         print_error "Failed to get deployer account address. Set VIEWER_OWNER manually."
         exit 1

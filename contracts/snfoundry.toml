@@ -25,6 +25,7 @@ show-explorer-links = true
 # Sepolia testnet profile
 [sncast.sepolia]
 url = "https://api.cartridge.gg/x/starknet/sepolia"
+account = "deployer"
 wait-params = { timeout = 300, retry-interval = 10 }
 block-explorer = "StarkScan"
 show-explorer-links = true

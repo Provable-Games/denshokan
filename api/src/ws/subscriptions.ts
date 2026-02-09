@@ -15,6 +15,8 @@ const VALID_CHANNELS = new Set([
   "new_tokens",
   "new_games",
   "new_minters",
+  "new_settings",
+  "new_objectives",
 ]);
 
 // Map friendly names to PG channels
@@ -25,6 +27,8 @@ const CHANNEL_MAP: Record<string, string> = {
   mints: "new_tokens",
   games: "new_games",
   minters: "new_minters",
+  settings: "new_settings",
+  objectives: "new_objectives",
 };
 
 // Reverse map: PG channel names back to friendly names

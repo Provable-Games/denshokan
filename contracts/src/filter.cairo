@@ -2,6 +2,8 @@
 // Provides paginated view functions that combine ERC721Enumerable iteration
 // with PackedTokenId unpacking for efficient token filtering.
 
+use game_components_minigame::extensions::objectives::structs::GameObjectiveDetails;
+use game_components_minigame::extensions::settings::structs::GameSettingDetails;
 use game_components_token::structs::Lifecycle;
 use starknet::ContractAddress;
 
@@ -315,4 +317,44 @@ pub trait IDenshokanFilter<TState> {
     /// Includes: owner, player_name, is_playable, game_address, game_over, completed_objective,
     /// lifecycle
     fn tokens_full_state_batch(self: @TState, token_ids: Array<felt252>) -> Array<TokenFullState>;
+}
+
+#[derive(Drop, Serde)]
+pub struct SettingsEntry {
+    pub game_address: ContractAddress,
+    pub settings_id: u32,
+    pub details: GameSettingDetails,
+}
+
+#[derive(Drop, Serde)]
+pub struct ObjectiveEntry {
+    pub game_address: ContractAddress,
+    pub objective_id: u32,
+    pub details: GameObjectiveDetails,
+}
+
+#[derive(Drop, Serde)]
+pub struct SettingsResult {
+    pub entries: Array<SettingsEntry>,
+    pub total: u32,
+}
+
+#[derive(Drop, Serde)]
+pub struct ObjectivesResult {
+    pub entries: Array<ObjectiveEntry>,
+    pub total: u32,
+}
+
+#[starknet::interface]
+pub trait IDenshokanSettingsObjectives<TState> {
+    fn all_settings(self: @TState, offset: u32, limit: u32) -> SettingsResult;
+    fn all_objectives(self: @TState, offset: u32, limit: u32) -> ObjectivesResult;
+    fn settings_for_game(
+        self: @TState, game_address: ContractAddress, offset: u32, limit: u32,
+    ) -> SettingsResult;
+    fn objectives_for_game(
+        self: @TState, game_address: ContractAddress, offset: u32, limit: u32,
+    ) -> ObjectivesResult;
+    fn count_settings_for_game(self: @TState, game_address: ContractAddress) -> u32;
+    fn count_objectives_for_game(self: @TState, game_address: ContractAddress) -> u32;
 }
