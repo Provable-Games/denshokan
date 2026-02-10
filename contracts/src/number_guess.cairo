@@ -583,7 +583,7 @@ pub mod NumberGuess {
                 }
                 results.append(0);
                 i += 1;
-            };
+            }
             results
         }
 

@@ -608,7 +608,7 @@ pub mod TicTacToe {
                 }
                 results.append(0);
                 i += 1;
-            };
+            }
             results
         }
     }

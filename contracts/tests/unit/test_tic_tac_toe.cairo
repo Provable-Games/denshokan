@@ -1331,7 +1331,9 @@ fn test_objective_settings_id_returns_zero() {
     let objectives_details = IMinigameObjectivesDetailsDispatcher { contract_address: address };
 
     // Default objective should return settings_id = 0
-    assert!(objectives_details.objective_settings_id(1) == 0, "Objective 1 settings_id should be 0");
+    assert!(
+        objectives_details.objective_settings_id(1) == 0, "Objective 1 settings_id should be 0",
+    );
 }
 
 #[test]
