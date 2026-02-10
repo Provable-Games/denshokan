@@ -870,7 +870,11 @@ pub mod DenshokanViewer {
         }
 
         fn all_objectives(
-            self: @ContractState, game_address: ContractAddress, offset: u32, limit: u32,
+            self: @ContractState,
+            game_address: ContractAddress,
+            settings_id: u32,
+            offset: u32,
+            limit: u32,
         ) -> ObjectivesResult {
             let filter_by_game = game_address.is_non_zero();
 
@@ -884,14 +888,26 @@ pub mod DenshokanViewer {
                 let mut obj_index: u32 = 1;
 
                 while obj_index <= objectives_count {
-                    if total >= offset && (limit == 0 || entries.len() < limit) {
-                        let details = objectives_disp.objectives_details(obj_index);
-                        entries
-                            .append(
-                                ObjectiveEntry { game_address, objective_id: obj_index, details },
-                            );
+                    let obj_settings_id = objectives_disp.objective_settings_id(obj_index);
+                    let matches = settings_id == 0
+                        || obj_settings_id == settings_id
+                        || obj_settings_id == 0;
+
+                    if matches {
+                        if total >= offset && (limit == 0 || entries.len() < limit) {
+                            let details = objectives_disp.objectives_details(obj_index);
+                            entries
+                                .append(
+                                    ObjectiveEntry {
+                                        game_address,
+                                        objective_id: obj_index,
+                                        settings_id: obj_settings_id,
+                                        details,
+                                    },
+                                );
+                        }
+                        total += 1;
                     }
-                    total += 1;
                     obj_index += 1;
                 }
 
@@ -913,16 +929,26 @@ pub mod DenshokanViewer {
 
                     let mut obj_index: u32 = 1;
                     while obj_index <= objectives_count {
-                        if total >= offset && (limit == 0 || entries.len() < limit) {
-                            let details = objectives_disp.objectives_details(obj_index);
-                            entries
-                                .append(
-                                    ObjectiveEntry {
-                                        game_address: ga, objective_id: obj_index, details,
-                                    },
-                                );
+                        let obj_settings_id = objectives_disp.objective_settings_id(obj_index);
+                        let matches = settings_id == 0
+                            || obj_settings_id == settings_id
+                            || obj_settings_id == 0;
+
+                        if matches {
+                            if total >= offset && (limit == 0 || entries.len() < limit) {
+                                let details = objectives_disp.objectives_details(obj_index);
+                                entries
+                                    .append(
+                                        ObjectiveEntry {
+                                            game_address: ga,
+                                            objective_id: obj_index,
+                                            settings_id: obj_settings_id,
+                                            details,
+                                        },
+                                    );
+                            }
+                            total += 1;
                         }
-                        total += 1;
                         obj_index += 1;
                     }
 
