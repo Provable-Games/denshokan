@@ -515,7 +515,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
             case EVENT_SELECTORS.ObjectiveCreated: {
               const decoded = decodeObjectiveCreated(keys, data);
               logger.info(
-                `ObjectiveCreated: game=${decoded.gameAddress}, objective_id=${decoded.objectiveId}, settings_id=${decoded.settingsId}`
+                `ObjectiveCreated: game=${decoded.gameAddress}, objective_id=${decoded.objectiveId}, settings_id=${decoded.settingsId}, name=${decoded.name}`
               );
 
               await db.insert(schema.objectives).values({
@@ -524,6 +524,9 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                 settingsId: decoded.settingsId,
                 creatorAddress: decoded.creatorAddress,
                 objectiveData: decoded.objectiveData,
+                name: decoded.name,
+                description: decoded.description,
+                objectives: decoded.objectives,
                 blockNumber,
               }).onConflictDoUpdate({
                 target: [schema.objectives.gameAddress, schema.objectives.objectiveId],
@@ -531,6 +534,9 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                   settingsId: decoded.settingsId,
                   creatorAddress: decoded.creatorAddress,
                   objectiveData: decoded.objectiveData,
+                  name: decoded.name,
+                  description: decoded.description,
+                  objectives: decoded.objectives,
                   blockNumber,
                 },
               });
@@ -541,7 +547,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
             case EVENT_SELECTORS.SettingsCreated: {
               const decoded = decodeSettingsCreated(keys, data);
               logger.info(
-                `SettingsCreated: game=${decoded.gameAddress}, settings_id=${decoded.settingsId}`
+                `SettingsCreated: game=${decoded.gameAddress}, settings_id=${decoded.settingsId}, name=${decoded.name}`
               );
 
               await db.insert(schema.settings).values({
@@ -549,12 +555,18 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                 settingsId: decoded.settingsId,
                 creatorAddress: decoded.creatorAddress,
                 settingsData: decoded.settingsData,
+                name: decoded.name,
+                description: decoded.description,
+                settings: decoded.settings,
                 blockNumber,
               }).onConflictDoUpdate({
                 target: [schema.settings.gameAddress, schema.settings.settingsId],
                 set: {
                   creatorAddress: decoded.creatorAddress,
                   settingsData: decoded.settingsData,
+                  name: decoded.name,
+                  description: decoded.description,
+                  settings: decoded.settings,
                   blockNumber,
                 },
               });

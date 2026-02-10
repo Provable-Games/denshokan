@@ -5,7 +5,9 @@ interface Props {
     gameAddress: string;
     objectiveId: number;
     creatorAddress: string;
-    objectiveData: string | null;
+    name: string;
+    description: string;
+    objectives: Record<string, string>;
     blockNumber: string;
   };
   index: number;
@@ -21,24 +23,31 @@ export default function ObjectiveCard({ objective, index }: Props) {
     <Card>
       <CardContent>
         <Typography variant="h6" gutterBottom>
-          Objective #{index + 1}
+          {objective.name || `Objective #${index + 1}`}
         </Typography>
+        {objective.description && (
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            {objective.description}
+          </Typography>
+        )}
         <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
           Game: {truncateAddress(objective.gameAddress)}
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
           Creator: {truncateAddress(objective.creatorAddress)}
         </Typography>
-        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 1 }}>
           <Chip label={`ID: ${objective.objectiveId}`} size="small" variant="outlined" />
           <Chip label={`Block: ${objective.blockNumber}`} size="small" variant="outlined" />
         </Box>
-        {objective.objectiveData && (
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
-            {objective.objectiveData.length > 60
-              ? `${objective.objectiveData.slice(0, 60)}...`
-              : objective.objectiveData}
-          </Typography>
+        {Object.keys(objective.objectives).length > 0 && (
+          <Box sx={{ mt: 1 }}>
+            {Object.entries(objective.objectives).map(([key, value]) => (
+              <Typography key={key} variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                {key}: {value}
+              </Typography>
+            ))}
+          </Box>
         )}
       </CardContent>
     </Card>

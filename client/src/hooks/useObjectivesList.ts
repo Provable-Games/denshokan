@@ -1,28 +1,34 @@
-import { useAllObjectives } from "@provable-games/denshokan-sdk/react";
-import type { GlobalObjectiveEntry, GlobalObjectivesParams } from "@provable-games/denshokan-sdk";
+import { useObjectives } from "@provable-games/denshokan-sdk/react";
+import type { GameObjectiveDetails, ObjectivesParams } from "@provable-games/denshokan-sdk";
 
 export interface ClientObjective {
   gameAddress: string;
   objectiveId: number;
+  settingsId: number;
   creatorAddress: string;
-  objectiveData: string | null;
+  name: string;
+  description: string;
+  objectives: Record<string, string>;
   blockNumber: string;
   createdAt: string;
 }
 
-function adaptObjective(o: GlobalObjectiveEntry): ClientObjective {
+function adaptObjective(o: GameObjectiveDetails): ClientObjective {
   return {
     gameAddress: o.gameAddress,
-    objectiveId: o.objectiveId,
+    objectiveId: o.id,
+    settingsId: o.settingsId,
     creatorAddress: o.creatorAddress,
-    objectiveData: o.objectiveData,
+    name: o.name,
+    description: o.description,
+    objectives: o.objectives,
     blockNumber: o.blockNumber,
     createdAt: o.createdAt,
   };
 }
 
-export function useObjectivesList(params?: GlobalObjectivesParams) {
-  const { data, isLoading, refetch } = useAllObjectives(params);
+export function useObjectivesList(params?: ObjectivesParams) {
+  const { data, isLoading, refetch } = useObjectives(params);
 
   return {
     objectives: data?.data.map(adaptObjective) ?? [],

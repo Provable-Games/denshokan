@@ -1,6 +1,6 @@
 {
-  "id": "f1a2b3c4-d5e6-7890-abcd-123456789abc",
-  "prevId": "da2c7da1-28d8-45a2-adb4-13b5c3cec9b4",
+  "id": "231291a6-7ae1-4441-9379-724ced25e76f",
+  "prevId": "f1a2b3c4-d5e6-7890-abcd-123456789abc",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -447,6 +447,24 @@
           "primaryKey": false,
           "notNull": false
         },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "objectives": {
+          "name": "objectives",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
         "block_number": {
           "name": "block_number",
           "type": "bigint",
@@ -670,6 +688,24 @@
         "settings_data": {
           "name": "settings_data",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "settings": {
+          "name": "settings",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": false
         },

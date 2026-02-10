@@ -333,25 +333,37 @@ export interface TokenContextUpdateEvent {
 /**
  * ObjectiveCreated event
  * Keys: [selector, game_address, objective_id(u32), settings_id(u32)]
- * Data: [creator_address, objective_data(ByteArray)]
+ * Data: [creator_address, name(ByteArray), description(ByteArray), objectives(Span<GameObjective>)]
+ *
+ * GameObjective = { name: ByteArray, value: ByteArray }
  */
 export interface ObjectiveCreatedEvent {
   gameAddress: string;
   objectiveId: number;
   settingsId: number;
   creatorAddress: string;
+  name: string;
+  description: string;
+  objectives: Record<string, string>;
+  /** @deprecated Raw concatenated string kept for backward compatibility */
   objectiveData: string;
 }
 
 /**
  * SettingsCreated event
  * Keys: [selector, game_address, settings_id(u32)]
- * Data: [creator_address, settings_data(ByteArray)]
+ * Data: [creator_address, name(ByteArray), description(ByteArray), settings(Span<GameSetting>)]
+ *
+ * GameSetting = { name: ByteArray, value: ByteArray }
  */
 export interface SettingsCreatedEvent {
   gameAddress: string;
   settingsId: number;
   creatorAddress: string;
+  name: string;
+  description: string;
+  settings: Record<string, string>;
+  /** @deprecated Raw concatenated string kept for backward compatibility */
   settingsData: string;
 }
 
@@ -506,33 +518,77 @@ export function decodeTokenContextUpdate(keys: readonly string[], data: readonly
 }
 
 /**
+ * Decode a Span of {name: ByteArray, value: ByteArray} pairs from felt252 array.
+ * Format: [span_length, ...for each element: name(ByteArray), value(ByteArray)]
+ */
+export function decodeKeyValueSpan(data: readonly string[], startIndex: number): { value: Record<string, string>; consumed: number } {
+  const spanLen = Number(hexToBigInt(data[startIndex]));
+  let idx = startIndex + 1;
+  const result: Record<string, string> = {};
+
+  for (let i = 0; i < spanLen; i++) {
+    const nameResult = decodeByteArray(data, idx);
+    idx += nameResult.consumed;
+    const valueResult = decodeByteArray(data, idx);
+    idx += valueResult.consumed;
+    result[nameResult.value] = valueResult.value;
+  }
+
+  return { value: result, consumed: idx - startIndex };
+}
+
+/**
  * Decode ObjectiveCreated event
  * Keys: [selector, game_address, objective_id(u32), settings_id(u32)]
- * Data: [creator_address, objective_data(ByteArray)]
+ * Data: [creator_address, name(ByteArray), description(ByteArray), objectives(Span<GameObjective>)]
  */
 export function decodeObjectiveCreated(keys: readonly string[], data: readonly string[]): ObjectiveCreatedEvent {
-  const { value: objectiveData } = decodeByteArray(data, 1);
+  let idx = 1; // skip creator_address at data[0]
+
+  const nameResult = decodeByteArray(data, idx);
+  idx += nameResult.consumed;
+
+  const descriptionResult = decodeByteArray(data, idx);
+  idx += descriptionResult.consumed;
+
+  const objectivesResult = decodeKeyValueSpan(data, idx);
+
   return {
     gameAddress: feltToHex(keys[1]),
     objectiveId: Number(hexToBigInt(keys[2])),
     settingsId: Number(hexToBigInt(keys[3])),
     creatorAddress: feltToHex(data[0]),
-    objectiveData,
+    name: nameResult.value,
+    description: descriptionResult.value,
+    objectives: objectivesResult.value,
+    objectiveData: `${nameResult.value}: ${descriptionResult.value}`,
   };
 }
 
 /**
  * Decode SettingsCreated event
  * Keys: [selector, game_address, settings_id(u32)]
- * Data: [creator_address, settings_data(ByteArray)]
+ * Data: [creator_address, name(ByteArray), description(ByteArray), settings(Span<GameSetting>)]
  */
 export function decodeSettingsCreated(keys: readonly string[], data: readonly string[]): SettingsCreatedEvent {
-  const { value: settingsData } = decodeByteArray(data, 1);
+  let idx = 1; // skip creator_address at data[0]
+
+  const nameResult = decodeByteArray(data, idx);
+  idx += nameResult.consumed;
+
+  const descriptionResult = decodeByteArray(data, idx);
+  idx += descriptionResult.consumed;
+
+  const settingsResult = decodeKeyValueSpan(data, idx);
+
   return {
     gameAddress: feltToHex(keys[1]),
     settingsId: Number(hexToBigInt(keys[2])),
     creatorAddress: feltToHex(data[0]),
-    settingsData,
+    name: nameResult.value,
+    description: descriptionResult.value,
+    settings: settingsResult.value,
+    settingsData: `${nameResult.value}: ${descriptionResult.value}`,
   };
 }
 
