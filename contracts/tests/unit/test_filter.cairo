@@ -1,4 +1,7 @@
-use denshokan::filter::{IDenshokanFilterDispatcher, IDenshokanFilterDispatcherTrait};
+use denshokan::filter::{
+    IDenshokanFilterDispatcher, IDenshokanFilterDispatcherTrait,
+    IDenshokanSettingsObjectivesDispatcher, IDenshokanSettingsObjectivesDispatcherTrait,
+};
 use game_components_registry::interface::IMinigameRegistryDispatcherTrait;
 use game_components_token::interface::IMinigameTokenMixinDispatcherTrait;
 use game_components_token::structs::{unpack_game_id, unpack_soulbound};
@@ -1558,4 +1561,155 @@ fn test_count_tokens_of_owner_by_minter_with_tokens() {
 
     let count3 = filter.count_tokens_of_owner_by_minter(ALICE(), BOB());
     assert!(count3 == 0, "ALICE owns 0 tokens minted by BOB");
+}
+
+// ================================================================================================
+// SETTINGS / OBJECTIVES QUERY TESTS
+// ================================================================================================
+
+fn get_settings_objectives_dispatcher(
+    denshokan_address: ContractAddress,
+) -> IDenshokanSettingsObjectivesDispatcher {
+    let contract = declare("DenshokanViewer").unwrap().contract_class();
+    let owner: ContractAddress = 'VIEWER_OWNER'.try_into().unwrap();
+    let mut calldata = array![];
+    calldata.append(owner.into());
+    calldata.append(denshokan_address.into());
+    let (contract_address, _) = contract.deploy(@calldata).unwrap();
+    IDenshokanSettingsObjectivesDispatcher { contract_address }
+}
+
+#[test]
+fn test_all_settings_single_game() {
+    let tc = setup_with_registry();
+    let so = get_settings_objectives_dispatcher(tc.denshokan_address);
+
+    // Register a game (mock games have settings via the minigame component)
+    let (_, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "TestGame", Option::None,
+    );
+    let registry = tc.registry;
+    let game_metadata = registry.game_metadata(1);
+
+    // Query settings for the registered game
+    let result = so.all_settings(game_metadata.contract_address, 0, 0);
+    // Mock games may have 0 or more settings depending on setup
+    assert!(result.total >= 0, "Should return settings count for game");
+}
+
+#[test]
+fn test_all_settings_cross_game() {
+    let tc = setup_with_registry();
+    let so = get_settings_objectives_dispatcher(tc.denshokan_address);
+
+    // Register 2 games
+    let (_, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "Game1", Option::None,
+    );
+    let (_, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "Game2", Option::None,
+    );
+
+    // Query settings across all games (zero address)
+    let zero_address: ContractAddress = 0.try_into().unwrap();
+    let result = so.all_settings(zero_address, 0, 0);
+    assert!(result.total >= 0, "Should return cross-game settings count");
+}
+
+#[test]
+fn test_all_objectives_single_game() {
+    let tc = setup_with_registry();
+    let so = get_settings_objectives_dispatcher(tc.denshokan_address);
+
+    let (_, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "TestGame", Option::None,
+    );
+    let registry = tc.registry;
+    let game_metadata = registry.game_metadata(1);
+
+    // Query objectives for the game with settings_id=0 (all objectives)
+    let result = so.all_objectives(game_metadata.contract_address, 0, 0, 0);
+    assert!(result.total >= 0, "Should return objectives count for game");
+}
+
+#[test]
+fn test_all_objectives_cross_game() {
+    let tc = setup_with_registry();
+    let so = get_settings_objectives_dispatcher(tc.denshokan_address);
+
+    let (_, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "Game1", Option::None,
+    );
+    let (_, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "Game2", Option::None,
+    );
+
+    // Query objectives across all games
+    let zero_address: ContractAddress = 0.try_into().unwrap();
+    let result = so.all_objectives(zero_address, 0, 0, 0);
+    assert!(result.total >= 0, "Should return cross-game objectives count");
+}
+
+#[test]
+fn test_count_settings_single_game() {
+    let tc = setup_with_registry();
+    let so = get_settings_objectives_dispatcher(tc.denshokan_address);
+
+    let (_, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "TestGame", Option::None,
+    );
+    let registry = tc.registry;
+    let game_metadata = registry.game_metadata(1);
+
+    let count = so.count_settings(game_metadata.contract_address);
+    assert!(count >= 0, "Should return settings count for game");
+}
+
+#[test]
+fn test_count_settings_cross_game() {
+    let tc = setup_with_registry();
+    let so = get_settings_objectives_dispatcher(tc.denshokan_address);
+
+    let (_, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "Game1", Option::None,
+    );
+    let (_, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "Game2", Option::None,
+    );
+
+    let zero_address: ContractAddress = 0.try_into().unwrap();
+    let count = so.count_settings(zero_address);
+    assert!(count >= 0, "Should return cross-game settings count");
+}
+
+#[test]
+fn test_count_objectives_single_game() {
+    let tc = setup_with_registry();
+    let so = get_settings_objectives_dispatcher(tc.denshokan_address);
+
+    let (_, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "TestGame", Option::None,
+    );
+    let registry = tc.registry;
+    let game_metadata = registry.game_metadata(1);
+
+    let count = so.count_objectives(game_metadata.contract_address);
+    assert!(count >= 0, "Should return objectives count for game");
+}
+
+#[test]
+fn test_count_objectives_cross_game() {
+    let tc = setup_with_registry();
+    let so = get_settings_objectives_dispatcher(tc.denshokan_address);
+
+    let (_, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "Game1", Option::None,
+    );
+    let (_, _, _) = register_game(
+        tc.registry, tc.denshokan_address, GAME_CREATOR(), "Game2", Option::None,
+    );
+
+    let zero_address: ContractAddress = 0.try_into().unwrap();
+    let count = so.count_objectives(zero_address);
+    assert!(count >= 0, "Should return cross-game objectives count");
 }

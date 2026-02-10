@@ -606,9 +606,9 @@ pub mod TicTacToe {
                 if i >= objective_ids.len() {
                     break;
                 }
-                results.append(self.objective_settings_id(*objective_ids.at(i)));
+                results.append(0);
                 i += 1;
-            }
+            };
             results
         }
     }

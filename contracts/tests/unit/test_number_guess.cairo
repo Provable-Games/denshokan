@@ -1777,3 +1777,30 @@ fn test_objectives_count() {
     config.create_objective("Custom Obj", "Custom objective", 1, 1);
     assert!(objectives_details.objectives_count() == 4, "Objectives count should be 4");
 }
+
+// ==========================================================================
+// OBJECTIVE_SETTINGS_ID TESTS
+// ==========================================================================
+
+#[test]
+fn test_objective_settings_id_returns_zero() {
+    let (_, address) = setup_number_guess();
+    let objectives_details = IMinigameObjectivesDetailsDispatcher { contract_address: address };
+
+    // All default objectives should return settings_id = 0
+    assert!(objectives_details.objective_settings_id(1) == 0, "Objective 1 settings_id should be 0");
+    assert!(objectives_details.objective_settings_id(2) == 0, "Objective 2 settings_id should be 0");
+    assert!(objectives_details.objective_settings_id(3) == 0, "Objective 3 settings_id should be 0");
+}
+
+#[test]
+fn test_objective_settings_id_batch_returns_zeros() {
+    let (_, address) = setup_number_guess();
+    let objectives_details = IMinigameObjectivesDetailsDispatcher { contract_address: address };
+
+    let results = objectives_details.objective_settings_id_batch(array![1, 2, 3].span());
+    assert!(results.len() == 3, "Should return 3 results");
+    assert!(*results.at(0) == 0, "Objective 1 settings_id should be 0");
+    assert!(*results.at(1) == 0, "Objective 2 settings_id should be 0");
+    assert!(*results.at(2) == 0, "Objective 3 settings_id should be 0");
+}
