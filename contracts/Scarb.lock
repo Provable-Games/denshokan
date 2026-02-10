@@ -74,7 +74,7 @@ source = "git+https://github.com/EkuboProtocol/starknet-contracts.git?tag=v4.0.1
 [[package]]
 name = "game_components_interfaces"
 version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=next#96d172f24b11057493efe090b470285e07489679"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=next#24248a6b8f2585b4089baddd67d5fb859391d601"
 dependencies = [
  "ekubo",
 ]
@@ -82,7 +82,7 @@ dependencies = [
 [[package]]
 name = "game_components_leaderboard"
 version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=next#96d172f24b11057493efe090b470285e07489679"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=next#24248a6b8f2585b4089baddd67d5fb859391d601"
 dependencies = [
  "game_components_interfaces",
  "openzeppelin_introspection",
@@ -91,7 +91,7 @@ dependencies = [
 [[package]]
 name = "game_components_metagame"
 version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=next#96d172f24b11057493efe090b470285e07489679"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=next#24248a6b8f2585b4089baddd67d5fb859391d601"
 dependencies = [
  "game_components_interfaces",
  "game_components_minigame",
@@ -106,7 +106,7 @@ dependencies = [
 [[package]]
 name = "game_components_minigame"
 version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=next#96d172f24b11057493efe090b470285e07489679"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=next#24248a6b8f2585b4089baddd67d5fb859391d601"
 dependencies = [
  "game_components_interfaces",
  "game_components_metagame",
@@ -121,7 +121,7 @@ dependencies = [
 [[package]]
 name = "game_components_registry"
 version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=next#96d172f24b11057493efe090b470285e07489679"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=next#24248a6b8f2585b4089baddd67d5fb859391d601"
 dependencies = [
  "game_components_interfaces",
  "game_components_minigame",
@@ -132,7 +132,7 @@ dependencies = [
 [[package]]
 name = "game_components_test_common"
 version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=next#96d172f24b11057493efe090b470285e07489679"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=next#24248a6b8f2585b4089baddd67d5fb859391d601"
 dependencies = [
  "game_components_interfaces",
  "game_components_leaderboard",
@@ -152,7 +152,7 @@ dependencies = [
 [[package]]
 name = "game_components_testing"
 version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=next#96d172f24b11057493efe090b470285e07489679"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=next#24248a6b8f2585b4089baddd67d5fb859391d601"
 dependencies = [
  "snforge_std",
 ]
@@ -160,7 +160,7 @@ dependencies = [
 [[package]]
 name = "game_components_token"
 version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=next#96d172f24b11057493efe090b470285e07489679"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=next#24248a6b8f2585b4089baddd67d5fb859391d601"
 dependencies = [
  "game_components_interfaces",
  "game_components_leaderboard",
@@ -177,7 +177,7 @@ dependencies = [
 [[package]]
 name = "game_components_utils"
 version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=next#96d172f24b11057493efe090b470285e07489679"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=next#24248a6b8f2585b4089baddd67d5fb859391d601"
 dependencies = [
  "alexandria_encoding",
  "game_components_metagame",

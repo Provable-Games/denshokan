@@ -553,6 +553,10 @@ pub mod NumberGuess {
             GameObjectiveDetails { name, description, objectives: objectives.span() }
         }
 
+        fn objective_settings_id(self: @ContractState, objective_id: u32) -> u32 {
+            0
+        }
+
         fn objectives_details_batch(
             self: @ContractState, objective_ids: Span<u32>,
         ) -> Array<GameObjectiveDetails> {
@@ -563,6 +567,21 @@ pub mod NumberGuess {
                     break;
                 }
                 results.append(self.objectives_details(*objective_ids.at(i)));
+                i += 1;
+            }
+            results
+        }
+
+        fn objective_settings_id_batch(
+            self: @ContractState, objective_ids: Span<u32>,
+        ) -> Array<u32> {
+            let mut results = array![];
+            let mut i = 0;
+            loop {
+                if i >= objective_ids.len() {
+                    break;
+                }
+                results.append(self.objective_settings_id(*objective_ids.at(i)));
                 i += 1;
             }
             results
@@ -916,6 +935,7 @@ pub mod NumberGuess {
                 .objectives
                 .create_objective(
                     1,
+                    0,
                     GameObjectiveDetails {
                         name: "First Win",
                         description: "Win your first game",
@@ -927,6 +947,7 @@ pub mod NumberGuess {
                 .objectives
                 .create_objective(
                     2,
+                    0,
                     GameObjectiveDetails {
                         name: "Quick Thinker",
                         description: "Win a game in 5 or fewer guesses",
@@ -938,6 +959,7 @@ pub mod NumberGuess {
                 .objectives
                 .create_objective(
                     3,
+                    0,
                     GameObjectiveDetails {
                         name: "Lucky Guess",
                         description: "Win a game on your first guess",
