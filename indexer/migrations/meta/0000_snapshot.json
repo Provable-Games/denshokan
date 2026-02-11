@@ -1,5 +1,5 @@
 {
-  "id": "d9af343d-1b47-402b-8d63-92e1f641f3e2",
+  "id": "00000000-0000-0000-0000-000000000000",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -23,7 +23,7 @@
         },
         "token_id": {
           "name": "token_id",
-          "type": "bigint",
+          "type": "numeric",
           "primaryKey": false,
           "notNull": true
         },
@@ -229,14 +229,69 @@
           "primaryKey": false,
           "notNull": false
         },
-        "image_url": {
-          "name": "image_url",
+        "image": {
+          "name": "image",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "developer": {
+          "name": "developer",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "publisher": {
+          "name": "publisher",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "genre": {
+          "name": "genre",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "color": {
+          "name": "color",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "client_url": {
+          "name": "client_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "renderer_address": {
+          "name": "renderer_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "royalty_fraction": {
+          "name": "royalty_fraction",
+          "type": "numeric",
           "primaryKey": false,
           "notNull": false
         },
         "created_at": {
           "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "last_updated_block": {
+          "name": "last_updated_block",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_updated_at": {
+          "name": "last_updated_at",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": false,
@@ -373,6 +428,13 @@
           "primaryKey": false,
           "notNull": true
         },
+        "settings_id": {
+          "name": "settings_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
         "creator_address": {
           "name": "creator_address",
           "type": "text",
@@ -382,6 +444,24 @@
         "objective_data": {
           "name": "objective_data",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "objectives": {
+          "name": "objectives",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": false
         },
@@ -420,6 +500,27 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "objectives_settings_idx": {
+          "name": "objectives_settings_idx",
+          "columns": [
+            {
+              "expression": "game_address",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "settings_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {},
@@ -442,7 +543,7 @@
         },
         "token_id": {
           "name": "token_id",
-          "type": "bigint",
+          "type": "numeric",
           "primaryKey": false,
           "notNull": true
         },
@@ -590,6 +691,24 @@
           "primaryKey": false,
           "notNull": false
         },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "settings": {
+          "name": "settings",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
         "block_number": {
           "name": "block_number",
           "type": "bigint",
@@ -647,7 +766,7 @@
         },
         "token_id": {
           "name": "token_id",
-          "type": "bigint",
+          "type": "numeric",
           "primaryKey": false,
           "notNull": true
         },
@@ -752,11 +871,17 @@
           "method": "btree",
           "with": {}
         },
-        "token_events_type_idx": {
-          "name": "token_events_type_idx",
+        "token_events_type_time_idx": {
+          "name": "token_events_type_time_idx",
           "columns": [
             {
               "expression": "event_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "block_timestamp",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -803,7 +928,7 @@
         },
         "token_id": {
           "name": "token_id",
-          "type": "bigint",
+          "type": "numeric",
           "primaryKey": false,
           "notNull": true
         },
@@ -986,8 +1111,8 @@
           "method": "btree",
           "with": {}
         },
-        "tokens_game_active_idx": {
-          "name": "tokens_game_active_idx",
+        "tokens_game_over_updated_idx": {
+          "name": "tokens_game_over_updated_idx",
           "columns": [
             {
               "expression": "game_id",
@@ -1000,6 +1125,12 @@
               "isExpression": false,
               "asc": true,
               "nulls": "last"
+            },
+            {
+              "expression": "last_updated_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
             }
           ],
           "isUnique": false,
@@ -1007,11 +1138,17 @@
           "method": "btree",
           "with": {}
         },
-        "tokens_owner_idx": {
-          "name": "tokens_owner_idx",
+        "tokens_owner_updated_idx": {
+          "name": "tokens_owner_updated_idx",
           "columns": [
             {
               "expression": "owner_address",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "last_updated_at",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1033,21 +1170,6 @@
             },
             {
               "expression": "game_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "tokens_updated_idx": {
-          "name": "tokens_updated_idx",
-          "columns": [
-            {
-              "expression": "last_updated_at",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

@@ -5,7 +5,9 @@ interface Props {
     gameAddress: string;
     settingsId: number;
     creatorAddress: string;
-    settingsData: string | null;
+    name: string;
+    description: string;
+    settings: Record<string, string>;
     blockNumber: string;
   };
   index: number;
@@ -21,24 +23,31 @@ export default function SettingCard({ setting, index }: Props) {
     <Card>
       <CardContent>
         <Typography variant="h6" gutterBottom>
-          Settings #{index + 1}
+          {setting.name || `Settings #${index + 1}`}
         </Typography>
+        {setting.description && (
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            {setting.description}
+          </Typography>
+        )}
         <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
           Game: {truncateAddress(setting.gameAddress)}
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
           Creator: {truncateAddress(setting.creatorAddress)}
         </Typography>
-        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 1 }}>
           <Chip label={`ID: ${setting.settingsId}`} size="small" variant="outlined" />
           <Chip label={`Block: ${setting.blockNumber}`} size="small" variant="outlined" />
         </Box>
-        {setting.settingsData && (
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
-            {setting.settingsData.length > 60
-              ? `${setting.settingsData.slice(0, 60)}...`
-              : setting.settingsData}
-          </Typography>
+        {Object.keys(setting.settings).length > 0 && (
+          <Box sx={{ mt: 1 }}>
+            {Object.entries(setting.settings).map(([key, value]) => (
+              <Typography key={key} variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                {key}: {value}
+              </Typography>
+            ))}
+          </Box>
         )}
       </CardContent>
     </Card>

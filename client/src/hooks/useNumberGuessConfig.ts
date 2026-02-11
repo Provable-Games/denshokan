@@ -5,8 +5,8 @@ import {
   useSendTransaction,
 } from "@starknet-react/core";
 import {
-  useSettingsDetails,
-  useObjectivesDetails,
+  useSettings,
+  useObjectives,
   useSettingsCount,
   useObjectivesCount,
 } from "@provable-games/denshokan-sdk/react";
@@ -90,18 +90,17 @@ export function useNumberGuessConfig(
   const { data: objectivesCountData, refetch: refetchObjectivesCount } =
     useObjectivesCount(gameAddress || undefined);
 
-  console.log("Objectives Count Data:", objectivesCountData, gameAddress);
   const {
     data: settingsData,
     isLoading: isLoadingSettings,
     refetch: refetchSettings,
-  } = useSettingsDetails(gameAddress || undefined);
+  } = useSettings(gameAddress ? { gameAddress } : undefined);
 
   const {
     data: objectivesData,
     isLoading: isLoadingObjectives,
     refetch: refetchObjectives,
-  } = useObjectivesDetails(gameAddress || undefined);
+  } = useObjectives(gameAddress ? { gameAddress } : undefined);
 
   const refetch = useCallback(() => {
     refetchSettingsCount();
@@ -117,16 +116,9 @@ export function useNumberGuessConfig(
 
   // Transform SDK data to client format
   const settings: SettingsItem[] = (settingsData?.data ?? []).map((s) => {
-    // Parse settings array to extract min, max, max_attempts
-    let min = 1,
-      max = 100,
-      maxAttempts = 0;
-    for (const setting of s.settings) {
-      if (setting.name === "min") min = parseInt(setting.value) || 1;
-      if (setting.name === "max") max = parseInt(setting.value) || 100;
-      if (setting.name === "max_attempts")
-        maxAttempts = parseInt(setting.value) || 0;
-    }
+    const min = parseInt(s.settings["min"] ?? s.settings["Range Min"]) || 1;
+    const max = parseInt(s.settings["max"] ?? s.settings["Range Max"]) || 100;
+    const maxAttempts = parseInt(s.settings["max_attempts"] ?? s.settings["Max Attempts"]) || 0;
     return {
       id: s.id,
       name: s.name || `Settings #${s.id}`,
@@ -138,13 +130,8 @@ export function useNumberGuessConfig(
   });
 
   const objectives: ObjectiveItem[] = (objectivesData?.data ?? []).map((o) => {
-    // Parse objectives array to extract type and threshold
-    let objectiveType = 1,
-      threshold = 1;
-    for (const obj of o.objectives) {
-      if (obj.name === "type") objectiveType = parseInt(obj.value) || 1;
-      if (obj.name === "threshold") threshold = parseInt(obj.value) || 1;
-    }
+    const objectiveType = parseInt(o.objectives["type"]) || 1;
+    const threshold = parseInt(o.objectives["threshold"]) || 1;
     return {
       id: o.id,
       name: o.name || `Objective #${o.id}`,

@@ -1320,3 +1320,28 @@ fn test_mixed_wins_losses_same_token() {
     // Losses = played - won - drawn = 3 - 2 - 0 = 1
     assert!(ttt.games_drawn(token_id) == 0, "No draws");
 }
+
+// ==========================================================================
+// OBJECTIVE_SETTINGS_ID TESTS
+// ==========================================================================
+
+#[test]
+fn test_objective_settings_id_returns_zero() {
+    let (_, address) = setup_tic_tac_toe();
+    let objectives_details = IMinigameObjectivesDetailsDispatcher { contract_address: address };
+
+    // Default objective should return settings_id = 0
+    assert!(
+        objectives_details.objective_settings_id(1) == 0, "Objective 1 settings_id should be 0",
+    );
+}
+
+#[test]
+fn test_objective_settings_id_batch_returns_zeros() {
+    let (_, address) = setup_tic_tac_toe();
+    let objectives_details = IMinigameObjectivesDetailsDispatcher { contract_address: address };
+
+    let results = objectives_details.objective_settings_id_batch(array![1].span());
+    assert!(results.len() == 1, "Should return 1 result");
+    assert!(*results.at(0) == 0, "Objective 1 settings_id should be 0");
+}

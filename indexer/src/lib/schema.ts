@@ -29,6 +29,7 @@ import {
   index,
   uniqueIndex,
   numeric,
+  jsonb,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -279,6 +280,9 @@ export const objectives = pgTable(
     settingsId: integer("settings_id").notNull().default(0),
     creatorAddress: text("creator_address").notNull(),
     objectiveData: text("objective_data"),
+    name: text("name"),
+    description: text("description"),
+    objectives: jsonb("objectives").$type<Record<string, string>>(),
     blockNumber: bigint("block_number", { mode: "bigint" }).notNull(),
     createdAt: timestamp("created_at").defaultNow(),
   },
@@ -301,6 +305,9 @@ export const settings = pgTable(
     settingsId: integer("settings_id").notNull(),
     creatorAddress: text("creator_address").notNull(),
     settingsData: text("settings_data"),
+    name: text("name"),
+    description: text("description"),
+    settings: jsonb("settings").$type<Record<string, string>>(),
     blockNumber: bigint("block_number", { mode: "bigint" }).notNull(),
     createdAt: timestamp("created_at").defaultNow(),
   },

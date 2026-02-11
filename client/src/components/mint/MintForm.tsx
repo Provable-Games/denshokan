@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Box,
   Button,
@@ -12,11 +12,15 @@ import {
   Switch,
   FormControlLabel,
   Divider,
+  CircularProgress,
+  ListItemText,
 } from "@mui/material";
 import { motion, AnimatePresence } from "framer-motion";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { useGameList } from "../../hooks/useGameList";
 import { useController } from "../../contexts/ControllerContext";
+import { useSettingsList } from "../../hooks/useSettingsList";
+import { useObjectivesList } from "../../hooks/useObjectivesList";
 
 export interface MintFormParams {
   gameAddress: string;
@@ -39,17 +43,41 @@ export default function MintForm({ onMint, minting, error }: Props) {
   const { games } = useGameList();
   const { isConnected } = useController();
 
-  console.log("Games:", games);
-
   const [selectedGame, setSelectedGame] = useState<string>("");
   const [playerName, setPlayerName] = useState("");
   const [soulbound, setSoulbound] = useState(false);
-  const [settingsId, setSettingsId] = useState("");
+  const [settingsId, setSettingsId] = useState<string>("");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
-  const [objectiveId, setObjectiveId] = useState("");
+  const [objectiveId, setObjectiveId] = useState<string>("");
   const [clientUrl, setClientUrl] = useState("");
+
+  // Fetch settings for selected game
+  const { settings, loading: isLoadingSettings } = useSettingsList(
+    selectedGame ? { gameAddress: selectedGame } : undefined,
+  );
+
+  // Fetch objectives for selected game, filtered by settings ID
+  const { objectives, loading: isLoadingObjectives } = useObjectivesList(
+    selectedGame
+      ? {
+          gameAddress: selectedGame,
+          ...(settingsId ? { settingsId: Number(settingsId) } : {}),
+        }
+      : undefined,
+  );
+
+  // Reset settings and objective when game changes
+  useEffect(() => {
+    setSettingsId("");
+    setObjectiveId("");
+  }, [selectedGame]);
+
+  // Reset objective when settings changes
+  useEffect(() => {
+    setObjectiveId("");
+  }, [settingsId]);
 
   const handleSubmit = () => {
     if (!selectedGame) return;
@@ -112,15 +140,32 @@ export default function MintForm({ onMint, minting, error }: Props) {
         </Typography>
       </Box>
 
-      <TextField
-        fullWidth
-        label="Settings ID"
-        type="number"
-        placeholder="Optional"
-        value={settingsId}
-        onChange={(e) => setSettingsId(e.target.value)}
-        sx={{ mb: 2 }}
-      />
+      <FormControl fullWidth sx={{ mb: 2 }}>
+        <InputLabel>Settings</InputLabel>
+        <Select
+          value={settingsId}
+          label="Settings"
+          onChange={(e) => setSettingsId(e.target.value as string)}
+          disabled={!selectedGame || isLoadingSettings}
+          endAdornment={
+            isLoadingSettings ? (
+              <CircularProgress size={20} sx={{ mr: 2 }} />
+            ) : undefined
+          }
+        >
+          <MenuItem value="">
+            <em>None</em>
+          </MenuItem>
+          {settings.map((s) => (
+            <MenuItem key={s.settingsId} value={String(s.settingsId)}>
+              <ListItemText
+                primary={s.name || `Settings #${s.settingsId}`}
+                secondary={s.description || undefined}
+              />
+            </MenuItem>
+          ))}
+        </Select>
+      </FormControl>
 
       <Divider sx={{ my: 2 }} />
 
@@ -174,14 +219,32 @@ export default function MintForm({ onMint, minting, error }: Props) {
                 value={endTime}
                 onChange={(e) => setEndTime(e.target.value)}
               />
-              <TextField
-                fullWidth
-                label="Objective ID"
-                type="number"
-                placeholder="Optional"
-                value={objectiveId}
-                onChange={(e) => setObjectiveId(e.target.value)}
-              />
+              <FormControl fullWidth>
+                <InputLabel>Objective</InputLabel>
+                <Select
+                  value={objectiveId}
+                  label="Objective"
+                  onChange={(e) => setObjectiveId(e.target.value as string)}
+                  disabled={!selectedGame || isLoadingObjectives}
+                  endAdornment={
+                    isLoadingObjectives ? (
+                      <CircularProgress size={20} sx={{ mr: 2 }} />
+                    ) : undefined
+                  }
+                >
+                  <MenuItem value="">
+                    <em>None</em>
+                  </MenuItem>
+                  {objectives.map((o) => (
+                    <MenuItem key={o.objectiveId} value={String(o.objectiveId)}>
+                      <ListItemText
+                        primary={o.name || `Objective #${o.objectiveId}`}
+                        secondary={o.description || undefined}
+                      />
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
               <TextField
                 fullWidth
                 label="Client URL"

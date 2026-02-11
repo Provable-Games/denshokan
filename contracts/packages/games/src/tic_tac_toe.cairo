@@ -578,6 +578,10 @@ pub mod TicTacToe {
             GameObjectiveDetails { name, description, objectives: objectives.span() }
         }
 
+        fn objective_settings_id(self: @ContractState, objective_id: u32) -> u32 {
+            0
+        }
+
         fn objectives_details_batch(
             self: @ContractState, objective_ids: Span<u32>,
         ) -> Array<GameObjectiveDetails> {
@@ -588,6 +592,21 @@ pub mod TicTacToe {
                     break;
                 }
                 results.append(self.objectives_details(*objective_ids.at(i)));
+                i += 1;
+            }
+            results
+        }
+
+        fn objective_settings_id_batch(
+            self: @ContractState, objective_ids: Span<u32>,
+        ) -> Array<u32> {
+            let mut results = array![];
+            let mut i = 0;
+            loop {
+                if i >= objective_ids.len() {
+                    break;
+                }
+                results.append(0);
                 i += 1;
             }
             results
@@ -758,6 +777,7 @@ pub mod TicTacToe {
                 .objectives
                 .create_objective(
                     1,
+                    0,
                     GameObjectiveDetails {
                         name: "Win 3 Games",
                         description: "Win 3 games against the AI",

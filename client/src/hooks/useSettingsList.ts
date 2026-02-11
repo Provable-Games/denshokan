@@ -1,28 +1,32 @@
-import { useAllSettings } from "@provable-games/denshokan-sdk/react";
-import type { GlobalSettingEntry, GlobalSettingsParams } from "@provable-games/denshokan-sdk";
+import { useSettings } from "@provable-games/denshokan-sdk/react";
+import type { GameSettingDetails, SettingsParams } from "@provable-games/denshokan-sdk";
 
 export interface ClientSetting {
   gameAddress: string;
   settingsId: number;
   creatorAddress: string;
-  settingsData: string | null;
+  name: string;
+  description: string;
+  settings: Record<string, string>;
   blockNumber: string;
   createdAt: string;
 }
 
-function adaptSetting(s: GlobalSettingEntry): ClientSetting {
+function adaptSetting(s: GameSettingDetails): ClientSetting {
   return {
     gameAddress: s.gameAddress,
-    settingsId: s.settingsId,
+    settingsId: s.id,
     creatorAddress: s.creatorAddress,
-    settingsData: s.settingsData,
+    name: s.name,
+    description: s.description,
+    settings: s.settings,
     blockNumber: s.blockNumber,
     createdAt: s.createdAt,
   };
 }
 
-export function useSettingsList(params?: GlobalSettingsParams) {
-  const { data, isLoading, refetch } = useAllSettings(params);
+export function useSettingsList(params?: SettingsParams) {
+  const { data, isLoading, refetch } = useSettings(params);
 
   return {
     settings: data?.data.map(adaptSetting) ?? [],
