@@ -4,6 +4,10 @@
 // Now includes OwnableComponent and UpgradeableComponent for access control and upgradability.
 
 use core::num::traits::Zero;
+use denshokan_interfaces::filter::{
+    FilterResult, IDenshokanFilter, IDenshokanSettingsObjectives, ObjectiveEntry, ObjectivesResult,
+    SettingsEntry, SettingsResult, TokenFullState,
+};
 use game_components_minigame::extensions::objectives::interface::{
     IMinigameObjectivesDetailsDispatcher, IMinigameObjectivesDetailsDispatcherTrait,
 };
@@ -29,10 +33,6 @@ use openzeppelin_interfaces::upgrades::IUpgradeable;
 use openzeppelin_upgrades::UpgradeableComponent;
 use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
 use starknet::{ClassHash, ContractAddress};
-use crate::filter::{
-    FilterResult, IDenshokanFilter, IDenshokanSettingsObjectives, ObjectiveEntry, ObjectivesResult,
-    SettingsEntry, SettingsResult, TokenFullState,
-};
 
 // ================================================================================================
 // CONTRACT

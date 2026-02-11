@@ -3,11 +3,10 @@ use game_components_token::interface::IMinigameTokenMixinDispatcherTrait;
 use openzeppelin_interfaces::erc2981::IERC2981DispatcherTrait;
 use openzeppelin_interfaces::erc721::{IERC721Dispatcher, IERC721DispatcherTrait};
 use snforge_std::{CheatSpan, cheat_caller_address};
-use crate::helpers::constants::{
+use crate::tests::setup::{
     ALICE, BOB, CHARLIE, CUSTOM_ROYALTY_FRACTION, DEFAULT_ROYALTY_FRACTION, GAME_CREATOR,
-    SALE_PRICE, SMALL_SALE_PRICE,
+    SALE_PRICE, SMALL_SALE_PRICE, register_game, setup_with_registry,
 };
-use crate::helpers::setup::{register_game, setup_with_registry};
 
 // ================================================================================================
 // ROYALTY TESTS - MULTI-GAME SCENARIO

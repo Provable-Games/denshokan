@@ -1,7 +1,5 @@
-use denshokan::number_guess::{
-    INumberGuessConfigDispatcher, INumberGuessConfigDispatcherTrait, INumberGuessDispatcher,
-    INumberGuessDispatcherTrait, INumberGuessInitDispatcher, INumberGuessInitDispatcherTrait,
-};
+use denshokan_testing::helpers::constants::GAME_CREATOR;
+use denshokan_testing::helpers::setup::{deploy_denshokan, deploy_minigame_registry};
 use game_components_minigame::extensions::objectives::interface::{
     IMinigameObjectivesDetailsDispatcher, IMinigameObjectivesDetailsDispatcherTrait,
     IMinigameObjectivesDispatcher, IMinigameObjectivesDispatcherTrait,
@@ -16,8 +14,10 @@ use game_components_minigame::interface::{
 };
 use snforge_std::{ContractClassTrait, DeclareResultTrait, declare};
 use starknet::ContractAddress;
-use crate::helpers::constants::GAME_CREATOR;
-use crate::helpers::setup::{deploy_denshokan, deploy_minigame_registry};
+use crate::number_guess::{
+    INumberGuessConfigDispatcher, INumberGuessConfigDispatcherTrait, INumberGuessDispatcher,
+    INumberGuessDispatcherTrait, INumberGuessInitDispatcher, INumberGuessInitDispatcherTrait,
+};
 
 // ==========================================================================
 // HELPERS

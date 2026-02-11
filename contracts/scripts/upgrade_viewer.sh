@@ -88,7 +88,7 @@ cd "$CONTRACTS_DIR"
 scarb build
 
 # Verify contract artifact exists
-if [ ! -f "$CONTRACTS_DIR/target/dev/denshokan_DenshokanViewer.contract_class.json" ]; then
+if [ ! -f "$CONTRACTS_DIR/target/dev/denshokan_viewer_DenshokanViewer.contract_class.json" ]; then
     print_error "DenshokanViewer contract artifact not found"
     exit 1
 fi

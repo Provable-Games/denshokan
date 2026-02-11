@@ -1,13 +1,21 @@
-[package]
-name = "denshokan"
-version = "0.1.0"
+[workspace]
+members = [
+    "packages/interfaces",
+    "packages/token",
+    "packages/viewer",
+    "packages/registry",
+    "packages/games",
+    "packages/testing",
+]
+
+[workspace.package]
 edition = "2024_07"
 cairo-version = "2.15.0"
 authors = ["Provable Games"]
 license = "MIT"
 repository = "https://github.com/Provable-Games/denshokan"
 
-[dependencies]
+[workspace.dependencies]
 starknet = "2.15.1"
 game_components_registry = { git = "https://github.com/Provable-Games/game-components.git", branch = "next" }
 game_components_token = { git = "https://github.com/Provable-Games/game-components.git", branch = "next" }
@@ -20,39 +28,41 @@ openzeppelin_introspection = { git = "https://github.com/OpenZeppelin/cairo-cont
 openzeppelin_interfaces = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0" }
 openzeppelin_access = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0" }
 openzeppelin_upgrades = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0" }
-
-[dev-dependencies]
 snforge_std = { git = "https://github.com/foundry-rs/starknet-foundry", tag = "v0.55.0" }
+denshokan_interfaces = { path = "packages/interfaces" }
+denshokan_token = { path = "packages/token" }
+denshokan_viewer = { path = "packages/viewer" }
+denshokan_registry = { path = "packages/registry" }
+denshokan_games = { path = "packages/games" }
+denshokan_testing = { path = "packages/testing" }
 
-[tool.fmt]
+[workspace.tool.fmt]
 sort-module-level-items = true
 
-[[target.starknet-contract]]
-sierra = true
-casm = true
-build-external-contracts = [
-    "game_components_test_common::mocks::minigame_starknet_mock::minigame_starknet_mock",
-]
+[workspace.tool.snforge]
+exit_first = false
+fuzzer_runs = 256
+
+[[workspace.tool.snforge.fork]]
+name = "MAINNET_LATEST"
+url = "https://api.cartridge.gg/x/starknet/mainnet/rpc/v0_10"
+block_id.tag = "latest"
+
+[[workspace.tool.snforge.fork]]
+name = "SEPOLIA_LATEST"
+url = "https://api.cartridge.gg/x/starknet/sepolia/rpc/v0_10"
+block_id.tag = "latest"
+
+[package]
+name = "denshokan"
+version = "0.1.0"
+edition.workspace = true
+cairo-version.workspace = true
 
 [lib]
 name = "denshokan"
-
-[[target.starknet-contract]]
-name = "denshokan_tests"
-sierra = true
-casm = true
-test = true
-build-external-contracts = [
-    "denshokan::denshokan::Denshokan",
-    "denshokan::denshokan_viewer::DenshokanViewer",
-    "denshokan::minigame_registry::MinigameRegistry",
-    "game_components_test_common::mocks::minigame_starknet_mock::minigame_starknet_mock",
-]
 
 [profile.dev.cairo]
 unstable-add-statements-functions-debug-info = true
 unstable-add-statements-code-locations-debug-info = true
 inlining-strategy = "avoid"
-
-[tool.snforge]
-exit_first = false

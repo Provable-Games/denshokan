@@ -8,8 +8,9 @@ use openzeppelin_interfaces::erc721::{
 };
 use snforge_std::{CheatSpan, cheat_caller_address};
 use starknet::ContractAddress;
-use crate::helpers::constants::{ALICE, BOB, GAME_CREATOR};
-use crate::helpers::setup::{TestContracts, register_game, setup_with_registry};
+use crate::tests::setup::{
+    ALICE, BOB, GAME_CREATOR, TestContracts, register_game, setup_with_registry,
+};
 
 // ================================================================================================
 // HELPERS
