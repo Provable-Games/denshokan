@@ -6,14 +6,25 @@ Game token contracts and indexer for Starknet. Denshokan (伝承館) means "Hall
 
 ```
 denshokan/
-├── contracts/         # Cairo smart contracts (Scarb 2.15.0, Cairo 2.15.0)
-├── indexer/           # Apibara event indexer (TypeScript)
-├── api/               # Hono REST API + WebSocket server
-├── client/            # React frontend (MUI 7, Cartridge Controller)
-├── docker-compose.yml # PostgreSQL, indexer, API services
-├── package.json       # npm workspaces root (indexer, api)
-├── railway.toml       # Railway deployment config
-└── render.yaml        # Render deployment config
+├── contracts/              # Cairo smart contracts (Scarb workspace)
+│   ├── Scarb.toml          # Workspace config (Cairo 2.15.0, Scarb 2.15.0)
+│   ├── snfoundry.toml      # sncast profiles only
+│   ├── packages/
+│   │   ├── interfaces/     # denshokan_interfaces - Filter traits & structs
+│   │   ├── token/          # denshokan_token - Main ERC721 token contract
+│   │   ├── viewer/         # denshokan_viewer - Filter/query API contract
+│   │   ├── registry/       # denshokan_registry - Game registration contract
+│   │   ├── games/          # denshokan_games - Number guess & tic-tac-toe
+│   │   └── testing/        # denshokan_testing - Shared test helpers
+│   ├── scripts/            # Deployment scripts
+│   └── deployments/        # Deployment artifacts
+├── indexer/                # Apibara event indexer (TypeScript)
+├── api/                    # Hono REST API + WebSocket server
+├── client/                 # React frontend (MUI 7, Cartridge Controller)
+├── docker-compose.yml      # PostgreSQL, indexer, API services
+├── package.json            # npm workspaces root (indexer, api)
+├── railway.toml            # Railway deployment config
+└── render.yaml             # Render deployment config
 ```
 
 ## Quick Commands
@@ -37,11 +48,16 @@ npm run db:generate              # Generate migrations from schema
 
 ```bash
 cd contracts
-scarb build                     # Compile contracts
-snforge test                    # Run all tests
-snforge test test_name          # Run specific test
-snforge test -x                 # Stop on first failure
-scarb fmt -w                    # Format code
+scarb build                          # Compile all packages
+snforge test                         # Run all tests (all packages)
+snforge test -p denshokan_token      # Run token package tests
+snforge test -p denshokan_viewer     # Run viewer package tests
+snforge test -p denshokan_registry   # Run registry package tests
+snforge test -p denshokan_games      # Run games package tests
+snforge test test_name               # Run specific test
+snforge test -x                      # Stop on first failure
+scarb fmt --check --workspace        # Check formatting (all packages)
+scarb fmt -w                         # Format code
 ```
 
 ### Indexer
@@ -90,13 +106,13 @@ The token contract uses the **game-components** library for modular composition:
 - **ContextComponent** - Mutable token context data
 - **RendererComponent** - Custom token URI rendering
 
-**Key Files:**
-- `src/denshokan.cairo` - Main token contract (ERC721 + game components)
-- `src/denshokan_viewer.cairo` - Filter/query API contract
-- `src/filter.cairo` - Token filtering utilities
-- `src/minigame_registry.cairo` - Game registration contract
-- `src/number_guess.cairo` - Number guessing minigame
-- `src/tic_tac_toe.cairo` - Tic-tac-toe minigame
+**Workspace Packages:**
+- `packages/interfaces/` - `denshokan_interfaces` - Filter traits, structs (IDenshokanFilter, IDenshokanSettingsObjectives)
+- `packages/token/` - `denshokan_token` - Main ERC721 token contract (denshokan.cairo)
+- `packages/viewer/` - `denshokan_viewer` - Filter/query API contract (denshokan_viewer.cairo)
+- `packages/registry/` - `denshokan_registry` - Game registration contract (minigame_registry.cairo)
+- `packages/games/` - `denshokan_games` - Minigames (number_guess.cairo, tic_tac_toe.cairo)
+- `packages/testing/` - `denshokan_testing` - Shared test helpers (constants, deploy utilities)
 
 **Deployment Scripts (`scripts/`):**
 - `deploy_denshokan.sh` - Deploy Denshokan token + registry + viewer
@@ -225,38 +241,36 @@ openzeppelin_upgrades = { git = "...", tag = "v3.0.0" }
 
 ## Testing
 
-### Unit Tests (`contracts/tests/unit/`)
+Tests are co-located with each package under `packages/<name>/src/tests/`.
 
-Test individual contract functions in isolation:
-
-```bash
-snforge test unit::              # Run all unit tests
-snforge test test_mint           # Run specific test
-```
-
-**Test files:** test_erc721_hooks, test_filter, test_number_guess, test_royalties, test_tic_tac_toe, test_token_uri
-
-### Integration Tests (`contracts/tests/integration/`)
-
-Test contract interactions, often using fork testing:
+### Per-Package Testing
 
 ```bash
-snforge test integration::       # Run integration tests
+cd contracts
+snforge test -p denshokan_token      # Token: test_denshokan, test_erc721_hooks, test_royalties, test_token_uri, test_full_workflow
+snforge test -p denshokan_viewer     # Viewer: test_filter
+snforge test -p denshokan_registry   # Registry: test_minigame_registry
+snforge test -p denshokan_games      # Games: test_number_guess, test_tic_tac_toe
 ```
 
-**Test files:** test_full_workflow
+### Shared Test Helpers (`denshokan_testing`)
+
+The `denshokan_testing` package provides shared constants and deploy utilities used by all test packages. It does NOT depend on any `denshokan_*` contract package (uses string-based `declare()` calls).
+
+- `helpers::constants` - OWNER, ALICE, BOB, CHARLIE, GAME_CREATOR, royalty constants
+- `helpers::setup` - TestContracts, deploy_minigame_registry, deploy_mock_game, deploy_denshokan, setup_with_registry
 
 ### Fork Testing
 
-Configured in `snfoundry.toml`:
+Configured in workspace `Scarb.toml`:
 
 ```toml
-[[tool.snforge.fork]]
+[[workspace.tool.snforge.fork]]
 name = "MAINNET_LATEST"
 url = "https://api.cartridge.gg/x/starknet/mainnet/rpc/v0_10"
 block_id.tag = "latest"
 
-[[tool.snforge.fork]]
+[[workspace.tool.snforge.fork]]
 name = "SEPOLIA_LATEST"
 url = "https://api.cartridge.gg/x/starknet/sepolia/rpc/v0_10"
 block_id.tag = "latest"

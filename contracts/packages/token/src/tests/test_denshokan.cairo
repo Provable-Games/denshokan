@@ -8,16 +8,16 @@ use openzeppelin_interfaces::erc721::{
 use openzeppelin_interfaces::introspection::{ISRC5Dispatcher, ISRC5DispatcherTrait};
 use snforge_std::{CheatSpan, cheat_caller_address};
 use starknet::ContractAddress;
-use crate::helpers::constants::{ALICE, BOB, CHARLIE, GAME_CREATOR, SALE_PRICE};
-use crate::helpers::setup::{register_game, setup_with_registry};
+use crate::tests::setup::{
+    ALICE, BOB, CHARLIE, GAME_CREATOR, SALE_PRICE, TestContracts, register_game,
+    setup_with_registry,
+};
 
 // ================================================================================================
 // HELPER: mint a token for a registered game
 // ================================================================================================
 
-fn mint_token(
-    tc: @crate::helpers::setup::TestContracts, game_id: u64, player: ContractAddress,
-) -> felt252 {
+fn mint_token(tc: @TestContracts, game_id: u64, player: ContractAddress) -> felt252 {
     let game_metadata = (*tc.registry).game_metadata(game_id);
 
     cheat_caller_address(*tc.denshokan_address, player, CheatSpan::TargetCalls(1));

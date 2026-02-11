@@ -110,17 +110,17 @@ cd "$CONTRACTS_DIR"
 scarb build
 
 # Verify contract artifacts exist
-if [ ! -f "$CONTRACTS_DIR/target/dev/denshokan_Denshokan.contract_class.json" ]; then
+if [ ! -f "$CONTRACTS_DIR/target/dev/denshokan_token_Denshokan.contract_class.json" ]; then
     print_error "Denshokan contract artifact not found"
     exit 1
 fi
 
-if [ ! -f "$CONTRACTS_DIR/target/dev/denshokan_MinigameRegistry.contract_class.json" ]; then
+if [ ! -f "$CONTRACTS_DIR/target/dev/denshokan_registry_MinigameRegistry.contract_class.json" ]; then
     print_error "MinigameRegistry contract artifact not found"
     exit 1
 fi
 
-if [ ! -f "$CONTRACTS_DIR/target/dev/denshokan_DenshokanViewer.contract_class.json" ]; then
+if [ ! -f "$CONTRACTS_DIR/target/dev/denshokan_viewer_DenshokanViewer.contract_class.json" ]; then
     print_error "DenshokanViewer contract artifact not found"
     exit 1
 fi

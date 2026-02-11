@@ -3,8 +3,10 @@ use game_components_token::interface::IMinigameTokenMixinDispatcherTrait;
 use openzeppelin_interfaces::erc2981::IERC2981DispatcherTrait;
 use openzeppelin_interfaces::erc721::{IERC721Dispatcher, IERC721DispatcherTrait};
 use snforge_std::{CheatSpan, cheat_caller_address};
-use crate::helpers::constants::{ALICE, BOB, CUSTOM_ROYALTY_FRACTION, GAME_CREATOR, SALE_PRICE};
-use crate::helpers::setup::{register_game, setup_with_registry};
+use crate::tests::setup::{
+    ALICE, BOB, CUSTOM_ROYALTY_FRACTION, GAME_CREATOR, SALE_PRICE, register_game,
+    setup_with_registry,
+};
 
 // ================================================================================================
 // FULL WORKFLOW INTEGRATION TESTS

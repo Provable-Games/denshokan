@@ -51,7 +51,66 @@ dependencies = [
 [[package]]
 name = "denshokan"
 version = "0.1.0"
+
+[[package]]
+name = "denshokan_games"
+version = "0.1.0"
 dependencies = [
+ "denshokan_registry",
+ "denshokan_testing",
+ "denshokan_token",
+ "game_components_metagame",
+ "game_components_minigame",
+ "game_components_registry",
+ "game_components_token",
+ "game_components_utils",
+ "openzeppelin_interfaces",
+ "openzeppelin_introspection",
+ "openzeppelin_token",
+ "snforge_std",
+]
+
+[[package]]
+name = "denshokan_interfaces"
+version = "0.1.0"
+dependencies = [
+ "game_components_minigame",
+ "game_components_token",
+]
+
+[[package]]
+name = "denshokan_registry"
+version = "0.1.0"
+dependencies = [
+ "denshokan_testing",
+ "denshokan_token",
+ "game_components_registry",
+ "game_components_test_common",
+ "openzeppelin_interfaces",
+ "openzeppelin_introspection",
+ "openzeppelin_token",
+ "snforge_std",
+]
+
+[[package]]
+name = "denshokan_testing"
+version = "0.1.0"
+dependencies = [
+ "game_components_minigame",
+ "game_components_registry",
+ "game_components_test_common",
+ "game_components_token",
+ "openzeppelin_interfaces",
+ "snforge_std",
+]
+
+[[package]]
+name = "denshokan_token"
+version = "0.1.0"
+dependencies = [
+ "denshokan_interfaces",
+ "denshokan_registry",
+ "denshokan_testing",
  "game_components_metagame",
  "game_components_minigame",
  "game_components_registry",
@@ -62,6 +121,23 @@ dependencies = [
  "openzeppelin_interfaces",
  "openzeppelin_introspection",
  "openzeppelin_token",
+ "snforge_std",
+]
+
+[[package]]
+name = "denshokan_viewer"
+version = "0.1.0"
+dependencies = [
+ "denshokan_interfaces",
+ "denshokan_registry",
+ "denshokan_testing",
+ "denshokan_token",
+ "game_components_minigame",
+ "game_components_registry",
+ "game_components_test_common",
+ "game_components_token",
+ "openzeppelin_access",
+ "openzeppelin_interfaces",
  "openzeppelin_upgrades",
  "snforge_std",
 ]

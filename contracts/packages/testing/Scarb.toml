@@ -1,0 +1,17 @@
+[package]
+name = "denshokan_testing"
+version = "0.1.0"
+edition.workspace = true
+cairo-version.workspace = true
+
+[dependencies]
+starknet.workspace = true
+snforge_std.workspace = true
+game_components_minigame.workspace = true
+game_components_registry.workspace = true
+game_components_token.workspace = true
+game_components_test_common.workspace = true
+openzeppelin_interfaces.workspace = true
+
+[lib]
+name = "denshokan_testing"

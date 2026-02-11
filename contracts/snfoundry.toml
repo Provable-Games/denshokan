@@ -1,18 +1,8 @@
 # Starknet Foundry Configuration
 # https://foundry-rs.github.io/starknet-foundry/appendix/snfoundry-toml.html
-
-[snforge]
-fuzzer_runs = 256
-
-[[tool.snforge.fork]]
-name = "MAINNET_LATEST"
-url = "https://api.cartridge.gg/x/starknet/mainnet/rpc/v0_10"
-block_id.tag = "latest"
-
-[[tool.snforge.fork]]
-name = "SEPOLIA_LATEST"
-url = "https://api.cartridge.gg/x/starknet/sepolia/rpc/v0_10"
-block_id.tag = "latest"
+#
+# NOTE: snforge config (fuzzer_runs, fork) has moved to [workspace.tool.snforge] in Scarb.toml.
+# This file only contains sncast profiles.
 
 # Default profile for local development
 [sncast.default]

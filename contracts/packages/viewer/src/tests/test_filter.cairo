@@ -1,7 +1,9 @@
-use denshokan::filter::{
+use denshokan_interfaces::filter::{
     IDenshokanFilterDispatcher, IDenshokanFilterDispatcherTrait,
     IDenshokanSettingsObjectivesDispatcher, IDenshokanSettingsObjectivesDispatcherTrait,
 };
+use denshokan_testing::helpers::constants::{ALICE, BOB, CHARLIE, GAME_CREATOR};
+use denshokan_testing::helpers::setup::{register_game, setup_with_registry};
 use game_components_registry::interface::IMinigameRegistryDispatcherTrait;
 use game_components_token::interface::IMinigameTokenMixinDispatcherTrait;
 use game_components_token::structs::{unpack_game_id, unpack_soulbound};
@@ -12,8 +14,6 @@ use snforge_std::{
     declare,
 };
 use starknet::ContractAddress;
-use crate::helpers::constants::{ALICE, BOB, CHARLIE, GAME_CREATOR};
-use crate::helpers::setup::{register_game, setup_with_registry};
 
 // ================================================================================================
 // HELPER FUNCTIONS
@@ -32,7 +32,7 @@ fn get_filter_dispatcher(denshokan_address: ContractAddress) -> IDenshokanFilter
 /// Helper to mint a token with specific parameters for testing
 /// Uses salt to avoid token ID collisions
 fn mint_token_with_salt(
-    tc: @crate::helpers::setup::TestContracts,
+    tc: @denshokan_testing::helpers::setup::TestContracts,
     game_address: ContractAddress,
     to: ContractAddress,
     is_soulbound: bool,

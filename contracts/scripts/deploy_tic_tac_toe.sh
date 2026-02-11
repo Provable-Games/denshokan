@@ -64,7 +64,7 @@ print_info "Building contracts..."
 cd "$CONTRACTS_DIR"
 scarb build
 
-ARTIFACT="$CONTRACTS_DIR/target/dev/denshokan_TicTacToe.contract_class.json"
+ARTIFACT="$CONTRACTS_DIR/target/dev/denshokan_games_TicTacToe.contract_class.json"
 if [ ! -f "$ARTIFACT" ]; then
     print_error "TicTacToe contract artifact not found at $ARTIFACT"
     echo "Available artifacts:"

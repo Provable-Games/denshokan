@@ -11,9 +11,40 @@ on:
       - main
 
 jobs:
-  contracts:
-    name: lint and test contracts
+  lint:
+    name: lint contracts
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract scarb version
+        run: |
+          SCARB_VERSION=$(grep '^scarb ' contracts/.tool-versions | awk '{print $2}')
+          echo "SCARB_VERSION=$SCARB_VERSION" >> "$GITHUB_ENV"
+
+      - uses: software-mansion/setup-scarb@v1
+        with:
+          scarb-version: ${{ env.SCARB_VERSION }}
+
+      - name: Cairo lint
+        run: cd contracts && scarb fmt --check --workspace
+
+  test:
+    name: test (${{ matrix.package }})
+    needs: lint
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - package: denshokan_token
+            fuzzer_runs: 256
+          - package: denshokan_viewer
+            fuzzer_runs: 256
+          - package: denshokan_registry
+            fuzzer_runs: 256
+          - package: denshokan_games
+            fuzzer_runs: 256
     steps:
       - uses: actions/checkout@v4
 
@@ -41,8 +72,9 @@ jobs:
           path: |
             ~/.cache/scarb
             contracts/target/
-          key: ${{ runner.os }}-scarb-${{ hashFiles('contracts/Scarb.toml', 'contracts/Scarb.lock') }}
+          key: ${{ runner.os }}-scarb-${{ matrix.package }}-${{ hashFiles('contracts/Scarb.toml', 'contracts/Scarb.lock') }}
           restore-keys: |
+            ${{ runner.os }}-scarb-${{ matrix.package }}-
             ${{ runner.os }}-scarb-
 
       - name: Cache tools
@@ -63,16 +95,14 @@ jobs:
           (curl -L https://raw.githubusercontent.com/software-mansion/universal-sierra-compiler/master/scripts/install.sh | sh) &
           wait
 
-      - name: Cairo lint
-        run: cd contracts && scarb fmt --check
-
       - name: Run tests with coverage
-        run: cd contracts && snforge test --coverage
+        run: cd contracts && snforge test -p ${{ matrix.package }} --fuzzer-runs ${{ matrix.fuzzer_runs }} --coverage
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
           file: ./contracts/coverage/coverage.lcov
+          flags: ${{ matrix.package }}
           token: ${{ secrets.CODECOV_TOKEN }}
 
   indexer:

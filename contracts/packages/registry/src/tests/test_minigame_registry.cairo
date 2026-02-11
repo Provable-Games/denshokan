@@ -1,3 +1,5 @@
+use denshokan_testing::helpers::constants::{ALICE, BOB, CHARLIE, GAME_CREATOR};
+use denshokan_testing::helpers::setup::{register_game, setup_with_registry};
 use game_components_registry::interface::{
     IMINIGAME_REGISTRY_ID, IMinigameRegistryDispatcher, IMinigameRegistryDispatcherTrait,
 };
@@ -8,8 +10,6 @@ use openzeppelin_interfaces::erc721::{
 use openzeppelin_interfaces::introspection::{ISRC5Dispatcher, ISRC5DispatcherTrait};
 use snforge_std::{CheatSpan, cheat_caller_address};
 use starknet::ContractAddress;
-use crate::helpers::constants::{ALICE, BOB, CHARLIE, GAME_CREATOR};
-use crate::helpers::setup::{register_game, setup_with_registry};
 
 // ================================================================================================
 // HELPER: Get ERC721 dispatcher for the registry contract

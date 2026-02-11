@@ -2,8 +2,7 @@ use game_components_registry::interface::IMinigameRegistryDispatcherTrait;
 use game_components_token::interface::IMinigameTokenMixinDispatcherTrait;
 use openzeppelin_interfaces::erc721::IERC721DispatcherTrait;
 use snforge_std::{CheatSpan, cheat_caller_address};
-use crate::helpers::constants::{ALICE, BOB, GAME_CREATOR};
-use crate::helpers::setup::{register_game, setup_with_registry};
+use crate::tests::setup::{ALICE, BOB, GAME_CREATOR, register_game, setup_with_registry};
 
 // ================================================================================================
 // SOULBOUND TESTS
