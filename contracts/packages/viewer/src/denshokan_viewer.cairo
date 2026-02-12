@@ -9,10 +9,12 @@ use denshokan_interfaces::filter::{
     SettingsEntry, SettingsResult, TokenFullState,
 };
 use game_components_minigame::extensions::objectives::interface::{
-    IMinigameObjectivesDetailsDispatcher, IMinigameObjectivesDetailsDispatcherTrait,
+    IMINIGAME_OBJECTIVES_ID, IMinigameObjectivesDetailsDispatcher,
+    IMinigameObjectivesDetailsDispatcherTrait,
 };
 use game_components_minigame::extensions::settings::interface::{
-    IMinigameSettingsDetailsDispatcher, IMinigameSettingsDetailsDispatcherTrait,
+    IMINIGAME_SETTINGS_ID, IMinigameSettingsDetailsDispatcher,
+    IMinigameSettingsDetailsDispatcherTrait,
 };
 use game_components_registry::interface::{
     IMinigameRegistryDispatcher, IMinigameRegistryDispatcherTrait,
@@ -29,6 +31,7 @@ use openzeppelin_interfaces::erc721::{
     IERC721Dispatcher, IERC721DispatcherTrait, IERC721EnumerableDispatcher,
     IERC721EnumerableDispatcherTrait,
 };
+use openzeppelin_interfaces::introspection::{ISRC5Dispatcher, ISRC5DispatcherTrait};
 use openzeppelin_interfaces::upgrades::IUpgradeable;
 use openzeppelin_upgrades::UpgradeableComponent;
 use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
@@ -150,6 +153,16 @@ pub mod DenshokanViewer {
             self: @ContractState, game_address: ContractAddress,
         ) -> IMinigameObjectivesDetailsDispatcher {
             IMinigameObjectivesDetailsDispatcher { contract_address: game_address }
+        }
+
+        fn _supports_settings(self: @ContractState, game_address: ContractAddress) -> bool {
+            ISRC5Dispatcher { contract_address: game_address }
+                .supports_interface(IMINIGAME_SETTINGS_ID)
+        }
+
+        fn _supports_objectives(self: @ContractState, game_address: ContractAddress) -> bool {
+            ISRC5Dispatcher { contract_address: game_address }
+                .supports_interface(IMINIGAME_OBJECTIVES_ID)
         }
     }
 
@@ -809,7 +822,11 @@ pub mod DenshokanViewer {
             let filter_by_game = game_address.is_non_zero();
 
             if filter_by_game {
-                // Single-game query
+                // Single-game query — skip if game doesn't support settings
+                if !self._supports_settings(game_address) {
+                    return SettingsResult { entries: array![], total: 0 };
+                }
+
                 let settings_disp = self._get_settings_dispatcher(game_address);
                 let settings_count = settings_disp.settings_count();
 
@@ -844,6 +861,13 @@ pub mod DenshokanViewer {
                 while game_index <= game_count {
                     let game_metadata = registry.game_metadata(game_index);
                     let ga = game_metadata.contract_address;
+
+                    // Skip games that don't support settings interface
+                    if !self._supports_settings(ga) {
+                        game_index += 1;
+                        continue;
+                    }
+
                     let settings_disp = self._get_settings_dispatcher(ga);
                     let settings_count = settings_disp.settings_count();
 
@@ -879,7 +903,11 @@ pub mod DenshokanViewer {
             let filter_by_game = game_address.is_non_zero();
 
             if filter_by_game {
-                // Single-game query
+                // Single-game query — skip if game doesn't support objectives
+                if !self._supports_objectives(game_address) {
+                    return ObjectivesResult { entries: array![], total: 0 };
+                }
+
                 let objectives_disp = self._get_objectives_dispatcher(game_address);
                 let objectives_count = objectives_disp.objectives_count();
 
@@ -924,6 +952,13 @@ pub mod DenshokanViewer {
                 while game_index <= game_count {
                     let game_metadata = registry.game_metadata(game_index);
                     let ga = game_metadata.contract_address;
+
+                    // Skip games that don't support objectives interface
+                    if !self._supports_objectives(ga) {
+                        game_index += 1;
+                        continue;
+                    }
+
                     let objectives_disp = self._get_objectives_dispatcher(ga);
                     let objectives_count = objectives_disp.objectives_count();
 
@@ -961,6 +996,10 @@ pub mod DenshokanViewer {
 
         fn count_settings(self: @ContractState, game_address: ContractAddress) -> u32 {
             if game_address.is_non_zero() {
+                // Skip if game doesn't support settings interface
+                if !self._supports_settings(game_address) {
+                    return 0;
+                }
                 let settings_disp = self._get_settings_dispatcher(game_address);
                 settings_disp.settings_count()
             } else {
@@ -971,9 +1010,14 @@ pub mod DenshokanViewer {
 
                 while game_index <= game_count {
                     let game_metadata = registry.game_metadata(game_index);
-                    let settings_disp = self
-                        ._get_settings_dispatcher(game_metadata.contract_address);
-                    total += settings_disp.settings_count();
+                    let ga = game_metadata.contract_address;
+
+                    // Skip games that don't support settings interface
+                    if self._supports_settings(ga) {
+                        let settings_disp = self._get_settings_dispatcher(ga);
+                        total += settings_disp.settings_count();
+                    }
+
                     game_index += 1;
                 }
 
@@ -983,6 +1027,10 @@ pub mod DenshokanViewer {
 
         fn count_objectives(self: @ContractState, game_address: ContractAddress) -> u32 {
             if game_address.is_non_zero() {
+                // Skip if game doesn't support objectives interface
+                if !self._supports_objectives(game_address) {
+                    return 0;
+                }
                 let objectives_disp = self._get_objectives_dispatcher(game_address);
                 objectives_disp.objectives_count()
             } else {
@@ -993,9 +1041,14 @@ pub mod DenshokanViewer {
 
                 while game_index <= game_count {
                     let game_metadata = registry.game_metadata(game_index);
-                    let objectives_disp = self
-                        ._get_objectives_dispatcher(game_metadata.contract_address);
-                    total += objectives_disp.objectives_count();
+                    let ga = game_metadata.contract_address;
+
+                    // Skip games that don't support objectives interface
+                    if self._supports_objectives(ga) {
+                        let objectives_disp = self._get_objectives_dispatcher(ga);
+                        total += objectives_disp.objectives_count();
+                    }
+
                     game_index += 1;
                 }
 
