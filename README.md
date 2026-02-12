@@ -229,4 +229,4 @@ Callbacks are SRC5-gated - only invoked if the minter contract explicitly suppor
 
 ## License
 
-MIT
+© 2026 Provable Games. All rights reserved.
