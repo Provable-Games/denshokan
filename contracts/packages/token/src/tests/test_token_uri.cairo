@@ -19,10 +19,7 @@ use crate::tests::setup::{
 /// Mint a token for a given game, using the mock contract as the caller so that
 /// token_uri can call context_details on the minted_by address (which must be deployed).
 fn mint_for_game(
-    tc: @TestContracts,
-    game_id: u64,
-    mock: IMinigameMockDispatcher,
-    player: ContractAddress,
+    tc: @TestContracts, game_id: u64, mock: IMinigameMockDispatcher, player: ContractAddress,
 ) -> felt252 {
     let game_metadata = (*tc.registry).game_metadata(game_id);
 
