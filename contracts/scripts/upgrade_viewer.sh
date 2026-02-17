@@ -103,7 +103,8 @@ print_info "Declaring DenshokanViewer contract..."
 
 VIEWER_DECLARE_OUTPUT=$(sncast --profile "$PROFILE" --wait \
     declare \
-    --contract-name DenshokanViewer 2>&1) || {
+    --contract-name DenshokanViewer \
+    --package denshokan_viewer 2>&1) || {
     if echo "$VIEWER_DECLARE_OUTPUT" | grep -q "already declared"; then
         print_warning "DenshokanViewer already declared"
         NEW_CLASS_HASH=$(echo "$VIEWER_DECLARE_OUTPUT" | grep -oE '0x[0-9a-fA-F]+' | head -1)

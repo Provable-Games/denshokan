@@ -82,7 +82,8 @@ print_info "Declaring TicTacToe contract..."
 
 DECLARE_OUTPUT=$(sncast --profile "$PROFILE" --wait \
     declare \
-    --contract-name TicTacToe 2>&1) || {
+    --contract-name TicTacToe \
+    --package denshokan_games 2>&1) || {
     if echo "$DECLARE_OUTPUT" | grep -q "already declared"; then
         print_warning "Contract already declared"
         CLASS_HASH=$(echo "$DECLARE_OUTPUT" | grep -oE '0x[0-9a-fA-F]+' | head -1)

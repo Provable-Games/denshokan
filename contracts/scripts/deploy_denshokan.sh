@@ -136,7 +136,8 @@ if [ -z "$GAME_REGISTRY_ADDRESS" ]; then
 
     REGISTRY_DECLARE_OUTPUT=$(sncast --profile "$PROFILE" --wait \
         declare \
-        --contract-name MinigameRegistry 2>&1) || {
+        --contract-name MinigameRegistry \
+        --package denshokan_registry 2>&1) || {
         # Check if already declared
         if echo "$REGISTRY_DECLARE_OUTPUT" | grep -q "already declared"; then
             print_warning "MinigameRegistry already declared"
@@ -183,7 +184,8 @@ print_info "Declaring Denshokan contract..."
 
 DENSHOKAN_DECLARE_OUTPUT=$(sncast --profile "$PROFILE" --wait \
     declare \
-    --contract-name Denshokan 2>&1) || {
+    --contract-name Denshokan \
+    --package denshokan_token 2>&1) || {
     if echo "$DENSHOKAN_DECLARE_OUTPUT" | grep -q "already declared"; then
         print_warning "Denshokan already declared"
         DENSHOKAN_CLASS_HASH=$(echo "$DENSHOKAN_DECLARE_OUTPUT" | grep -oE '0x[0-9a-fA-F]+' | head -1)
@@ -238,7 +240,8 @@ print_info "Declaring DenshokanViewer contract..."
 
 VIEWER_DECLARE_OUTPUT=$(sncast --profile "$PROFILE" --wait \
     declare \
-    --contract-name DenshokanViewer 2>&1) || {
+    --contract-name DenshokanViewer \
+    --package denshokan_viewer 2>&1) || {
     if echo "$VIEWER_DECLARE_OUTPUT" | grep -q "already declared"; then
         print_warning "DenshokanViewer already declared"
         VIEWER_CLASS_HASH=$(echo "$VIEWER_DECLARE_OUTPUT" | grep -oE '0x[0-9a-fA-F]+' | head -1)

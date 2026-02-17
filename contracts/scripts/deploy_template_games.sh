@@ -93,7 +93,8 @@ print_info "Declaring minigame_starknet_mock..."
 
 DECLARE_OUTPUT=$(sncast --profile "$PROFILE" --wait \
     declare \
-    --contract-name minigame_starknet_mock 2>&1) || {
+    --contract-name minigame_starknet_mock \
+    --package denshokan_testing 2>&1) || {
     if echo "$DECLARE_OUTPUT" | grep -q "already declared"; then
         print_warning "Contract already declared"
         CLASS_HASH=$(echo "$DECLARE_OUTPUT" | grep -oE '0x[0-9a-fA-F]+' | head -1)
