@@ -80,6 +80,7 @@ dependencies = [
  "denshokan_testing",
  "denshokan_token",
  "game_components_embeddable_game_standard",
+ "game_components_test_common",
  "openzeppelin_interfaces",
  "openzeppelin_introspection",
  "openzeppelin_token",
@@ -91,6 +92,7 @@ name = "denshokan_testing"
 version = "0.1.0"
 dependencies = [
  "game_components_embeddable_game_standard",
+ "game_components_test_common",
  "openzeppelin_interfaces",
  "openzeppelin_introspection",
  "snforge_std",
@@ -104,6 +106,7 @@ dependencies = [
  "denshokan_registry",
  "denshokan_testing",
  "game_components_embeddable_game_standard",
+ "game_components_test_common",
  "game_components_utilities",
  "openzeppelin_access",
  "openzeppelin_interfaces",
@@ -121,6 +124,7 @@ dependencies = [
  "denshokan_testing",
  "denshokan_token",
  "game_components_embeddable_game_standard",
+ "game_components_test_common",
  "openzeppelin_access",
  "openzeppelin_interfaces",
  "openzeppelin_upgrades",
@@ -135,7 +139,7 @@ source = "git+https://github.com/EkuboProtocol/starknet-contracts.git?tag=v4.0.1
 [[package]]
 name = "game_components_embeddable_game_standard"
 version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?rev=22ca9dfb92dce9d6a56681d157eff0e2f5d848ab#22ca9dfb92dce9d6a56681d157eff0e2f5d848ab"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=next#c758ee8319d18a4b2be42c005f0920fdd1a86465"
 dependencies = [
  "game_components_interfaces",
  "game_components_metagame",
@@ -149,26 +153,44 @@ dependencies = [
 [[package]]
 name = "game_components_interfaces"
 version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?rev=22ca9dfb92dce9d6a56681d157eff0e2f5d848ab#22ca9dfb92dce9d6a56681d157eff0e2f5d848ab"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=next#c758ee8319d18a4b2be42c005f0920fdd1a86465"
 dependencies = [
  "ekubo",
+ "interfaces",
 ]
 
 [[package]]
 name = "game_components_metagame"
 version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?rev=22ca9dfb92dce9d6a56681d157eff0e2f5d848ab#22ca9dfb92dce9d6a56681d157eff0e2f5d848ab"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=next#c758ee8319d18a4b2be42c005f0920fdd1a86465"
 dependencies = [
  "game_components_interfaces",
  "game_components_utilities",
+ "interfaces",
  "openzeppelin_interfaces",
  "openzeppelin_introspection",
 ]
 
 [[package]]
+name = "game_components_test_common"
+version = "1.5.1"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=next#c758ee8319d18a4b2be42c005f0920fdd1a86465"
+dependencies = [
+ "game_components_embeddable_game_standard",
+ "game_components_interfaces",
+ "game_components_metagame",
+ "game_components_utilities",
+ "openzeppelin_access",
+ "openzeppelin_interfaces",
+ "openzeppelin_introspection",
+ "openzeppelin_token",
+ "snforge_std",
+]
+
+[[package]]
 name = "game_components_utilities"
 version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?rev=22ca9dfb92dce9d6a56681d157eff0e2f5d848ab#22ca9dfb92dce9d6a56681d157eff0e2f5d848ab"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=next#c758ee8319d18a4b2be42c005f0920fdd1a86465"
 dependencies = [
  "alexandria_encoding",
  "game_components_embeddable_game_standard",
@@ -180,6 +202,11 @@ dependencies = [
 name = "graffiti"
 version = "0.1.0"
 source = "git+https://github.com/provable-games/graffiti#085657596d0779299f1087bbf139a9fe8e5e71b4"
+
+[[package]]
+name = "interfaces"
+version = "0.1.0"
+source = "git+https://github.com/Provable-Games/metagame_extensions.git?branch=next#3c5a1ef05736aa4a44a4bb73519ed07e574b2240"
 
 [[package]]
 name = "openzeppelin_access"

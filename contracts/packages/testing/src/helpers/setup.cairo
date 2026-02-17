@@ -8,9 +8,8 @@ use openzeppelin_interfaces::erc721::IERC721Dispatcher;
 use snforge_std::{ContractClassTrait, DeclareResultTrait, declare};
 use starknet::ContractAddress;
 use crate::helpers::constants::GAME_CREATOR;
-use crate::mocks::minigame_starknet_mock::{
-    IMinigameStarknetMockDispatcher, IMinigameStarknetMockInitDispatcher,
-    IMinigameStarknetMockInitDispatcherTrait,
+use crate::mocks::minigame_mock::{
+    IMinigameMockDispatcher, IMinigameMockInitDispatcher, IMinigameMockInitDispatcherTrait,
 };
 
 // ================================================================================================
@@ -25,7 +24,7 @@ pub struct TestContracts {
     pub erc2981: IERC2981Dispatcher,
     pub token_mixin: IMinigameTokenMixinDispatcher,
     pub minigame: IMinigameDispatcher,
-    pub mock_minigame: IMinigameStarknetMockDispatcher,
+    pub mock_minigame: IMinigameMockDispatcher,
 }
 
 // ================================================================================================
@@ -51,14 +50,14 @@ pub fn deploy_minigame_registry() -> IMinigameRegistryDispatcher {
 
 /// Deploy a minigame_starknet_mock contract
 pub fn deploy_mock_game() -> (
-    IMinigameDispatcher, IMinigameStarknetMockInitDispatcher, IMinigameStarknetMockDispatcher,
+    IMinigameDispatcher, IMinigameMockInitDispatcher, IMinigameMockDispatcher,
 ) {
-    let contract = declare("minigame_starknet_mock").unwrap().contract_class();
+    let contract = declare("minigame_mock").unwrap().contract_class();
     let (contract_address, _) = contract.deploy(@array![]).unwrap();
 
     let minigame_dispatcher = IMinigameDispatcher { contract_address };
-    let minigame_init_dispatcher = IMinigameStarknetMockInitDispatcher { contract_address };
-    let minigame_mock_dispatcher = IMinigameStarknetMockDispatcher { contract_address };
+    let minigame_init_dispatcher = IMinigameMockInitDispatcher { contract_address };
+    let minigame_mock_dispatcher = IMinigameMockDispatcher { contract_address };
     (minigame_dispatcher, minigame_init_dispatcher, minigame_mock_dispatcher)
 }
 
@@ -144,7 +143,7 @@ pub fn register_game(
     creator: ContractAddress,
     name: ByteArray,
     royalty_fraction: Option<u128>,
-) -> (u64, IMinigameDispatcher, IMinigameStarknetMockDispatcher) {
+) -> (u64, IMinigameDispatcher, IMinigameMockDispatcher) {
     let (game_dispatcher, game_init_dispatcher, mock_minigame_dispatcher) = deploy_mock_game();
 
     game_init_dispatcher

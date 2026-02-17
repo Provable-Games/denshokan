@@ -17,6 +17,7 @@ snforge_std.workspace = true
 denshokan_testing.workspace = true
 denshokan_token.workspace = true
 denshokan_registry.workspace = true
+game_components_test_common.workspace = true
 
 
 [[target.starknet-contract]]
@@ -25,7 +26,7 @@ casm = true
 build-external-contracts = [
     "denshokan_token::denshokan::Denshokan",
     "denshokan_registry::minigame_registry::MinigameRegistry",
-    "denshokan_testing::mocks::minigame_starknet_mock::minigame_starknet_mock",
+    "game_components_test_common::mocks::minigame_mock::minigame_mock",
 ]
 
 [lib]
