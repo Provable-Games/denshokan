@@ -1,8 +1,8 @@
-use game_components_registry::interface::IMinigameRegistryDispatcherTrait;
-use game_components_test_common::mocks::minigame_starknet_mock::{
-    IMinigameStarknetMockDispatcher, IMinigameStarknetMockDispatcherTrait,
+use denshokan_testing::mocks::minigame_mock::{
+    IMinigameMockDispatcher, IMinigameMockDispatcherTrait,
 };
-use game_components_token::interface::IMinigameTokenMixinDispatcherTrait;
+use game_components_embeddable_game_standard::registry::interface::IMinigameRegistryDispatcherTrait;
+use game_components_embeddable_game_standard::token::interface::IMinigameTokenMixinDispatcherTrait;
 use openzeppelin_interfaces::erc721::{
     IERC721DispatcherTrait, IERC721MetadataDispatcher, IERC721MetadataDispatcherTrait,
 };
@@ -19,10 +19,7 @@ use crate::tests::setup::{
 /// Mint a token for a given game, using the mock contract as the caller so that
 /// token_uri can call context_details on the minted_by address (which must be deployed).
 fn mint_for_game(
-    tc: @TestContracts,
-    game_id: u64,
-    mock: IMinigameStarknetMockDispatcher,
-    player: ContractAddress,
+    tc: @TestContracts, game_id: u64, mock: IMinigameMockDispatcher, player: ContractAddress,
 ) -> felt252 {
     let game_metadata = (*tc.registry).game_metadata(game_id);
 
@@ -82,7 +79,7 @@ fn test_token_uri_contains_game_name() {
     let uri = metadata_dispatcher.token_uri(token_id.into());
 
     // The metadata should be non-empty. Since no custom renderer overrides token_name,
-    // the mock returns "Test Token" as token_name (see minigame_starknet_mock).
+    // the mock returns "Test Token" as token_name (see minigame_mock).
     assert!(uri.len() > 0, "token_uri should return non-empty metadata");
 }
 

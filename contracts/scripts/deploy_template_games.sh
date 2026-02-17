@@ -70,10 +70,10 @@ print_info "Building contracts..."
 cd "$CONTRACTS_DIR"
 scarb build
 
-ARTIFACT="$CONTRACTS_DIR/target/dev/denshokan_minigame_starknet_mock.contract_class.json"
+ARTIFACT="$CONTRACTS_DIR/target/dev/denshokan_testing_minigame_starknet_mock.contract_class.json"
 if [ ! -f "$ARTIFACT" ]; then
-    # Try the game_components prefix in case naming differs
-    ARTIFACT="$CONTRACTS_DIR/target/dev/game_components_test_common_minigame_starknet_mock.contract_class.json"
+    # Try alternative prefix in case naming differs
+    ARTIFACT="$CONTRACTS_DIR/target/dev/denshokan_minigame_starknet_mock.contract_class.json"
 fi
 
 if [ ! -f "$ARTIFACT" ]; then

@@ -1,19 +1,23 @@
 /**
  * Packed Token ID decoder for client-side use
  *
- * Layout (251 bits in felt252):
+ * Layout (251 bits in felt252, u128-aligned):
+ *
+ * Low u128 (bits 0-127):
  * | Bits      | Field        | Size     |
  * |-----------|--------------|----------|
  * | 0-29      | game_id      | 30 bits  |
  * | 30-69     | minted_by    | 40 bits  |
  * | 70-99     | settings_id  | 30 bits  |
- * | 100-134   | minted_at    | 35 bits  |
- * | 135-159   | start_delay  | 25 bits  |
- * | 160-184   | end_delay    | 25 bits  |
- * | 185-214   | objective_id | 30 bits  |
- * | 215       | soulbound    | 1 bit    |
- * | 216       | has_context   | 1 bit    |
- * | 217       | paymaster    | 1 bit    |
+ * | 100-124   | start_delay  | 25 bits  |
+ * | 125       | soulbound    | 1 bit    |
+ * | 126       | has_context   | 1 bit    |
+ * | 127       | paymaster    | 1 bit    |
+ *
+ * High u128 (bits 128-250):
+ * | 128-162   | minted_at    | 35 bits  |
+ * | 163-187   | end_delay    | 25 bits  |
+ * | 188-217   | objective_id | 30 bits  |
  * | 218-227   | tx_hash      | 10 bits  |
  * | 228-237   | salt         | 10 bits  |
  * | 238-250   | metadata     | 13 bits  |
@@ -54,13 +58,13 @@ const OFFSETS = {
   GAME_ID: 0n,
   MINTED_BY: 30n,
   SETTINGS_ID: 70n,
-  MINTED_AT: 100n,
-  START_DELAY: 135n,
-  END_DELAY: 160n,
-  OBJECTIVE_ID: 185n,
-  SOULBOUND: 215n,
-  HAS_CONTEXT: 216n,
-  PAYMASTER: 217n,
+  START_DELAY: 100n,
+  SOULBOUND: 125n,
+  HAS_CONTEXT: 126n,
+  PAYMASTER: 127n,
+  MINTED_AT: 128n,
+  END_DELAY: 163n,
+  OBJECTIVE_ID: 188n,
   TX_HASH: 218n,
   SALT: 228n,
   METADATA: 238n,

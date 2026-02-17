@@ -13,19 +13,23 @@
  * - u256: 2 field elements (low, high)
  * - ContractAddress: 1 field element
  *
- * Packed Token ID Layout (251 bits in felt252):
+ * Packed Token ID Layout (251 bits in felt252, u128-aligned):
+ *
+ * Low u128 (bits 0-127):
  * | Bits      | Field          | Size     | Max Value                    |
  * |-----------|----------------|----------|------------------------------|
  * | 0-29      | game_id        | 30 bits  | ~1 billion games             |
  * | 30-69     | minted_by      | 40 bits  | ~1 trillion minters          |
  * | 70-99     | settings_id    | 30 bits  | ~1 billion settings          |
- * | 100-134   | minted_at      | 35 bits  | Unix timestamp (~1000 years) |
- * | 135-159   | start_delay    | 25 bits  | Relative offset              |
- * | 160-184   | end_delay      | 25 bits  | Relative offset              |
- * | 185-214   | objective_id   | 30 bits  | ~1 billion objectives        |
- * | 215       | soulbound      | 1 bit    | bool                         |
- * | 216       | has_context    | 1 bit    | bool                         |
- * | 217       | paymaster      | 1 bit    | bool                         |
+ * | 100-124   | start_delay    | 25 bits  | Relative offset              |
+ * | 125       | soulbound      | 1 bit    | bool                         |
+ * | 126       | has_context    | 1 bit    | bool                         |
+ * | 127       | paymaster      | 1 bit    | bool                         |
+ *
+ * High u128 (bits 128-250):
+ * | 128-162   | minted_at      | 35 bits  | Unix timestamp (~1000 years) |
+ * | 163-187   | end_delay      | 25 bits  | Relative offset              |
+ * | 188-217   | objective_id   | 30 bits  | ~1 billion objectives        |
  * | 218-227   | tx_hash        | 10 bits  | Hash fragment                |
  * | 228-237   | salt           | 10 bits  | Salt value                   |
  * | 238-250   | metadata       | 13 bits  | Metadata flags               |
@@ -159,13 +163,13 @@ const PACKED_TOKEN_ID_OFFSETS = {
   GAME_ID: 0n,
   MINTED_BY: 30n,
   SETTINGS_ID: 70n,
-  MINTED_AT: 100n,
-  START_DELAY: 135n,
-  END_DELAY: 160n,
-  OBJECTIVE_ID: 185n,
-  SOULBOUND: 215n,
-  HAS_CONTEXT: 216n,
-  PAYMASTER: 217n,
+  START_DELAY: 100n,
+  SOULBOUND: 125n,
+  HAS_CONTEXT: 126n,
+  PAYMASTER: 127n,
+  MINTED_AT: 128n,
+  END_DELAY: 163n,
+  OBJECTIVE_ID: 188n,
   TX_HASH: 218n,
   SALT: 228n,
   METADATA: 238n,

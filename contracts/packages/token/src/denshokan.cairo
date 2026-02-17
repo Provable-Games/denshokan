@@ -3,23 +3,25 @@
 // a full token implementation using the modular component system.
 
 use core::num::traits::Zero;
-use game_components_metagame::extensions::context::structs::GameContextDetails;
-use game_components_minigame::extensions::settings::structs::GameSettingDetails;
-use game_components_minigame::interface::{IMinigameDispatcher, IMinigameDispatcherTrait};
-use game_components_minigame::structs::GameDetail;
+use game_components_embeddable_game_standard::metagame::extensions::context::structs::GameContextDetails;
+use game_components_embeddable_game_standard::minigame::extensions::settings::structs::GameSettingDetails;
+use game_components_embeddable_game_standard::minigame::interface::{
+    IMinigameDispatcher, IMinigameDispatcherTrait,
+};
+use game_components_embeddable_game_standard::minigame::structs::GameDetail;
 
 // Game components imports - using full package paths
-use game_components_registry::interface::{
+use game_components_embeddable_game_standard::registry::interface::{
     IMinigameRegistryDispatcher, IMinigameRegistryDispatcherTrait,
 };
-use game_components_token::core::core_token::CoreTokenComponent;
-use game_components_token::extensions::context::context::ContextComponent;
-use game_components_token::extensions::minter::minter::MinterComponent;
-use game_components_token::extensions::objectives::objectives::ObjectivesComponent;
-use game_components_token::extensions::renderer::renderer::RendererComponent;
-use game_components_token::extensions::settings::settings::SettingsComponent;
-use game_components_token::structs::TokenMetadata;
-use game_components_utils::renderer::{create_custom_metadata, create_default_svg};
+use game_components_embeddable_game_standard::token::core::core_token::CoreTokenComponent;
+use game_components_embeddable_game_standard::token::extensions::context::context::ContextComponent;
+use game_components_embeddable_game_standard::token::extensions::minter::minter::MinterComponent;
+use game_components_embeddable_game_standard::token::extensions::objectives::objectives::ObjectivesComponent;
+use game_components_embeddable_game_standard::token::extensions::renderer::renderer::RendererComponent;
+use game_components_embeddable_game_standard::token::extensions::settings::settings::SettingsComponent;
+use game_components_embeddable_game_standard::token::structs::TokenMetadata;
+use game_components_utilities::utils::renderer::{create_custom_metadata, create_default_svg};
 use openzeppelin_interfaces::erc2981::{IERC2981, IERC2981_ID};
 use openzeppelin_interfaces::erc721::{IERC721Dispatcher, IERC721DispatcherTrait, IERC721Metadata};
 use openzeppelin_introspection::src5::SRC5Component;
