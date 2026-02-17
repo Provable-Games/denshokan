@@ -1,8 +1,8 @@
-use game_components_registry::interface::IMinigameRegistryDispatcherTrait;
-use game_components_test_common::mocks::minigame_starknet_mock::{
+use denshokan_testing::mocks::minigame_starknet_mock::{
     IMinigameStarknetMockDispatcher, IMinigameStarknetMockDispatcherTrait,
 };
-use game_components_token::interface::IMinigameTokenMixinDispatcherTrait;
+use game_components_embeddable_game_standard::registry::interface::IMinigameRegistryDispatcherTrait;
+use game_components_embeddable_game_standard::token::interface::IMinigameTokenMixinDispatcherTrait;
 use openzeppelin_interfaces::erc721::{
     IERC721DispatcherTrait, IERC721MetadataDispatcher, IERC721MetadataDispatcherTrait,
 };

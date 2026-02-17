@@ -231,21 +231,25 @@ fn find_winning_move(board: u32, player: u32) -> u8 {
 
 #[starknet::contract]
 pub mod TicTacToe {
-    use game_components_minigame::extensions::objectives::interface::{
+    use game_components_embeddable_game_standard::minigame::extensions::objectives::interface::{
         IMinigameObjectives, IMinigameObjectivesDetails,
     };
-    use game_components_minigame::extensions::objectives::objectives::ObjectivesComponent;
-    use game_components_minigame::extensions::objectives::structs::{
+    use game_components_embeddable_game_standard::minigame::extensions::objectives::objectives::ObjectivesComponent;
+    use game_components_embeddable_game_standard::minigame::extensions::objectives::structs::{
         GameObjective, GameObjectiveDetails,
     };
-    use game_components_minigame::extensions::settings::interface::{
+    use game_components_embeddable_game_standard::minigame::extensions::settings::interface::{
         IMinigameSettings, IMinigameSettingsDetails,
     };
-    use game_components_minigame::extensions::settings::settings::SettingsComponent;
-    use game_components_minigame::extensions::settings::structs::{GameSetting, GameSettingDetails};
-    use game_components_minigame::interface::{IMinigameDetails, IMinigameTokenData};
-    use game_components_minigame::minigame::MinigameComponent;
-    use game_components_minigame::structs::GameDetail;
+    use game_components_embeddable_game_standard::minigame::extensions::settings::settings::SettingsComponent;
+    use game_components_embeddable_game_standard::minigame::extensions::settings::structs::{
+        GameSetting, GameSettingDetails,
+    };
+    use game_components_embeddable_game_standard::minigame::interface::{
+        IMinigameDetails, IMinigameTokenData,
+    };
+    use game_components_embeddable_game_standard::minigame::minigame::MinigameComponent;
+    use game_components_embeddable_game_standard::minigame::structs::GameDetail;
     use openzeppelin_introspection::src5::SRC5Component;
     use starknet::storage::{
         Map, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess,

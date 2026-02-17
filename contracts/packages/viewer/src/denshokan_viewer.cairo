@@ -8,21 +8,21 @@ use denshokan_interfaces::filter::{
     FilterResult, IDenshokanFilter, IDenshokanSettingsObjectives, ObjectiveEntry, ObjectivesResult,
     SettingsEntry, SettingsResult, TokenFullState,
 };
-use game_components_minigame::extensions::objectives::interface::{
+use game_components_embeddable_game_standard::minigame::extensions::objectives::interface::{
     IMINIGAME_OBJECTIVES_ID, IMinigameObjectivesDetailsDispatcher,
     IMinigameObjectivesDetailsDispatcherTrait,
 };
-use game_components_minigame::extensions::settings::interface::{
+use game_components_embeddable_game_standard::minigame::extensions::settings::interface::{
     IMINIGAME_SETTINGS_ID, IMinigameSettingsDetailsDispatcher,
     IMinigameSettingsDetailsDispatcherTrait,
 };
-use game_components_registry::interface::{
+use game_components_embeddable_game_standard::registry::interface::{
     IMinigameRegistryDispatcher, IMinigameRegistryDispatcherTrait,
 };
-use game_components_token::interface::{
+use game_components_embeddable_game_standard::token::interface::{
     IMinigameTokenMixinDispatcher, IMinigameTokenMixinDispatcherTrait,
 };
-use game_components_token::structs::{
+use game_components_embeddable_game_standard::token::structs::{
     unpack_game_id, unpack_minted_at, unpack_minted_by, unpack_objective_id, unpack_settings_id,
     unpack_soulbound,
 };

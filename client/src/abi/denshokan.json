@@ -391,6 +391,20 @@
     ]
   },
   {
+    "type": "struct",
+    "name": "game_components_interfaces::structs::token::TokenMutableState",
+    "members": [
+      {
+        "name": "game_over",
+        "type": "core::bool"
+      },
+      {
+        "name": "completed_objective",
+        "type": "core::bool"
+      }
+    ]
+  },
+  {
     "type": "enum",
     "name": "core::option::Option::<core::felt252>",
     "variants": [
@@ -778,6 +792,22 @@
       },
       {
         "type": "function",
+        "name": "token_mutable_state",
+        "inputs": [
+          {
+            "name": "token_id",
+            "type": "core::felt252"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "game_components_interfaces::structs::token::TokenMutableState"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
         "name": "token_metadata_batch",
         "inputs": [
           {
@@ -922,6 +952,22 @@
       },
       {
         "type": "function",
+        "name": "token_mutable_state_batch",
+        "inputs": [
+          {
+            "name": "token_ids",
+            "type": "core::array::Span::<core::felt252>"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::array::Array::<game_components_interfaces::structs::token::TokenMutableState>"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
         "name": "mint",
         "inputs": [
           {
@@ -1060,6 +1106,64 @@
   },
   {
     "type": "impl",
+    "name": "ERC721EnumerableImpl",
+    "interface_name": "openzeppelin_interfaces::token::erc721::IERC721Enumerable"
+  },
+  {
+    "type": "interface",
+    "name": "openzeppelin_interfaces::token::erc721::IERC721Enumerable",
+    "items": [
+      {
+        "type": "function",
+        "name": "total_supply",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "token_by_index",
+        "inputs": [
+          {
+            "name": "index",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "token_of_owner_by_index",
+        "inputs": [
+          {
+            "name": "owner",
+            "type": "core::starknet::contract_address::ContractAddress"
+          },
+          {
+            "name": "index",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "view"
+      }
+    ]
+  },
+  {
+    "type": "impl",
     "name": "MinterImpl",
     "interface_name": "game_components_interfaces::token::minter::IMinigameTokenMinter"
   },
@@ -1148,6 +1252,34 @@
     ]
   },
   {
+    "type": "struct",
+    "name": "core::array::Span::<game_components_interfaces::structs::minigame::GameObjective>",
+    "members": [
+      {
+        "name": "snapshot",
+        "type": "@core::array::Array::<game_components_interfaces::structs::minigame::GameObjective>"
+      }
+    ]
+  },
+  {
+    "type": "struct",
+    "name": "game_components_interfaces::structs::minigame::GameObjectiveDetails",
+    "members": [
+      {
+        "name": "name",
+        "type": "core::byte_array::ByteArray"
+      },
+      {
+        "name": "description",
+        "type": "core::byte_array::ByteArray"
+      },
+      {
+        "name": "objectives",
+        "type": "core::array::Span::<game_components_interfaces::structs::minigame::GameObjective>"
+      }
+    ]
+  },
+  {
     "type": "interface",
     "name": "game_components_interfaces::token::objectives::IMinigameTokenObjectives",
     "items": [
@@ -1168,8 +1300,12 @@
             "type": "core::integer::u32"
           },
           {
-            "name": "objective_data",
-            "type": "game_components_interfaces::structs::minigame::GameObjective"
+            "name": "settings_id",
+            "type": "core::integer::u32"
+          },
+          {
+            "name": "objective_details",
+            "type": "game_components_interfaces::structs::minigame::GameObjectiveDetails"
           }
         ],
         "outputs": [],
@@ -1207,6 +1343,24 @@
     ]
   },
   {
+    "type": "struct",
+    "name": "game_components_interfaces::structs::minigame::GameSettingDetails",
+    "members": [
+      {
+        "name": "name",
+        "type": "core::byte_array::ByteArray"
+      },
+      {
+        "name": "description",
+        "type": "core::byte_array::ByteArray"
+      },
+      {
+        "name": "settings",
+        "type": "core::array::Span::<game_components_interfaces::structs::minigame::GameSetting>"
+      }
+    ]
+  },
+  {
     "type": "interface",
     "name": "game_components_interfaces::token::settings::IMinigameTokenSettings",
     "items": [
@@ -1227,16 +1381,8 @@
             "type": "core::integer::u32"
           },
           {
-            "name": "name",
-            "type": "core::byte_array::ByteArray"
-          },
-          {
-            "name": "description",
-            "type": "core::byte_array::ByteArray"
-          },
-          {
-            "name": "settings_data",
-            "type": "core::array::Span::<game_components_interfaces::structs::minigame::GameSetting>"
+            "name": "settings_details",
+            "type": "game_components_interfaces::structs::minigame::GameSettingDetails"
           }
         ],
         "outputs": [],
@@ -1451,7 +1597,7 @@
   },
   {
     "type": "event",
-    "name": "game_components_token::core::core_token::CoreTokenComponent::TokenPlayerNameUpdate",
+    "name": "game_components_embeddable_game_standard::token::core::core_token::CoreTokenComponent::TokenPlayerNameUpdate",
     "kind": "struct",
     "members": [
       {
@@ -1468,7 +1614,7 @@
   },
   {
     "type": "event",
-    "name": "game_components_token::core::core_token::CoreTokenComponent::TokenClientUrlUpdate",
+    "name": "game_components_embeddable_game_standard::token::core::core_token::CoreTokenComponent::TokenClientUrlUpdate",
     "kind": "struct",
     "members": [
       {
@@ -1485,7 +1631,7 @@
   },
   {
     "type": "event",
-    "name": "game_components_token::core::core_token::CoreTokenComponent::MetadataUpdate",
+    "name": "game_components_embeddable_game_standard::token::core::core_token::CoreTokenComponent::MetadataUpdate",
     "kind": "struct",
     "members": [
       {
@@ -1497,7 +1643,7 @@
   },
   {
     "type": "event",
-    "name": "game_components_token::core::core_token::CoreTokenComponent::ScoreUpdate",
+    "name": "game_components_embeddable_game_standard::token::core::core_token::CoreTokenComponent::ScoreUpdate",
     "kind": "struct",
     "members": [
       {
@@ -1514,7 +1660,7 @@
   },
   {
     "type": "event",
-    "name": "game_components_token::core::core_token::CoreTokenComponent::GameOver",
+    "name": "game_components_embeddable_game_standard::token::core::core_token::CoreTokenComponent::GameOver",
     "kind": "struct",
     "members": [
       {
@@ -1531,7 +1677,7 @@
   },
   {
     "type": "event",
-    "name": "game_components_token::core::core_token::CoreTokenComponent::CompletedObjective",
+    "name": "game_components_embeddable_game_standard::token::core::core_token::CoreTokenComponent::CompletedObjective",
     "kind": "struct",
     "members": [
       {
@@ -1543,44 +1689,50 @@
   },
   {
     "type": "event",
-    "name": "game_components_token::core::core_token::CoreTokenComponent::Event",
+    "name": "game_components_embeddable_game_standard::token::core::core_token::CoreTokenComponent::Event",
     "kind": "enum",
     "variants": [
       {
         "name": "TokenPlayerNameUpdate",
-        "type": "game_components_token::core::core_token::CoreTokenComponent::TokenPlayerNameUpdate",
+        "type": "game_components_embeddable_game_standard::token::core::core_token::CoreTokenComponent::TokenPlayerNameUpdate",
         "kind": "nested"
       },
       {
         "name": "TokenClientUrlUpdate",
-        "type": "game_components_token::core::core_token::CoreTokenComponent::TokenClientUrlUpdate",
+        "type": "game_components_embeddable_game_standard::token::core::core_token::CoreTokenComponent::TokenClientUrlUpdate",
         "kind": "nested"
       },
       {
         "name": "MetadataUpdate",
-        "type": "game_components_token::core::core_token::CoreTokenComponent::MetadataUpdate",
+        "type": "game_components_embeddable_game_standard::token::core::core_token::CoreTokenComponent::MetadataUpdate",
         "kind": "nested"
       },
       {
         "name": "ScoreUpdate",
-        "type": "game_components_token::core::core_token::CoreTokenComponent::ScoreUpdate",
+        "type": "game_components_embeddable_game_standard::token::core::core_token::CoreTokenComponent::ScoreUpdate",
         "kind": "nested"
       },
       {
         "name": "GameOver",
-        "type": "game_components_token::core::core_token::CoreTokenComponent::GameOver",
+        "type": "game_components_embeddable_game_standard::token::core::core_token::CoreTokenComponent::GameOver",
         "kind": "nested"
       },
       {
         "name": "CompletedObjective",
-        "type": "game_components_token::core::core_token::CoreTokenComponent::CompletedObjective",
+        "type": "game_components_embeddable_game_standard::token::core::core_token::CoreTokenComponent::CompletedObjective",
         "kind": "nested"
       }
     ]
   },
   {
     "type": "event",
-    "name": "game_components_token::extensions::minter::minter::MinterComponent::MinterRegistryUpdate",
+    "name": "openzeppelin_token::erc721::extensions::erc721_enumerable::erc721_enumerable::ERC721EnumerableComponent::Event",
+    "kind": "enum",
+    "variants": []
+  },
+  {
+    "type": "event",
+    "name": "game_components_embeddable_game_standard::token::extensions::minter::minter::MinterComponent::MinterRegistryUpdate",
     "kind": "struct",
     "members": [
       {
@@ -1597,19 +1749,19 @@
   },
   {
     "type": "event",
-    "name": "game_components_token::extensions::minter::minter::MinterComponent::Event",
+    "name": "game_components_embeddable_game_standard::token::extensions::minter::minter::MinterComponent::Event",
     "kind": "enum",
     "variants": [
       {
         "name": "MinterRegistryUpdate",
-        "type": "game_components_token::extensions::minter::minter::MinterComponent::MinterRegistryUpdate",
+        "type": "game_components_embeddable_game_standard::token::extensions::minter::minter::MinterComponent::MinterRegistryUpdate",
         "kind": "nested"
       }
     ]
   },
   {
     "type": "event",
-    "name": "game_components_token::extensions::objectives::objectives::ObjectivesComponent::ObjectiveCreated",
+    "name": "game_components_embeddable_game_standard::token::extensions::objectives::objectives::ObjectivesComponent::ObjectiveCreated",
     "kind": "struct",
     "members": [
       {
@@ -1623,32 +1775,47 @@
         "kind": "key"
       },
       {
+        "name": "settings_id",
+        "type": "core::integer::u32",
+        "kind": "key"
+      },
+      {
         "name": "creator_address",
         "type": "core::starknet::contract_address::ContractAddress",
         "kind": "data"
       },
       {
-        "name": "objective_data",
+        "name": "name",
         "type": "core::byte_array::ByteArray",
+        "kind": "data"
+      },
+      {
+        "name": "description",
+        "type": "core::byte_array::ByteArray",
+        "kind": "data"
+      },
+      {
+        "name": "objectives",
+        "type": "core::array::Span::<game_components_interfaces::structs::minigame::GameObjective>",
         "kind": "data"
       }
     ]
   },
   {
     "type": "event",
-    "name": "game_components_token::extensions::objectives::objectives::ObjectivesComponent::Event",
+    "name": "game_components_embeddable_game_standard::token::extensions::objectives::objectives::ObjectivesComponent::Event",
     "kind": "enum",
     "variants": [
       {
         "name": "ObjectiveCreated",
-        "type": "game_components_token::extensions::objectives::objectives::ObjectivesComponent::ObjectiveCreated",
+        "type": "game_components_embeddable_game_standard::token::extensions::objectives::objectives::ObjectivesComponent::ObjectiveCreated",
         "kind": "nested"
       }
     ]
   },
   {
     "type": "event",
-    "name": "game_components_token::extensions::settings::settings::SettingsComponent::SettingsCreated",
+    "name": "game_components_embeddable_game_standard::token::extensions::settings::settings::SettingsComponent::SettingsCreated",
     "kind": "struct",
     "members": [
       {
@@ -1667,27 +1834,37 @@
         "kind": "data"
       },
       {
-        "name": "settings_data",
+        "name": "name",
         "type": "core::byte_array::ByteArray",
+        "kind": "data"
+      },
+      {
+        "name": "description",
+        "type": "core::byte_array::ByteArray",
+        "kind": "data"
+      },
+      {
+        "name": "settings",
+        "type": "core::array::Span::<game_components_interfaces::structs::minigame::GameSetting>",
         "kind": "data"
       }
     ]
   },
   {
     "type": "event",
-    "name": "game_components_token::extensions::settings::settings::SettingsComponent::Event",
+    "name": "game_components_embeddable_game_standard::token::extensions::settings::settings::SettingsComponent::Event",
     "kind": "enum",
     "variants": [
       {
         "name": "SettingsCreated",
-        "type": "game_components_token::extensions::settings::settings::SettingsComponent::SettingsCreated",
+        "type": "game_components_embeddable_game_standard::token::extensions::settings::settings::SettingsComponent::SettingsCreated",
         "kind": "nested"
       }
     ]
   },
   {
     "type": "event",
-    "name": "game_components_token::extensions::context::context::ContextComponent::TokenContextUpdate",
+    "name": "game_components_embeddable_game_standard::token::extensions::context::context::ContextComponent::TokenContextUpdate",
     "kind": "struct",
     "members": [
       {
@@ -1704,19 +1881,19 @@
   },
   {
     "type": "event",
-    "name": "game_components_token::extensions::context::context::ContextComponent::Event",
+    "name": "game_components_embeddable_game_standard::token::extensions::context::context::ContextComponent::Event",
     "kind": "enum",
     "variants": [
       {
         "name": "TokenContextUpdate",
-        "type": "game_components_token::extensions::context::context::ContextComponent::TokenContextUpdate",
+        "type": "game_components_embeddable_game_standard::token::extensions::context::context::ContextComponent::TokenContextUpdate",
         "kind": "nested"
       }
     ]
   },
   {
     "type": "event",
-    "name": "game_components_token::extensions::renderer::renderer::RendererComponent::TokenRendererUpdate",
+    "name": "game_components_embeddable_game_standard::token::extensions::renderer::renderer::RendererComponent::TokenRendererUpdate",
     "kind": "struct",
     "members": [
       {
@@ -1733,19 +1910,19 @@
   },
   {
     "type": "event",
-    "name": "game_components_token::extensions::renderer::renderer::RendererComponent::Event",
+    "name": "game_components_embeddable_game_standard::token::extensions::renderer::renderer::RendererComponent::Event",
     "kind": "enum",
     "variants": [
       {
         "name": "TokenRendererUpdate",
-        "type": "game_components_token::extensions::renderer::renderer::RendererComponent::TokenRendererUpdate",
+        "type": "game_components_embeddable_game_standard::token::extensions::renderer::renderer::RendererComponent::TokenRendererUpdate",
         "kind": "nested"
       }
     ]
   },
   {
     "type": "event",
-    "name": "denshokan::denshokan::Denshokan::Event",
+    "name": "denshokan_token::denshokan::Denshokan::Event",
     "kind": "enum",
     "variants": [
       {
@@ -1765,32 +1942,37 @@
       },
       {
         "name": "CoreTokenEvent",
-        "type": "game_components_token::core::core_token::CoreTokenComponent::Event",
+        "type": "game_components_embeddable_game_standard::token::core::core_token::CoreTokenComponent::Event",
+        "kind": "flat"
+      },
+      {
+        "name": "ERC721EnumerableEvent",
+        "type": "openzeppelin_token::erc721::extensions::erc721_enumerable::erc721_enumerable::ERC721EnumerableComponent::Event",
         "kind": "flat"
       },
       {
         "name": "MinterEvent",
-        "type": "game_components_token::extensions::minter::minter::MinterComponent::Event",
+        "type": "game_components_embeddable_game_standard::token::extensions::minter::minter::MinterComponent::Event",
         "kind": "flat"
       },
       {
         "name": "ObjectivesEvent",
-        "type": "game_components_token::extensions::objectives::objectives::ObjectivesComponent::Event",
+        "type": "game_components_embeddable_game_standard::token::extensions::objectives::objectives::ObjectivesComponent::Event",
         "kind": "flat"
       },
       {
         "name": "SettingsEvent",
-        "type": "game_components_token::extensions::settings::settings::SettingsComponent::Event",
+        "type": "game_components_embeddable_game_standard::token::extensions::settings::settings::SettingsComponent::Event",
         "kind": "flat"
       },
       {
         "name": "ContextEvent",
-        "type": "game_components_token::extensions::context::context::ContextComponent::Event",
+        "type": "game_components_embeddable_game_standard::token::extensions::context::context::ContextComponent::Event",
         "kind": "flat"
       },
       {
         "name": "RendererEvent",
-        "type": "game_components_token::extensions::renderer::renderer::RendererComponent::Event",
+        "type": "game_components_embeddable_game_standard::token::extensions::renderer::renderer::RendererComponent::Event",
         "kind": "flat"
       }
     ]

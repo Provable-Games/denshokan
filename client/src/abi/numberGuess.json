@@ -353,6 +353,17 @@
     "items": [
       {
         "type": "function",
+        "name": "settings_count",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::integer::u32"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
         "name": "settings_details",
         "inputs": [
           {
@@ -501,6 +512,17 @@
     "items": [
       {
         "type": "function",
+        "name": "objectives_count",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::integer::u32"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
         "name": "objectives_details",
         "inputs": [
           {
@@ -511,6 +533,22 @@
         "outputs": [
           {
             "type": "game_components_interfaces::structs::minigame::GameObjectiveDetails"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "objective_settings_id",
+        "inputs": [
+          {
+            "name": "objective_id",
+            "type": "core::integer::u32"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::integer::u32"
           }
         ],
         "state_mutability": "view"
@@ -530,17 +568,33 @@
           }
         ],
         "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "objective_settings_id_batch",
+        "inputs": [
+          {
+            "name": "objective_ids",
+            "type": "core::array::Span::<core::integer::u32>"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::array::Array::<core::integer::u32>"
+          }
+        ],
+        "state_mutability": "view"
       }
     ]
   },
   {
     "type": "impl",
     "name": "NumberGuessImpl",
-    "interface_name": "denshokan::number_guess::INumberGuess"
+    "interface_name": "denshokan_games::number_guess::INumberGuess"
   },
   {
     "type": "interface",
-    "name": "denshokan::number_guess::INumberGuess",
+    "name": "denshokan_games::number_guess::INumberGuess",
     "items": [
       {
         "type": "function",
@@ -711,11 +765,11 @@
   {
     "type": "impl",
     "name": "NumberGuessConfigImpl",
-    "interface_name": "denshokan::number_guess::INumberGuessConfig"
+    "interface_name": "denshokan_games::number_guess::INumberGuessConfig"
   },
   {
     "type": "interface",
-    "name": "denshokan::number_guess::INumberGuessConfig",
+    "name": "denshokan_games::number_guess::INumberGuessConfig",
     "items": [
       {
         "type": "function",
@@ -776,51 +830,13 @@
           }
         ],
         "state_mutability": "external"
-      },
-      {
-        "type": "function",
-        "name": "settings_count",
-        "inputs": [],
-        "outputs": [
-          {
-            "type": "core::integer::u32"
-          }
-        ],
-        "state_mutability": "view"
-      },
-      {
-        "type": "function",
-        "name": "objective_count",
-        "inputs": [],
-        "outputs": [
-          {
-            "type": "core::integer::u32"
-          }
-        ],
-        "state_mutability": "view"
-      },
-      {
-        "type": "function",
-        "name": "get_objective",
-        "inputs": [
-          {
-            "name": "objective_id",
-            "type": "core::integer::u32"
-          }
-        ],
-        "outputs": [
-          {
-            "type": "(core::byte_array::ByteArray, core::byte_array::ByteArray, core::integer::u8, core::integer::u32)"
-          }
-        ],
-        "state_mutability": "view"
       }
     ]
   },
   {
     "type": "impl",
     "name": "NumberGuessInitImpl",
-    "interface_name": "denshokan::number_guess::INumberGuessInit"
+    "interface_name": "denshokan_games::number_guess::INumberGuessInit"
   },
   {
     "type": "enum",
@@ -866,7 +882,7 @@
   },
   {
     "type": "interface",
-    "name": "denshokan::number_guess::INumberGuessInit",
+    "name": "denshokan_games::number_guess::INumberGuessInit",
     "items": [
       {
         "type": "function",
@@ -1247,19 +1263,19 @@
   },
   {
     "type": "event",
-    "name": "game_components_minigame::minigame::MinigameComponent::Event",
+    "name": "game_components_embeddable_game_standard::minigame::minigame::MinigameComponent::Event",
     "kind": "enum",
     "variants": []
   },
   {
     "type": "event",
-    "name": "game_components_minigame::extensions::objectives::objectives::ObjectivesComponent::Event",
+    "name": "game_components_embeddable_game_standard::minigame::extensions::objectives::objectives::ObjectivesComponent::Event",
     "kind": "enum",
     "variants": []
   },
   {
     "type": "event",
-    "name": "game_components_minigame::extensions::settings::settings::SettingsComponent::Event",
+    "name": "game_components_embeddable_game_standard::minigame::extensions::settings::settings::SettingsComponent::Event",
     "kind": "enum",
     "variants": []
   },
@@ -1271,22 +1287,22 @@
   },
   {
     "type": "event",
-    "name": "denshokan::number_guess::NumberGuess::Event",
+    "name": "denshokan_games::number_guess::NumberGuess::Event",
     "kind": "enum",
     "variants": [
       {
         "name": "MinigameEvent",
-        "type": "game_components_minigame::minigame::MinigameComponent::Event",
+        "type": "game_components_embeddable_game_standard::minigame::minigame::MinigameComponent::Event",
         "kind": "flat"
       },
       {
         "name": "ObjectivesEvent",
-        "type": "game_components_minigame::extensions::objectives::objectives::ObjectivesComponent::Event",
+        "type": "game_components_embeddable_game_standard::minigame::extensions::objectives::objectives::ObjectivesComponent::Event",
         "kind": "flat"
       },
       {
         "name": "SettingsEvent",
-        "type": "game_components_minigame::extensions::settings::settings::SettingsComponent::Event",
+        "type": "game_components_embeddable_game_standard::minigame::extensions::settings::settings::SettingsComponent::Event",
         "kind": "flat"
       },
       {

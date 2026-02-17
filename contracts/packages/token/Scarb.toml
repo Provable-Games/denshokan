@@ -7,11 +7,9 @@ cairo-version.workspace = true
 [dependencies]
 starknet.workspace = true
 denshokan_interfaces.workspace = true
-game_components_token.workspace = true
-game_components_metagame.workspace = true
-game_components_minigame.workspace = true
-game_components_registry.workspace = true
-game_components_utils.workspace = true
+game_components_embeddable_game_standard.workspace = true
+game_components_utilities.workspace = true
+
 openzeppelin_token.workspace = true
 openzeppelin_introspection.workspace = true
 openzeppelin_interfaces.workspace = true
@@ -21,14 +19,14 @@ openzeppelin_access.workspace = true
 snforge_std.workspace = true
 denshokan_testing.workspace = true
 denshokan_registry.workspace = true
-game_components_test_common.workspace = true
+
 
 [[target.starknet-contract]]
 sierra = true
 casm = true
 build-external-contracts = [
     "denshokan_registry::minigame_registry::MinigameRegistry",
-    "game_components_test_common::mocks::minigame_starknet_mock::minigame_starknet_mock",
+    "denshokan_testing::mocks::minigame_starknet_mock::minigame_starknet_mock",
 ]
 
 [lib]

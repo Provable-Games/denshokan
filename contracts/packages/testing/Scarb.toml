@@ -7,11 +7,10 @@ cairo-version.workspace = true
 [dependencies]
 starknet.workspace = true
 snforge_std.workspace = true
-game_components_minigame.workspace = true
-game_components_registry.workspace = true
-game_components_token.workspace = true
-game_components_test_common.workspace = true
+game_components_embeddable_game_standard.workspace = true
+
 openzeppelin_interfaces.workspace = true
+openzeppelin_introspection.workspace = true
 
 [lib]
 name = "denshokan_testing"

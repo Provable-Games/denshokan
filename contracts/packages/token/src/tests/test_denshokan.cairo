@@ -1,5 +1,5 @@
-use game_components_registry::interface::IMinigameRegistryDispatcherTrait;
-use game_components_token::interface::IMinigameTokenMixinDispatcherTrait;
+use game_components_embeddable_game_standard::registry::interface::IMinigameRegistryDispatcherTrait;
+use game_components_embeddable_game_standard::token::interface::IMinigameTokenMixinDispatcherTrait;
 use openzeppelin_interfaces::erc2981::{IERC2981DispatcherTrait, IERC2981_ID};
 use openzeppelin_interfaces::erc721::{
     IERC721DispatcherTrait, IERC721EnumerableDispatcher, IERC721EnumerableDispatcherTrait,

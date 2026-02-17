@@ -4,9 +4,9 @@ use denshokan_interfaces::filter::{
 };
 use denshokan_testing::helpers::constants::{ALICE, BOB, CHARLIE, GAME_CREATOR};
 use denshokan_testing::helpers::setup::{register_game, setup_with_registry};
-use game_components_registry::interface::IMinigameRegistryDispatcherTrait;
-use game_components_token::interface::IMinigameTokenMixinDispatcherTrait;
-use game_components_token::structs::{unpack_game_id, unpack_soulbound};
+use game_components_embeddable_game_standard::registry::interface::IMinigameRegistryDispatcherTrait;
+use game_components_embeddable_game_standard::token::interface::IMinigameTokenMixinDispatcherTrait;
+use game_components_embeddable_game_standard::token::structs::{unpack_game_id, unpack_soulbound};
 use openzeppelin_interfaces::ownable::{IOwnableDispatcher, IOwnableDispatcherTrait};
 use openzeppelin_interfaces::upgrades::{IUpgradeableDispatcher, IUpgradeableDispatcherTrait};
 use snforge_std::{

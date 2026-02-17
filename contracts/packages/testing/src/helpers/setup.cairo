@@ -1,17 +1,17 @@
-use game_components_minigame::interface::IMinigameDispatcher;
-use game_components_registry::interface::{
+use game_components_embeddable_game_standard::minigame::interface::IMinigameDispatcher;
+use game_components_embeddable_game_standard::registry::interface::{
     IMinigameRegistryDispatcher, IMinigameRegistryDispatcherTrait,
 };
-use game_components_test_common::mocks::minigame_starknet_mock::{
-    IMinigameStarknetMockDispatcher, IMinigameStarknetMockInitDispatcher,
-    IMinigameStarknetMockInitDispatcherTrait,
-};
-use game_components_token::interface::IMinigameTokenMixinDispatcher;
+use game_components_embeddable_game_standard::token::interface::IMinigameTokenMixinDispatcher;
 use openzeppelin_interfaces::erc2981::IERC2981Dispatcher;
 use openzeppelin_interfaces::erc721::IERC721Dispatcher;
 use snforge_std::{ContractClassTrait, DeclareResultTrait, declare};
 use starknet::ContractAddress;
 use crate::helpers::constants::GAME_CREATOR;
+use crate::mocks::minigame_starknet_mock::{
+    IMinigameStarknetMockDispatcher, IMinigameStarknetMockInitDispatcher,
+    IMinigameStarknetMockInitDispatcherTrait,
+};
 
 // ================================================================================================
 // TEST CONTRACTS STRUCT

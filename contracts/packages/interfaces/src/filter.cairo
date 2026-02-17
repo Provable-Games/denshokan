@@ -2,9 +2,9 @@
 // Provides paginated view functions that combine ERC721Enumerable iteration
 // with PackedTokenId unpacking for efficient token filtering.
 
-use game_components_minigame::extensions::objectives::structs::GameObjectiveDetails;
-use game_components_minigame::extensions::settings::structs::GameSettingDetails;
-use game_components_token::structs::Lifecycle;
+use game_components_embeddable_game_standard::minigame::extensions::objectives::structs::GameObjectiveDetails;
+use game_components_embeddable_game_standard::minigame::extensions::settings::structs::GameSettingDetails;
+use game_components_embeddable_game_standard::token::structs::Lifecycle;
 use starknet::ContractAddress;
 
 /// Maximum number of tokens returned per filter call

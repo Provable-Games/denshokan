@@ -1,6 +1,6 @@
 use denshokan_testing::helpers::constants::{ALICE, BOB, CHARLIE, GAME_CREATOR};
 use denshokan_testing::helpers::setup::{register_game, setup_with_registry};
-use game_components_registry::interface::{
+use game_components_embeddable_game_standard::registry::interface::{
     IMINIGAME_REGISTRY_ID, IMinigameRegistryDispatcher, IMinigameRegistryDispatcherTrait,
 };
 use openzeppelin_interfaces::erc721::{

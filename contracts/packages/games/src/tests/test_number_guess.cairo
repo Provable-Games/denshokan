@@ -1,14 +1,14 @@
 use denshokan_testing::helpers::constants::GAME_CREATOR;
 use denshokan_testing::helpers::setup::{deploy_denshokan, deploy_minigame_registry};
-use game_components_minigame::extensions::objectives::interface::{
+use game_components_embeddable_game_standard::minigame::extensions::objectives::interface::{
     IMinigameObjectivesDetailsDispatcher, IMinigameObjectivesDetailsDispatcherTrait,
     IMinigameObjectivesDispatcher, IMinigameObjectivesDispatcherTrait,
 };
-use game_components_minigame::extensions::settings::interface::{
+use game_components_embeddable_game_standard::minigame::extensions::settings::interface::{
     IMinigameSettingsDetailsDispatcher, IMinigameSettingsDetailsDispatcherTrait,
     IMinigameSettingsDispatcher, IMinigameSettingsDispatcherTrait,
 };
-use game_components_minigame::interface::{
+use game_components_embeddable_game_standard::minigame::interface::{
     IMinigameDetailsDispatcher, IMinigameDetailsDispatcherTrait, IMinigameTokenDataDispatcher,
     IMinigameTokenDataDispatcherTrait,
 };
