@@ -14,7 +14,7 @@ use game_components_embeddable_game_standard::minigame::structs::GameDetail;
 use game_components_embeddable_game_standard::registry::interface::{
     IMinigameRegistryDispatcher, IMinigameRegistryDispatcherTrait,
 };
-use game_components_embeddable_game_standard::token::core::core_token::CoreTokenComponent;
+use game_components_embeddable_game_standard::token::token_component::CoreTokenComponent;
 use game_components_embeddable_game_standard::token::extensions::context::context::ContextComponent;
 use game_components_embeddable_game_standard::token::extensions::minter::minter::MinterComponent;
 use game_components_embeddable_game_standard::token::extensions::objectives::objectives::ObjectivesComponent;
