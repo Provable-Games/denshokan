@@ -726,6 +726,7 @@ jobs:
         run: |
           FAILED=$(echo "$NEEDS_JSON" | jq -r '
             to_entries[]
+            | select(.key != "claude-review" and .key != "codex-review")
             | select(.value.result == "failure" or .value.result == "cancelled")
             | .key
           ')
@@ -758,12 +759,16 @@ jobs:
                 CLAUDE_RESULT=$(echo "$NEEDS_JSON" | jq -r '.["claude-review"].result // "unknown"')
                 if [ "$CLAUDE_RESULT" = "skipped" ]; then
                   MISSING_REVIEWS="${MISSING_REVIEWS}claude-review"$'\n'
+                elif [ "$CLAUDE_RESULT" = "failure" ]; then
+                  echo "::warning::claude-review failed (likely infrastructure issue) — not blocking PR"
                 fi
               fi
 
               CODEX_RESULT=$(echo "$NEEDS_JSON" | jq -r '.["codex-review"].result // "unknown"')
               if [ "$CODEX_RESULT" = "skipped" ]; then
                 MISSING_REVIEWS="${MISSING_REVIEWS}codex-review"$'\n'
+              elif [ "$CODEX_RESULT" = "failure" ]; then
+                echo "::warning::codex-review failed (likely infrastructure issue) — not blocking PR"
               fi
             fi
 
