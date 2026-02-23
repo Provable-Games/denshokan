@@ -2,6 +2,8 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { ThemeProvider } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { SnackbarProvider } from "notistack";
 import { BrowserRouter } from "react-router-dom";
 import { DenshokanProvider } from "@provable-games/denshokan-sdk/react";
@@ -25,19 +27,21 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <SnackbarProvider maxSnack={3}>
-        <StarknetProvider>
-          <DenshokanProvider config={denshokanConfig}>
-            <ControllerProvider>
-              <BrowserRouter>
-                <ErrorBoundary>
-                  <App />
-                </ErrorBoundary>
-              </BrowserRouter>
-            </ControllerProvider>
-          </DenshokanProvider>
-        </StarknetProvider>
-      </SnackbarProvider>
+      <LocalizationProvider dateAdapter={AdapterDayjs}>
+        <SnackbarProvider maxSnack={3}>
+          <StarknetProvider>
+            <DenshokanProvider config={denshokanConfig}>
+              <ControllerProvider>
+                <BrowserRouter>
+                  <ErrorBoundary>
+                    <App />
+                  </ErrorBoundary>
+                </BrowserRouter>
+              </ControllerProvider>
+            </DenshokanProvider>
+          </StarknetProvider>
+        </SnackbarProvider>
+      </LocalizationProvider>
     </ThemeProvider>
   </React.StrictMode>,
 );
