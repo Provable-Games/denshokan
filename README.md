@@ -135,8 +135,8 @@ The script will:
 cd indexer
 
 # Configure environment
-# Set DATABASE_URL, DENSHOKAN_CONTRACT_ADDRESS, DENSHOKAN_REGISTRY_ADDRESS,
-# APIBARA_STREAM_URL, STARTING_BLOCK in .env
+# Set DATABASE_URL, DENSHOKAN_ADDRESS, REGISTRY_ADDRESS,
+# STREAM_URL, STARTING_BLOCK in .env
 
 # Run migrations
 npm run db:migrate

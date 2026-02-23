@@ -5,7 +5,7 @@
 #
 # Updates:
 #   - client/.env      (VITE_DENSHOKAN_ADDRESS, VITE_REGISTRY_ADDRESS, VITE_VIEWER_ADDRESS)
-#   - indexer/.env      (CONTRACT_ADDRESS, REGISTRY_CONTRACT_ADDRESS)
+#   - indexer/.env      (DENSHOKAN_ADDRESS, REGISTRY_ADDRESS)
 #   - contracts/.env    (already the source, no changes)
 #
 # Usage:
@@ -117,8 +117,8 @@ INDEXER_ENV="$ROOT_DIR/indexer/.env"
 
 if [ -f "$INDEXER_ENV" ]; then
     echo -e "${GREEN}[INFO]${NC} Updating indexer/.env"
-    update_env_var "$INDEXER_ENV" "CONTRACT_ADDRESS" "$DENSHOKAN"
-    update_env_var "$INDEXER_ENV" "REGISTRY_CONTRACT_ADDRESS" "$REGISTRY"
+    update_env_var "$INDEXER_ENV" "DENSHOKAN_ADDRESS" "$DENSHOKAN"
+    update_env_var "$INDEXER_ENV" "REGISTRY_ADDRESS" "$REGISTRY"
     echo
 else
     echo -e "${YELLOW}[SKIP]${NC} indexer/.env not found"

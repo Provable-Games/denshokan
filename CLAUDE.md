@@ -314,14 +314,14 @@ After deploying contracts, sync addresses to all `.env` files:
 
 Source of truth is `contracts/.env`. The script updates:
 - `client/.env` — `VITE_DENSHOKAN_ADDRESS`, `VITE_REGISTRY_ADDRESS`, `VITE_VIEWER_ADDRESS`
-- `indexer/.env` — `CONTRACT_ADDRESS`, `REGISTRY_CONTRACT_ADDRESS`
+- `indexer/.env` — `DENSHOKAN_ADDRESS`, `REGISTRY_ADDRESS`
 
 ### Indexer Deployment
 
 Configure environment variables:
 - `DATABASE_URL` - PostgreSQL connection string
-- `DENSHOKAN_CONTRACT_ADDRESS` - Token contract address
-- `DENSHOKAN_REGISTRY_ADDRESS` - Registry contract address
+- `DENSHOKAN_ADDRESS` - Token contract address
+- `REGISTRY_ADDRESS` - Registry contract address
 - `APIBARA_STREAM_URL` - DNA stream URL
 - `STARTING_BLOCK` - Block number to start from
 

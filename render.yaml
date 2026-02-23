@@ -69,9 +69,9 @@ services:
         fromDatabase:
           name: denshokan-db
           property: connectionString
-      - key: CONTRACT_ADDRESS
+      - key: DENSHOKAN_ADDRESS
         sync: false # Set manually in dashboard
-      - key: REGISTRY_CONTRACT_ADDRESS
+      - key: REGISTRY_ADDRESS
         sync: false # Set manually in dashboard
       - key: STREAM_URL
         sync: false # Set manually in dashboard
