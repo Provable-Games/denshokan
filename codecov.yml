@@ -1,5 +1,8 @@
 codecov:
   require_ci_to_pass: true
+  notify:
+    # Must equal module count in .github/workflows/main-ci.yml matrix
+    after_n_builds: 4
 
 comment:
   layout: "diff, files, header, footer"
@@ -26,8 +29,8 @@ flag_management:
 
 ignore:
   - "**/tests/**"
-  - "contracts/src/denshokan.cairo"
-  - "contracts/src/minigame_registry.cairo"
+  - "contracts/packages/testing/**"
+  - "contracts/packages/interfaces/**"
 
 github_checks:
   annotations: false
