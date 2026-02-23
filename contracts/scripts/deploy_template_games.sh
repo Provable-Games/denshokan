@@ -70,9 +70,12 @@ print_info "Building contracts..."
 cd "$CONTRACTS_DIR"
 scarb build
 
-ARTIFACT="$CONTRACTS_DIR/target/dev/denshokan_testing_minigame_starknet_mock.contract_class.json"
+ARTIFACT="$CONTRACTS_DIR/target/dev/denshokan_testing_minigame_mock.contract_class.json"
 if [ ! -f "$ARTIFACT" ]; then
-    # Try alternative prefix in case naming differs
+    # Try alternative prefixes in case naming differs
+    ARTIFACT="$CONTRACTS_DIR/target/dev/denshokan_testing_minigame_starknet_mock.contract_class.json"
+fi
+if [ ! -f "$ARTIFACT" ]; then
     ARTIFACT="$CONTRACTS_DIR/target/dev/denshokan_minigame_starknet_mock.contract_class.json"
 fi
 
@@ -89,11 +92,11 @@ print_info "Using artifact: $(basename "$ARTIFACT")"
 # DECLARE MOCK GAME CLASS
 # ============================
 
-print_info "Declaring minigame_starknet_mock..."
+print_info "Declaring minigame_mock..."
 
 DECLARE_OUTPUT=$(sncast --profile "$PROFILE" --wait \
     declare \
-    --contract-name minigame_starknet_mock \
+    --contract-name minigame_mock \
     --package denshokan_testing 2>&1) || {
     if echo "$DECLARE_OUTPUT" | grep -q "already declared"; then
         print_warning "Contract already declared"
@@ -162,23 +165,44 @@ deploy_game() {
 
     print_info "  Deployed at: $GAME_ADDRESS"
 
-    # Call initializer
-    # Signature: initializer(
-    #   game_creator: ContractAddress,
-    #   game_name: ByteArray,
-    #   game_description: ByteArray,
-    #   game_developer: ByteArray,
-    #   game_publisher: ByteArray,
-    #   game_genre: ByteArray,
-    #   game_image: ByteArray,
-    #   game_color: Option<ByteArray>,       -- 0 = Some, 1 = None
-    #   client_url: Option<ByteArray>,       -- None
-    #   renderer_address: Option<ContractAddress>, -- None
-    #   settings_address: Option<ContractAddress>,  -- None
-    #   objectives_address: Option<ContractAddress>, -- None
-    #   minigame_token_address: ContractAddress,
-    #   royalty_fraction: Option<u128>,      -- 0 = Some
-    # )
+    # Call initializer using raw calldata (felt serialization)
+    # ByteArray = num_31byte_chunks [chunks...] pending_word pending_len
+    # Option::Some(x) = 0 x  |  Option::None = 1
+
+    # Encode strings to ByteArray calldata
+    encode_bytearray() {
+        local str="$1"
+        local len=${#str}
+        local hex=$(printf '%s' "$str" | xxd -p | tr -d '\n')
+        if [ "$len" -le 31 ]; then
+            echo "0 0x$hex $len"
+        else
+            local full_chunks=$((len / 31))
+            local pending_len=$((len % 31))
+            local result="$full_chunks"
+            local i=0
+            while [ "$i" -lt "$full_chunks" ]; do
+                local chunk_hex=${hex:$((i * 62)):62}
+                result="$result 0x$chunk_hex"
+                i=$((i + 1))
+            done
+            if [ "$pending_len" -gt 0 ]; then
+                local pending_hex=${hex:$((full_chunks * 62))}
+                result="$result 0x$pending_hex $pending_len"
+            else
+                result="$result 0x0 0"
+            fi
+            echo "$result"
+        fi
+    }
+
+    local NAME_CD=$(encode_bytearray "$name")
+    local DESC_CD=$(encode_bytearray "$description")
+    local DEV_CD=$(encode_bytearray "$developer")
+    local PUB_CD=$(encode_bytearray "$publisher")
+    local GENRE_CD=$(encode_bytearray "$genre")
+    local IMAGE_CD=$(encode_bytearray "$image")
+    local COLOR_CD=$(encode_bytearray "$color")
 
     print_info "  Initializing $name..."
 
@@ -186,7 +210,21 @@ deploy_game() {
         invoke \
         --contract-address "$GAME_ADDRESS" \
         --function "initializer" \
-        --arguments "$GAME_CREATOR, \"$name\", \"$description\", \"$developer\", \"$publisher\", \"$genre\", \"$image\", core::option::Option::Some(\"$color\"), core::option::Option::None, core::option::Option::None, core::option::Option::None, core::option::Option::None, $DENSHOKAN_ADDRESS, core::option::Option::Some($royalty_bps)" || {
+        --calldata \
+            $GAME_CREATOR \
+            $NAME_CD \
+            $DESC_CD \
+            $DEV_CD \
+            $PUB_CD \
+            $GENRE_CD \
+            $IMAGE_CD \
+            0 $COLOR_CD \
+            1 \
+            1 \
+            1 \
+            1 \
+            $DENSHOKAN_ADDRESS \
+            0 $royalty_bps || {
         print_error "Failed to initialize game $idx ($name)"
         exit 1
     }

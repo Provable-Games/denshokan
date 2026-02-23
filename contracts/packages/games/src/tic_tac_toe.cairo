@@ -248,7 +248,7 @@ pub mod TicTacToe {
     use game_components_embeddable_game_standard::minigame::interface::{
         IMinigameDetails, IMinigameTokenData,
     };
-    use game_components_embeddable_game_standard::minigame::minigame::MinigameComponent;
+    use game_components_embeddable_game_standard::minigame::minigame_component::MinigameComponent;
     use game_components_embeddable_game_standard::minigame::structs::GameDetail;
     use openzeppelin_introspection::src5::SRC5Component;
     use starknet::storage::{
