@@ -7,8 +7,7 @@ import { config, networkName } from "../config";
 const chain = networkName === "sepolia" ? sepolia : mainnet;
 
 const cartridgeConnector = new ControllerConnector({
-  chains: [{ rpcUrl: config.rpcUrl }],
-  defaultChainId: chain.id.toString(),
+  rpcUrl: config.rpcUrl,
   policies: {
     contracts: {
       [config.denshokanAddress]: {
