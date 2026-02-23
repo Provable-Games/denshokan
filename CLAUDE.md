@@ -93,6 +93,13 @@ docker-compose up -d postgres   # Start PostgreSQL only
 docker-compose up -d            # Start all services (postgres, indexer, API)
 ```
 
+### Environment Sync
+
+```bash
+./scripts/sync-env.sh            # Sync contract addresses to client + indexer .env files
+./scripts/sync-env.sh --dry-run  # Preview changes
+```
+
 ## Architecture
 
 ### Contracts (`contracts/`)
@@ -295,6 +302,19 @@ Additional deployment scripts:
 - `./scripts/deploy_number_guess.sh`
 - `./scripts/deploy_tic_tac_toe.sh`
 - `./scripts/deploy_template_games.sh`
+
+### Syncing Environment Variables
+
+After deploying contracts, sync addresses to all `.env` files:
+
+```bash
+./scripts/sync-env.sh            # Apply updates
+./scripts/sync-env.sh --dry-run  # Preview changes without writing
+```
+
+Source of truth is `contracts/.env`. The script updates:
+- `client/.env` — `VITE_DENSHOKAN_ADDRESS`, `VITE_REGISTRY_ADDRESS`, `VITE_VIEWER_ADDRESS`
+- `indexer/.env` — `CONTRACT_ADDRESS`, `REGISTRY_CONTRACT_ADDRESS`
 
 ### Indexer Deployment
 
