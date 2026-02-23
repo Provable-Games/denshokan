@@ -330,6 +330,12 @@ Use Cartridge's RPC:
 - Mainnet: `https://api.cartridge.gg/x/starknet/mainnet`
 - Sepolia: `https://api.cartridge.gg/x/starknet/sepolia`
 
+## Workflow Rules
+
+### Cairo Contract Changes
+
+After any modifications to Cairo contract files (`contracts/`), always run `cd contracts && scarb fmt -w` before committing. CI enforces `scarb fmt --check --workspace` and will fail if formatting is off.
+
 ## Key Patterns
 
 ### Adding a New Event
