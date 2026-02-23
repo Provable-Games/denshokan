@@ -1,7 +1,8 @@
 import { useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Box, Typography, Grid, Card, CardContent, Chip, Stack, Button } from "@mui/material";
+import { Box, Typography, Grid, Button } from "@mui/material";
 import { PlayArrow } from "@mui/icons-material";
+import { motion } from "framer-motion";
 import {
   useScoreUpdates,
   useGameOverEvents,
@@ -10,11 +11,20 @@ import {
 import type { ScoreEvent, GameOverEvent } from "@provable-games/denshokan-sdk";
 import { useTokenDetail } from "../hooks/useTokenDetail";
 import LoadingSpinner from "../components/common/LoadingSpinner";
+import TokenScoreCard from "../components/tokens/TokenScoreCard";
+import TokenInfoCard from "../components/tokens/TokenInfoCard";
+import TokenGameInfoCard from "../components/tokens/TokenGameInfoCard";
+import TokenSettingsCard from "../components/tokens/TokenSettingsCard";
+import TokenObjectiveCard from "../components/tokens/TokenObjectiveCard";
+import TokenPropertiesChips from "../components/tokens/TokenPropertiesChips";
+import ScoreHistoryTable from "../components/tokens/ScoreHistoryTable";
 
 export default function TokenDetailPage() {
   const { tokenId } = useParams<{ tokenId: string }>();
   const navigate = useNavigate();
-  const { token, scores } = useTokenDetail(tokenId || "");
+  const { token, scores, game, setting, objective } = useTokenDetail(
+    tokenId || "",
+  );
   const { isConnected } = useConnectionStatus();
 
   const [liveScore, setLiveScore] = useState<number | null>(null);
@@ -25,101 +35,130 @@ export default function TokenDetailPage() {
   useScoreUpdates({
     gameIds,
     enabled: !!token,
-    onEvent: useCallback((e: ScoreEvent) => {
-      if (e.tokenId === tokenId) {
-        setLiveScore(e.score);
-      }
-    }, [tokenId]),
+    onEvent: useCallback(
+      (e: ScoreEvent) => {
+        if (e.tokenId === tokenId) {
+          setLiveScore(e.score);
+        }
+      },
+      [tokenId],
+    ),
   });
 
   useGameOverEvents({
     gameIds,
     enabled: !!token,
-    onEvent: useCallback((e: GameOverEvent) => {
-      if (e.tokenId === tokenId) {
-        setLiveGameOver(true);
-        setLiveScore(e.score);
-      }
-    }, [tokenId]),
+    onEvent: useCallback(
+      (e: GameOverEvent) => {
+        if (e.tokenId === tokenId) {
+          setLiveGameOver(true);
+          setLiveScore(e.score);
+        }
+      },
+      [tokenId],
+    ),
   });
 
   if (!token) return <LoadingSpinner message="Loading token..." />;
 
-  const displayScore = liveScore !== null ? liveScore : Number(token.currentScore);
+  const displayScore =
+    liveScore !== null ? liveScore : Number(token.currentScore);
   const isGameOver = liveGameOver || token.gameOver;
 
   return (
-    <Box>
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 2 }}>
-        <Typography variant="h3" gutterBottom>
-          {token.playerName || `Token #${token.tokenId.slice(0, 12)}...`}
-        </Typography>
-        {!isGameOver && (
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<PlayArrow />}
-            onClick={() => navigate(`/tokens/${tokenId}/play`)}
-          >
-            Play Game
-          </Button>
-        )}
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: "easeOut" }}
+    >
+      {/* Header */}
+      <Box
+        sx={{
+          mb: 3,
+          p: 3,
+          borderRadius: 3,
+          background:
+            "linear-gradient(135deg, rgba(124,77,255,0.08) 0%, rgba(255,109,0,0.05) 100%)",
+          border: "1px solid rgba(124, 77, 255, 0.1)",
+        }}
+      >
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+          }}
+        >
+          <Box>
+            <Typography variant="h3" sx={{ fontWeight: 700 }}>
+              {token.playerName || `Token #${token.tokenId.slice(0, 12)}...`}
+            </Typography>
+            {game && (
+              <Typography variant="body1" color="text.secondary" sx={{ mt: 0.5 }}>
+                {game.name || `Game #${game.gameId}`}
+              </Typography>
+            )}
+          </Box>
+          {!isGameOver && (
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<PlayArrow />}
+              onClick={() => navigate(`/tokens/${tokenId}/play`)}
+              sx={{
+                boxShadow: "0 0 16px rgba(124, 77, 255, 0.3)",
+              }}
+            >
+              Play Game
+            </Button>
+          )}
+        </Box>
+
+        <Box sx={{ mt: 2 }}>
+          <TokenPropertiesChips token={token} isGameOver={isGameOver} />
+        </Box>
       </Box>
 
-      <Stack direction="row" spacing={1} sx={{ mb: 3 }}>
-        <Chip label={isGameOver ? "Completed" : "Active"} color={isGameOver ? "success" : "primary"} />
-        {liveGameOver && !token.gameOver && <Chip label="Game Over" color="warning" />}
-        {token.soulbound && <Chip label="Soulbound" variant="outlined" />}
-        <Chip label={`Game #${token.gameId}`} variant="outlined" />
-      </Stack>
-
+      {/* Main content grid */}
       <Grid container spacing={3}>
+        {/* Score Card */}
         <Grid size={{ xs: 12, md: 6 }}>
-          <Card variant="outlined">
-            <CardContent>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                <Typography color="text.secondary" gutterBottom>Current Score</Typography>
-                {isConnected && (
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 0.5 }}>
-                    <Box
-                      sx={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: "50%",
-                        bgcolor: "success.main",
-                      }}
-                    />
-                    <Typography variant="caption" color="success.main">
-                      Live
-                    </Typography>
-                  </Box>
-                )}
-              </Box>
-              <Typography variant="h3">{displayScore.toLocaleString()}</Typography>
-            </CardContent>
-          </Card>
+          <TokenScoreCard
+            score={displayScore}
+            isLive={isConnected}
+            isGameOver={isGameOver}
+          />
         </Grid>
+
+        {/* Token Info Card */}
         <Grid size={{ xs: 12, md: 6 }}>
-          <Card variant="outlined">
-            <CardContent>
-              <Typography color="text.secondary" gutterBottom>Owner</Typography>
-              <Typography variant="body1" sx={{ wordBreak: "break-all" }}>{token.ownerAddress}</Typography>
-            </CardContent>
-          </Card>
+          <TokenInfoCard token={token} />
+        </Grid>
+
+        {/* Game Info Card */}
+        <Grid size={{ xs: 12, md: 6 }}>
+          <TokenGameInfoCard game={game} gameId={token.gameId} />
+        </Grid>
+
+        {/* Settings Card */}
+        {setting && (
+          <Grid size={{ xs: 12, md: 6 }}>
+            <TokenSettingsCard setting={setting} />
+          </Grid>
+        )}
+
+        {/* Objective Card */}
+        {objective && (
+          <Grid size={{ xs: 12, md: 6 }}>
+            <TokenObjectiveCard objective={objective} />
+          </Grid>
+        )}
+
+        {/* Score History */}
+        <Grid size={{ xs: 12 }}>
+          <ScoreHistoryTable scores={scores} />
         </Grid>
       </Grid>
-
-      {scores.length > 0 && (
-        <Box sx={{ mt: 4 }}>
-          <Typography variant="h5" gutterBottom>Score History</Typography>
-          {scores.map((s, i) => (
-            <Box key={i} sx={{ display: "flex", justifyContent: "space-between", py: 1, borderBottom: 1, borderColor: "divider" }}>
-              <Typography>{Number(s.score).toLocaleString()}</Typography>
-              <Typography color="text.secondary">{new Date(s.timestamp).toLocaleDateString()}</Typography>
-            </Box>
-          ))}
-        </Box>
-      )}
-    </Box>
+    </motion.div>
   );
 }

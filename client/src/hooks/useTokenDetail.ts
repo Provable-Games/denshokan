@@ -1,9 +1,12 @@
 import {
   useToken,
   useTokenScores,
+  useGame,
 } from "@provable-games/denshokan-sdk/react";
+import { useSettingsList, type ClientSetting } from "./useSettingsList";
+import { useObjectivesList, type ClientObjective } from "./useObjectivesList";
 
-interface ClientToken {
+export interface ClientToken {
   tokenId: string;
   gameId: number;
   gameAddress: string | null;
@@ -13,6 +16,22 @@ interface ClientToken {
   gameOver: boolean;
   soulbound: boolean;
   mintedAt: string;
+  settingsId: number;
+  objectiveId: number;
+  startDelay: number;
+  endDelay: number;
+  hasContext: boolean;
+  paymaster: boolean;
+  mintedBy: number;
+  isPlayable: boolean;
+}
+
+export interface ClientGame {
+  gameId: number;
+  name: string | null;
+  description: string | null;
+  imageUrl: string | null;
+  contractAddress: string;
 }
 
 export function useTokenDetail(tokenId: string) {
@@ -29,6 +48,19 @@ export function useTokenDetail(tokenId: string) {
     refetch: refetchScores,
   } = useTokenScores(tokenId || undefined, 100);
 
+  // Fetch game info
+  const gameAddress = sdkToken?.gameAddress || undefined;
+  const { data: sdkGame, isLoading: gameLoading } = useGame(gameAddress);
+
+  // Fetch settings and objectives for this game
+  const { settings, loading: settingsLoading } = useSettingsList(
+    gameAddress ? { gameAddress } : undefined,
+  );
+
+  const { objectives, loading: objectivesLoading } = useObjectivesList(
+    gameAddress ? { gameAddress } : undefined,
+  );
+
   const token: ClientToken | null = sdkToken
     ? {
         tokenId: sdkToken.tokenId,
@@ -40,8 +72,37 @@ export function useTokenDetail(tokenId: string) {
         gameOver: sdkToken.gameOver,
         soulbound: sdkToken.soulbound,
         mintedAt: sdkToken.mintedAt,
+        settingsId: sdkToken.settingsId,
+        objectiveId: sdkToken.objectiveId,
+        startDelay: sdkToken.startDelay,
+        endDelay: sdkToken.endDelay,
+        hasContext: sdkToken.hasContext,
+        paymaster: sdkToken.paymaster,
+        mintedBy: sdkToken.mintedBy,
+        isPlayable: sdkToken.isPlayable,
       }
     : null;
+
+  const game: ClientGame | null = sdkGame
+    ? {
+        gameId: sdkGame.gameId,
+        name: sdkGame.name || null,
+        description: sdkGame.description || null,
+        imageUrl: sdkGame.imageUrl ?? null,
+        contractAddress: sdkGame.contractAddress,
+      }
+    : null;
+
+  // Find matching setting/objective for this token
+  const setting: ClientSetting | null =
+    token && token.settingsId > 0
+      ? settings.find((s) => s.settingsId === token.settingsId) ?? null
+      : null;
+
+  const objective: ClientObjective | null =
+    token && token.objectiveId > 0
+      ? objectives.find((o) => o.objectiveId === token.objectiveId) ?? null
+      : null;
 
   const refetch = () => {
     refetchToken();
@@ -51,7 +112,15 @@ export function useTokenDetail(tokenId: string) {
   return {
     token,
     scores: sdkScores ?? [],
-    isLoading: tokenLoading || scoresLoading,
+    game,
+    setting,
+    objective,
+    isLoading:
+      tokenLoading ||
+      scoresLoading ||
+      gameLoading ||
+      settingsLoading ||
+      objectivesLoading,
     error: tokenError,
     refetch,
   };

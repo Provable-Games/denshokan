@@ -13,6 +13,7 @@ interface MintParams {
   end?: number;
   objectiveId?: number;
   clientUrl?: string;
+  recipientAddress?: string;
 }
 
 interface MintResult {
@@ -56,7 +57,7 @@ export function useMint() {
           none(), // context (Option<GameContextDetails>)
           params.clientUrl ? some(params.clientUrl) : none(), // client_url (Option<ByteArray>)
           none(), // renderer_address (Option<ContractAddress>)
-          address, // to
+          params.recipientAddress || address, // to
           params.soulbound ?? false, // soulbound
           false, // paymaster
           0, // salt

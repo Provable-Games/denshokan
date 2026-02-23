@@ -15,6 +15,8 @@ import {
   CircularProgress,
   ListItemText,
 } from "@mui/material";
+import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
+import dayjs, { Dayjs } from "dayjs";
 import { motion, AnimatePresence } from "framer-motion";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { useGameList } from "../../hooks/useGameList";
@@ -31,6 +33,7 @@ export interface MintFormParams {
   end?: number;
   objectiveId?: number;
   clientUrl?: string;
+  recipientAddress?: string;
 }
 
 interface Props {
@@ -39,19 +42,22 @@ interface Props {
   error: string | null;
 }
 
+const ADDRESS_REGEX = /^0x[0-9a-fA-F]{1,64}$/;
+
 export default function MintForm({ onMint, minting, error }: Props) {
   const { games } = useGameList();
-  const { isConnected } = useController();
+  const { isConnected, address } = useController();
 
   const [selectedGame, setSelectedGame] = useState<string>("");
   const [playerName, setPlayerName] = useState("");
   const [soulbound, setSoulbound] = useState(false);
   const [settingsId, setSettingsId] = useState<string>("");
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [startTime, setStartTime] = useState("");
-  const [endTime, setEndTime] = useState("");
+  const [startTime, setStartTime] = useState<Dayjs | null>(null);
+  const [endTime, setEndTime] = useState<Dayjs | null>(null);
   const [objectiveId, setObjectiveId] = useState<string>("");
   const [clientUrl, setClientUrl] = useState("");
+  const [recipientAddress, setRecipientAddress] = useState("");
 
   // Fetch settings for selected game
   const { settings, loading: isLoadingSettings } = useSettingsList(
@@ -79,18 +85,26 @@ export default function MintForm({ onMint, minting, error }: Props) {
     setObjectiveId("");
   }, [settingsId]);
 
+  const recipientValid =
+    recipientAddress === "" || ADDRESS_REGEX.test(recipientAddress);
+
   const handleSubmit = () => {
-    if (!selectedGame) return;
+    if (!selectedGame || !recipientValid) return;
     const params: MintFormParams = { gameAddress: selectedGame };
     if (playerName.trim()) params.playerName = playerName.trim();
     if (settingsId) params.settingsId = Number(settingsId);
     if (soulbound) params.soulbound = true;
-    if (startTime) params.start = Number(startTime);
-    if (endTime) params.end = Number(endTime);
+    if (startTime) params.start = startTime.unix();
+    if (endTime) params.end = endTime.unix();
     if (objectiveId) params.objectiveId = Number(objectiveId);
     if (clientUrl.trim()) params.clientUrl = clientUrl.trim();
+    if (recipientAddress.trim()) params.recipientAddress = recipientAddress.trim();
     onMint(params);
   };
+
+  const truncatedAddress = address
+    ? `${address.slice(0, 6)}...${address.slice(-4)}`
+    : "";
 
   return (
     <Box sx={{ maxWidth: 480 }}>
@@ -115,6 +129,21 @@ export default function MintForm({ onMint, minting, error }: Props) {
         placeholder="Enter your name (optional)"
         value={playerName}
         onChange={(e) => setPlayerName(e.target.value)}
+        sx={{ mb: 2 }}
+      />
+
+      <TextField
+        fullWidth
+        label="Recipient Address"
+        placeholder={truncatedAddress || "0x..."}
+        value={recipientAddress}
+        onChange={(e) => setRecipientAddress(e.target.value)}
+        error={!recipientValid}
+        helperText={
+          !recipientValid
+            ? "Invalid address format"
+            : "Leave empty to mint to yourself"
+        }
         sx={{ mb: 2 }}
       />
 
@@ -203,21 +232,26 @@ export default function MintForm({ onMint, minting, error }: Props) {
                 pb: 2,
               }}
             >
-              <TextField
-                fullWidth
+              <DateTimePicker
                 label="Start Time"
-                type="number"
-                placeholder="Unix timestamp (optional)"
                 value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
+                onChange={setStartTime}
+                disablePast
+                slotProps={{
+                  textField: { fullWidth: true },
+                  field: { clearable: true },
+                }}
               />
-              <TextField
-                fullWidth
+              <DateTimePicker
                 label="End Time"
-                type="number"
-                placeholder="Unix timestamp (optional)"
                 value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
+                onChange={setEndTime}
+                disablePast
+                minDateTime={startTime ?? undefined}
+                slotProps={{
+                  textField: { fullWidth: true },
+                  field: { clearable: true },
+                }}
               />
               <FormControl fullWidth>
                 <InputLabel>Objective</InputLabel>
@@ -267,7 +301,7 @@ export default function MintForm({ onMint, minting, error }: Props) {
         variant="contained"
         size="large"
         fullWidth
-        disabled={!isConnected || !selectedGame || minting}
+        disabled={!isConnected || !selectedGame || minting || !recipientValid}
         onClick={handleSubmit}
       >
         {!isConnected
