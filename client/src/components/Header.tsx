@@ -17,7 +17,7 @@ export default function Header() {
   const location = useLocation();
 
   return (
-    <AppBar position="sticky" color="transparent" elevation={0} sx={{ borderBottom: 1, borderColor: "divider" }}>
+    <AppBar position="sticky" color="transparent" elevation={0} sx={{ borderBottom: 1, borderColor: "divider", bgcolor: "background.default", zIndex: (theme) => theme.zIndex.appBar }}>
       <Toolbar>
         <Typography
           variant="h6"

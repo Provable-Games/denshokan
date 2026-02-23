@@ -24,7 +24,7 @@ export default function GameDetailPage() {
   const { gameId } = useParams<{ gameId: string }>();
   const navigate = useNavigate();
   const id = parseInt(gameId || "0");
-  const { game, stats, isLoading, refetch } = useGameDetail(id);
+  const { game, stats, isLoading, error, refetch } = useGameDetail(id);
   const { isConnected } = useConnectionStatus();
 
   const refetchingRef = useRef(false);
@@ -56,7 +56,22 @@ export default function GameDetailPage() {
     onEvent: debouncedRefetch,
   });
 
-  if (!game) return <LoadingSpinner message="Loading game..." />;
+  if (isLoading) return <LoadingSpinner message="Loading game..." />;
+  if (error || !game) {
+    return (
+      <Box sx={{ textAlign: "center", py: 6 }}>
+        <Typography variant="h5" gutterBottom>
+          Game not found
+        </Typography>
+        <Typography color="text.secondary" gutterBottom>
+          {error?.message || "Unable to load game details."}
+        </Typography>
+        <Button variant="outlined" onClick={() => navigate("/games")}>
+          Back to Games
+        </Button>
+      </Box>
+    );
+  }
 
   return (
     <Box>

@@ -12,8 +12,8 @@ interface ClientGameStats {
 
 export function useGameDetail(gameId: number) {
   const gameAddress = gameId ? String(gameId) : undefined;
-  const { data: gameData, isLoading: gameLoading, refetch: refetchGame } = useGame(gameAddress);
-  const { data: statsData, isLoading: statsLoading, refetch: refetchStats } = useGameStats(gameAddress);
+  const { data: gameData, isLoading: gameLoading, error: gameError, refetch: refetchGame } = useGame(gameAddress);
+  const { data: statsData, isLoading: statsLoading, error: statsError, refetch: refetchStats } = useGameStats(gameAddress);
 
   const game: ClientGame | null = gameData
     ? {
@@ -46,6 +46,7 @@ export function useGameDetail(gameId: number) {
     game,
     stats,
     isLoading: gameLoading || statsLoading,
+    error: gameError || statsError,
     refetch,
   };
 }
