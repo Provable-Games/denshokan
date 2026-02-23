@@ -1,11 +1,14 @@
 import { ReactNode } from "react";
-import { sepolia, mainnet } from "@starknet-react/chains";
-import { StarknetConfig, voyager } from "@starknet-react/core";
+import { sepolia, mainnet, type Chain } from "@starknet-react/chains";
+import { StarknetConfig, jsonRpcProvider, voyager } from "@starknet-react/core";
 import { ControllerConnector } from "@cartridge/connector";
-import { RpcProvider } from "starknet";
 import { config, networkName } from "../config";
 
+const chain = networkName === "sepolia" ? sepolia : mainnet;
+
 const cartridgeConnector = new ControllerConnector({
+  chains: [{ rpcUrl: config.rpcUrl }],
+  defaultChainId: chain.id.toString(),
   policies: {
     contracts: {
       [config.denshokanAddress]: {
@@ -17,14 +20,13 @@ const cartridgeConnector = new ControllerConnector({
       },
     },
   },
-  rpcUrl: config.rpcUrl,
 }) as any;
 
-function provider() {
-  return new RpcProvider({ nodeUrl: config.rpcUrl });
-}
-
-const chain = networkName === "sepolia" ? sepolia : mainnet;
+const provider = jsonRpcProvider({
+  rpc: (_chain: Chain) => ({
+    nodeUrl: config.rpcUrl,
+  }),
+});
 
 export function StarknetProvider({ children }: { children: ReactNode }) {
   return (
