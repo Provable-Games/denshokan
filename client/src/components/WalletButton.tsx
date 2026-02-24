@@ -1,8 +1,18 @@
-import { Button, Typography, Box } from "@mui/material";
+import { useState, MouseEvent } from "react";
+import { Button, Typography, Box, Menu, MenuItem, ListItemIcon, ListItemText } from "@mui/material";
 import { useController } from "../contexts/ControllerContext";
 
 export default function WalletButton() {
-  const { isConnected, isPending, address, login, logout } = useController();
+  const { isConnected, isPending, address, connectors, login, logout } = useController();
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+
+  const handleOpen = (e: MouseEvent<HTMLButtonElement>) => {
+    setAnchorEl(e.currentTarget);
+  };
+
+  const handleClose = () => {
+    setAnchorEl(null);
+  };
 
   if (isPending) {
     return <Button disabled variant="outlined" size="small">Connecting...</Button>;
@@ -22,8 +32,34 @@ export default function WalletButton() {
   }
 
   return (
-    <Button variant="contained" size="small" onClick={login}>
-      Connect Wallet
-    </Button>
+    <>
+      <Button variant="contained" size="small" onClick={handleOpen}>
+        Connect Wallet
+      </Button>
+      <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleClose}>
+        {connectors.map((connector) => {
+          const iconSrc =
+            typeof connector.icon === "string"
+              ? connector.icon
+              : connector.icon?.dark;
+          return (
+            <MenuItem
+              key={connector.id}
+              onClick={() => {
+                login(connector);
+                handleClose();
+              }}
+            >
+              {iconSrc && (
+                <ListItemIcon>
+                  <img src={iconSrc} alt={connector.name} width={24} height={24} />
+                </ListItemIcon>
+              )}
+              <ListItemText>{connector.name}</ListItemText>
+            </MenuItem>
+          );
+        })}
+      </Menu>
+    </>
   );
 }

@@ -8,13 +8,22 @@ import { config } from "../config";
 
 export default function MintTokenPage() {
   const { isConnected } = useController();
-  const { mint, minting, error } = useMint();
+  const { mint, mintBatchCount, minting, error } = useMint();
   const [txHash, setTxHash] = useState<string | null>(null);
+  const [mintedCount, setMintedCount] = useState(1);
 
   const handleMint = async (params: MintFormParams) => {
     setTxHash(null);
-    const result = await mint(params);
+    const { quantity, ...mintParams } = params;
+    const count = quantity ?? 1;
+
+    const result =
+      count > 1
+        ? await mintBatchCount(mintParams, count)
+        : await mint(mintParams);
+
     if (result) {
+      setMintedCount(count);
       setTxHash(result.transactionHash);
     }
   };
@@ -37,7 +46,7 @@ export default function MintTokenPage() {
             style={{ width: "100%", maxWidth: 520 }}
           >
             <Alert severity="success" sx={{ mb: 2 }}>
-              Token minted!{" "}
+              {mintedCount > 1 ? `${mintedCount} tokens minted!` : "Token minted!"}{" "}
               <a
                 href={`${config.explorerUrl}/tx/${txHash}`}
                 target="_blank"
