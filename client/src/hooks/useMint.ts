@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { useAccount, useContract, useSendTransaction } from "@starknet-react/core";
 import { CairoOption, CairoOptionVariant } from "starknet";
+import { MintSaltCounter } from "@provable-games/denshokan-sdk";
 import { config } from "../config";
 import denshokanAbi from "../abi/denshokan.json";
 
@@ -14,6 +15,7 @@ interface MintParams {
   objectiveId?: number;
   clientUrl?: string;
   recipientAddress?: string;
+  salt?: number;
 }
 
 interface MintResult {
@@ -60,7 +62,7 @@ export function useMint() {
           params.recipientAddress || address, // to
           params.soulbound ?? false, // soulbound
           false, // paymaster
-          0, // salt
+          params.salt ?? 0, // salt
           0, // metadata
         ]);
 
@@ -77,5 +79,58 @@ export function useMint() {
     [address, contract, sendAsync]
   );
 
-  return { mint, minting, error };
+  const mintBatch = useCallback(
+    async (paramsList: MintParams[]): Promise<MintResult | null> => {
+      if (!address || !contract) {
+        setError("Wallet not connected");
+        return null;
+      }
+      if (paramsList.length === 0) {
+        setError("No mint params provided");
+        return null;
+      }
+
+      setMinting(true);
+      setError(null);
+
+      try {
+        const none = <T>() => new CairoOption<T>(CairoOptionVariant.None);
+        const some = <T>(val: T) => new CairoOption<T>(CairoOptionVariant.Some, val);
+
+        const saltCounter = new MintSaltCounter();
+
+        const calls = paramsList.map((params) => {
+          const autoSalt = saltCounter.next(); // Always advance to prevent collisions
+          return contract.populate("mint", [
+            params.gameAddress,
+            params.playerName ? some(params.playerName) : none(),
+            params.settingsId !== undefined ? some(params.settingsId) : none(),
+            params.start !== undefined ? some(params.start) : none(),
+            params.end !== undefined ? some(params.end) : none(),
+            params.objectiveId !== undefined ? some(params.objectiveId) : none(),
+            none(), // context
+            params.clientUrl ? some(params.clientUrl) : none(),
+            none(), // renderer_address
+            params.recipientAddress || address,
+            params.soulbound ?? false,
+            false, // paymaster
+            params.salt ?? autoSalt,
+            0, // metadata
+          ]);
+        });
+
+        const result = await sendAsync(calls);
+
+        setMinting(false);
+        return { transactionHash: result.transaction_hash };
+      } catch (e: any) {
+        setError(e.message || "Batch mint failed");
+        setMinting(false);
+        return null;
+      }
+    },
+    [address, contract, sendAsync]
+  );
+
+  return { mint, mintBatch, minting, error };
 }
