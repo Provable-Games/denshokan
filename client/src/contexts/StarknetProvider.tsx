@@ -4,6 +4,7 @@ import {
   StarknetConfig,
   jsonRpcProvider,
   voyager,
+  InjectedConnector,
 } from "@starknet-react/core";
 import ControllerConnector from "@cartridge/connector/controller";
 import { config, networkName } from "../config";
@@ -35,12 +36,21 @@ const cartridgeConnector =
       })
     : null;
 
+const argentConnector = new InjectedConnector({
+  options: { id: "argentX", name: "Argent X" },
+});
+
+const braavosConnector = new InjectedConnector({
+  options: { id: "braavos", name: "Braavos" },
+});
+
 export function StarknetProvider({ children }: { children: ReactNode }) {
   const connectors = useMemo(() => {
     const base: any[] = [];
     if (cartridgeConnector) {
       base.push(cartridgeConnector);
     }
+    base.push(argentConnector, braavosConnector);
     return base;
   }, []);
 
