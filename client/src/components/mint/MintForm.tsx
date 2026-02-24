@@ -34,6 +34,7 @@ export interface MintFormParams {
   objectiveId?: number;
   clientUrl?: string;
   recipientAddress?: string;
+  quantity?: number;
 }
 
 interface Props {
@@ -58,6 +59,7 @@ export default function MintForm({ onMint, minting, error }: Props) {
   const [objectiveId, setObjectiveId] = useState<string>("");
   const [clientUrl, setClientUrl] = useState("");
   const [recipientAddress, setRecipientAddress] = useState("");
+  const [quantity, setQuantity] = useState(1);
 
   // Fetch settings for selected game
   const { settings, loading: isLoadingSettings } = useSettingsList(
@@ -99,6 +101,7 @@ export default function MintForm({ onMint, minting, error }: Props) {
     if (objectiveId) params.objectiveId = Number(objectiveId);
     if (clientUrl.trim()) params.clientUrl = clientUrl.trim();
     if (recipientAddress.trim()) params.recipientAddress = recipientAddress.trim();
+    if (quantity > 1) params.quantity = quantity;
     onMint(params);
   };
 
@@ -168,6 +171,20 @@ export default function MintForm({ onMint, minting, error }: Props) {
           Token cannot be transferred
         </Typography>
       </Box>
+
+      <TextField
+        fullWidth
+        label="Quantity"
+        type="number"
+        value={quantity}
+        onChange={(e) => {
+          const val = Math.max(1, Math.min(1000, Number(e.target.value) || 1));
+          setQuantity(val);
+        }}
+        inputProps={{ min: 1, max: 1000 }}
+        helperText="Number of tokens to mint in one transaction (1–1000)"
+        sx={{ mb: 2 }}
+      />
 
       <FormControl fullWidth sx={{ mb: 2 }}>
         <InputLabel>Settings</InputLabel>
@@ -307,8 +324,12 @@ export default function MintForm({ onMint, minting, error }: Props) {
         {!isConnected
           ? "Connect Wallet to Mint"
           : minting
-            ? "Minting..."
-            : "Mint Token"}
+            ? quantity > 1
+              ? `Minting ${quantity} tokens...`
+              : "Minting..."
+            : quantity > 1
+              ? `Mint ${quantity} Tokens`
+              : "Mint Token"}
       </Button>
 
       {!isConnected && (

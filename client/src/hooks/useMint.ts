@@ -132,5 +132,61 @@ export function useMint() {
     [address, contract, sendAsync]
   );
 
-  return { mint, mintBatch, minting, error };
+  /**
+   * Batch mint using the contract's native mint_batch entrypoint.
+   * Sends a single call with an Array<MintParams> instead of N
+   * individual mint calls, so starknet.js only serialises once.
+   */
+  const mintBatchCount = useCallback(
+    async (params: MintParams, count: number): Promise<MintResult | null> => {
+      if (!address || !contract) {
+        setError("Wallet not connected");
+        return null;
+      }
+      if (count <= 0) {
+        setError("Count must be positive");
+        return null;
+      }
+
+      setMinting(true);
+      setError(null);
+
+      try {
+        const none = <T>() => new CairoOption<T>(CairoOptionVariant.None);
+        const some = <T>(val: T) => new CairoOption<T>(CairoOptionVariant.Some, val);
+
+        const saltCounter = new MintSaltCounter();
+
+        const mints = Array.from({ length: count }, () => ({
+          game_address: params.gameAddress,
+          player_name: params.playerName ? some(params.playerName) : none(),
+          settings_id: params.settingsId !== undefined ? some(params.settingsId) : none(),
+          start: params.start !== undefined ? some(params.start) : none(),
+          end: params.end !== undefined ? some(params.end) : none(),
+          objective_id: params.objectiveId !== undefined ? some(params.objectiveId) : none(),
+          context: none(),
+          client_url: params.clientUrl ? some(params.clientUrl) : none(),
+          renderer_address: none(),
+          to: params.recipientAddress || address,
+          soulbound: params.soulbound ?? false,
+          paymaster: false,
+          salt: params.salt ?? saltCounter.next(),
+          metadata: 0,
+        }));
+
+        const call = contract.populate("mint_batch", [mints]);
+        const result = await sendAsync([call]);
+
+        setMinting(false);
+        return { transactionHash: result.transaction_hash };
+      } catch (e: any) {
+        setError(e.message || "Batch mint failed");
+        setMinting(false);
+        return null;
+      }
+    },
+    [address, contract, sendAsync]
+  );
+
+  return { mint, mintBatch, mintBatchCount, minting, error };
 }
