@@ -23,7 +23,9 @@ use game_components_embeddable_game_standard::token::structs::TokenMetadata;
 use game_components_embeddable_game_standard::token::token_component::CoreTokenComponent;
 use game_components_utilities::utils::renderer::{create_custom_metadata, create_default_svg};
 use openzeppelin_interfaces::erc2981::{IERC2981, IERC2981_ID};
-use openzeppelin_interfaces::erc721::{IERC721Dispatcher, IERC721DispatcherTrait, IERC721Metadata};
+use openzeppelin_interfaces::erc721::{
+    IERC721Dispatcher, IERC721DispatcherTrait, IERC721Metadata, IERC721MetadataCamelOnly,
+};
 use openzeppelin_introspection::src5::SRC5Component;
 use openzeppelin_token::common::erc2981::erc2981::{DefaultConfig, ERC2981Component};
 use openzeppelin_token::erc721::ERC721Component;
@@ -141,6 +143,8 @@ pub mod Denshokan {
     // Core implementations (always included)
     #[abi(embed_v0)]
     impl ERC721Impl = ERC721Component::ERC721Impl<ContractState>;
+    #[abi(embed_v0)]
+    impl ERC721CamelOnlyImpl = ERC721Component::ERC721CamelOnlyImpl<ContractState>;
     #[abi(embed_v0)]
     impl SRC5Impl = SRC5Component::SRC5Impl<ContractState>;
     #[abi(embed_v0)]
@@ -295,6 +299,13 @@ pub mod Denshokan {
                 minted_by_address,
                 player_name,
             )
+        }
+    }
+
+    #[abi(embed_v0)]
+    impl ERC721MetadataCamelOnlyImpl of IERC721MetadataCamelOnly<ContractState> {
+        fn tokenURI(self: @ContractState, tokenId: u256) -> ByteArray {
+            self.token_uri(tokenId)
         }
     }
 
