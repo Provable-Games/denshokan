@@ -139,7 +139,7 @@ source = "git+https://github.com/EkuboProtocol/starknet-contracts.git?tag=v4.0.1
 [[package]]
 name = "game_components_embeddable_game_standard"
 version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=next#759c008a40cae0e9cd06748b2779c76206a9fff7"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=next#83a682ab0269534e896744a7c8fb9502a886fb6f"
 dependencies = [
  "game_components_interfaces",
  "game_components_metagame",
@@ -153,7 +153,7 @@ dependencies = [
 [[package]]
 name = "game_components_interfaces"
 version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=next#759c008a40cae0e9cd06748b2779c76206a9fff7"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=next#83a682ab0269534e896744a7c8fb9502a886fb6f"
 dependencies = [
  "ekubo",
  "interfaces",
@@ -162,7 +162,7 @@ dependencies = [
 [[package]]
 name = "game_components_metagame"
 version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=next#759c008a40cae0e9cd06748b2779c76206a9fff7"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=next#83a682ab0269534e896744a7c8fb9502a886fb6f"
 dependencies = [
  "game_components_interfaces",
  "game_components_utilities",
@@ -174,7 +174,7 @@ dependencies = [
 [[package]]
 name = "game_components_test_common"
 version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=next#759c008a40cae0e9cd06748b2779c76206a9fff7"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=next#83a682ab0269534e896744a7c8fb9502a886fb6f"
 dependencies = [
  "game_components_embeddable_game_standard",
  "game_components_interfaces",
@@ -191,7 +191,7 @@ dependencies = [
 [[package]]
 name = "game_components_utilities"
 version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=next#759c008a40cae0e9cd06748b2779c76206a9fff7"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=next#83a682ab0269534e896744a7c8fb9502a886fb6f"
 dependencies = [
  "alexandria_encoding",
  "game_components_embeddable_game_standard",

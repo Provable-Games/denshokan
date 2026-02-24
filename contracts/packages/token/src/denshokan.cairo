@@ -4,6 +4,7 @@
 
 use core::num::traits::Zero;
 use game_components_embeddable_game_standard::metagame::extensions::context::structs::GameContextDetails;
+use game_components_embeddable_game_standard::minigame::extensions::objectives::structs::GameObjectiveDetails;
 use game_components_embeddable_game_standard::minigame::extensions::settings::structs::GameSettingDetails;
 use game_components_embeddable_game_standard::minigame::interface::{
     IMinigameDispatcher, IMinigameDispatcherTrait,
@@ -285,6 +286,25 @@ pub mod Denshokan {
                 },
             );
 
+            let objective_name: ByteArray = if token_metadata.objective_id != 0 {
+                let objectives_address = try_call_and_deserialize::<
+                    ContractAddress,
+                >(game_address, selector!("objectives_address"), array![].span(), Zero::zero());
+                let mut obj_calldata = array![];
+                obj_calldata.append(token_metadata.objective_id.into());
+                let obj_details = try_call_and_deserialize::<
+                    GameObjectiveDetails,
+                >(
+                    objectives_address,
+                    selector!("objectives_details"),
+                    obj_calldata.span(),
+                    GameObjectiveDetails { name: "", description: "", objectives: array![].span() },
+                );
+                obj_details.name
+            } else {
+                ""
+            };
+
             create_custom_metadata(
                 token_id.try_into().unwrap(),
                 token_name,
@@ -298,6 +318,7 @@ pub mod Denshokan {
                 score,
                 minted_by_address,
                 player_name,
+                objective_name,
             )
         }
     }
