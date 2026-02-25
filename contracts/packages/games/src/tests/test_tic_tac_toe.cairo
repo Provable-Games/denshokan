@@ -1,4 +1,4 @@
-use denshokan_testing::helpers::constants::GAME_CREATOR;
+use denshokan_testing::helpers::constants::{ALICE, GAME_CREATOR};
 use denshokan_testing::helpers::setup::{deploy_denshokan, deploy_minigame_registry};
 use game_components_embeddable_game_standard::minigame::extensions::objectives::interface::{
     IMinigameObjectivesDetailsDispatcher, IMinigameObjectivesDetailsDispatcherTrait,
@@ -9,8 +9,8 @@ use game_components_embeddable_game_standard::minigame::extensions::settings::in
     IMinigameSettingsDispatcher, IMinigameSettingsDispatcherTrait,
 };
 use game_components_embeddable_game_standard::minigame::interface::{
-    IMinigameDetailsDispatcher, IMinigameDetailsDispatcherTrait, IMinigameTokenDataDispatcher,
-    IMinigameTokenDataDispatcherTrait,
+    IMinigameDetailsDispatcher, IMinigameDetailsDispatcherTrait, IMinigameDispatcher,
+    IMinigameDispatcherTrait, IMinigameTokenDataDispatcher, IMinigameTokenDataDispatcherTrait,
 };
 use snforge_std::{ContractClassTrait, DeclareResultTrait, declare};
 use starknet::ContractAddress;
@@ -86,25 +86,45 @@ fn get_cell(board: u32, pos: u8) -> u32 {
     (board / shift) % 4
 }
 
+fn mint_token(game_address: ContractAddress, player: ContractAddress, salt: u16) -> felt252 {
+    let minigame = IMinigameDispatcher { contract_address: game_address };
+    minigame
+        .mint_game(
+            Option::None,
+            Option::None,
+            Option::None,
+            Option::None,
+            Option::None,
+            Option::None,
+            Option::None,
+            Option::None,
+            player,
+            false,
+            false,
+            salt,
+            0,
+        )
+}
+
 // ==========================================================================
 // NEW GAME TESTS
 // ==========================================================================
 
 #[test]
 fn test_new_game_initializes_empty_board() {
-    let (ttt, _) = setup_tic_tac_toe();
-    let token_id: felt252 = 1;
+    let (ttt, address) = setup_tic_tac_toe();
+    let token_id = mint_token(address, ALICE(), 0);
     ttt.new_game(token_id);
     assert!(ttt.board(token_id) == 0, "Board should be empty");
 }
 
 #[test]
 fn test_new_game_resets_board() {
-    let (ttt, _) = setup_tic_tac_toe();
-    let token_id: felt252 = 1;
+    let (ttt, address) = setup_tic_tac_toe();
+    let token_id = mint_token(address, ALICE(), 0);
     ttt.new_game(token_id);
     ttt.make_move(token_id, 0);
-    // Start a new game — board should reset
+    // Start a new game -- board should reset (game not over yet, just 1 move played)
     ttt.new_game(token_id);
     assert!(ttt.board(token_id) == 0, "Board should be reset");
 }
@@ -115,8 +135,8 @@ fn test_new_game_resets_board() {
 
 #[test]
 fn test_player_move_places_x() {
-    let (ttt, _) = setup_tic_tac_toe();
-    let token_id: felt252 = 1;
+    let (ttt, address) = setup_tic_tac_toe();
+    let token_id = mint_token(address, ALICE(), 0);
     ttt.new_game(token_id);
     ttt.make_move(token_id, 0); // Player at pos 0, AI responds somewhere
     let board = ttt.board(token_id);
@@ -126,12 +146,12 @@ fn test_player_move_places_x() {
 
 #[test]
 fn test_ai_responds_after_player() {
-    let (ttt, _) = setup_tic_tac_toe();
-    let token_id: felt252 = 1;
+    let (ttt, address) = setup_tic_tac_toe();
+    let token_id = mint_token(address, ALICE(), 0);
     ttt.new_game(token_id);
     ttt.make_move(token_id, 0); // Player at 0
     let board = ttt.board(token_id);
-    // Count non-empty cells — should be 2 (player + AI)
+    // Count non-empty cells -- should be 2 (player + AI)
     let mut count: u32 = 0;
     let mut i: u8 = 0;
     loop {
@@ -149,8 +169,8 @@ fn test_ai_responds_after_player() {
 #[test]
 #[should_panic(expected: "Position must be 0-8")]
 fn test_invalid_position_panics() {
-    let (ttt, _) = setup_tic_tac_toe();
-    let token_id: felt252 = 1;
+    let (ttt, address) = setup_tic_tac_toe();
+    let token_id = mint_token(address, ALICE(), 0);
     ttt.new_game(token_id);
     ttt.make_move(token_id, 9); // Invalid
 }
@@ -158,18 +178,18 @@ fn test_invalid_position_panics() {
 #[test]
 #[should_panic(expected: "Cell is already occupied")]
 fn test_occupied_cell_panics() {
-    let (ttt, _) = setup_tic_tac_toe();
-    let token_id: felt252 = 1;
+    let (ttt, address) = setup_tic_tac_toe();
+    let token_id = mint_token(address, ALICE(), 0);
     ttt.new_game(token_id);
     ttt.make_move(token_id, 0);
     ttt.make_move(token_id, 0); // Same cell
 }
 
 #[test]
-#[should_panic(expected: "Game is already over")]
+#[should_panic(expected: "Game is not playable")]
 fn test_move_after_game_over_panics() {
-    let (ttt, _) = setup_tic_tac_toe();
-    let token_id: felt252 = 1;
+    let (ttt, address) = setup_tic_tac_toe();
+    let token_id = mint_token(address, ALICE(), 0);
     ttt.new_game(token_id);
     // Force a quick game by playing to lose/win
     // Play a sequence that leads to a game ending, then try another move
@@ -196,7 +216,8 @@ fn test_move_after_game_over_panics() {
         }
         idx += 1;
     }
-    // Game should be over now; this should panic
+    // Game should be over now; this should panic with "Game is not playable"
+    // because post_action marked game_over=true on the Denshokan token
     assert!(done, "Game should have ended");
     ttt.make_move(token_id, 4);
 }
@@ -208,18 +229,8 @@ fn test_move_after_game_over_panics() {
 #[test]
 fn test_player_can_win() {
     let (ttt, address) = setup_tic_tac_toe();
-    let token_id: felt252 = 1;
     // Try multiple games until player wins (AI is deterministic so we can find a winning line)
-    // Strategy: AI takes center first (pos 4) when player doesn't take it.
-    // If player takes corner 0, AI takes center 4.
-    // Player takes corner 8, AI blocks at ... let's just try a sequence.
-    //
-    // After move at 0: board has X at 0, AI takes 4 (center)
-    // After move at 2: board has X at 0,2, AI blocks at 1
-    // After move at 6: board has X at 0,2,6, AI blocks at ... hmm
-    // Let's try: player 0 -> AI 4, player 2 -> AI 1, player 3 -> AI takes 6 (blocking col 0)
-    //   then player 5 -> that's not a winning line
-    // Different approach: just play and check outcome
+    // Each attempt needs a fresh token since post_action marks game_over on Denshokan
     let mut won = false;
     let mut attempt: u32 = 0;
     // Try various opening sequences
@@ -235,10 +246,13 @@ fn test_player_can_win() {
         array![0, 2, 1] // Top row
     ];
 
+    let mut total_games_played: u32 = 0;
+
     loop {
         if attempt >= sequences.len() || won {
             break;
         }
+        let token_id = mint_token(address, ALICE(), attempt.try_into().unwrap());
         ttt.new_game(token_id);
         let seq = sequences.at(attempt);
         let mut move_idx: u32 = 0;
@@ -254,6 +268,7 @@ fn test_player_can_win() {
                 let token_data = IMinigameTokenDataDispatcher { contract_address: address };
                 if token_data.game_over(token_id) {
                     game_ended = true;
+                    total_games_played += 1;
                     if ttt.games_won(token_id) > 0 {
                         won = true;
                     }
@@ -264,14 +279,14 @@ fn test_player_can_win() {
         attempt += 1;
     }
     // Even if no sequence above produces a win due to AI blocking, that's OK
-    // The important thing is the mechanics work. Let's just verify games_played increments.
-    assert!(ttt.games_played(token_id) > 0, "At least one game should have been played");
+    // The important thing is the mechanics work. Let's just verify at least one game was played.
+    assert!(total_games_played > 0, "At least one game should have been played");
 }
 
 #[test]
 fn test_draw_is_possible() {
     let (ttt, address) = setup_tic_tac_toe();
-    let token_id: felt252 = 1;
+    let token_id = mint_token(address, ALICE(), 0);
     ttt.new_game(token_id);
     // Play all empty cells in order until game ends
     let mut i: u8 = 0;
@@ -301,14 +316,14 @@ fn test_draw_is_possible() {
 #[test]
 fn test_multiple_games_track_stats() {
     let (ttt, address) = setup_tic_tac_toe();
-    let token_id: felt252 = 1;
 
-    // Play 3 games
+    // Play 3 games on separate tokens (post_action marks game_over after each game)
     let mut game: u32 = 0;
     loop {
         if game >= 3 {
             break;
         }
+        let token_id = mint_token(address, ALICE(), game.try_into().unwrap());
         ttt.new_game(token_id);
         let mut i: u8 = 0;
         loop {
@@ -325,17 +340,17 @@ fn test_multiple_games_track_stats() {
             }
             i += 1;
         }
+        // Verify each token played exactly 1 game
+        assert!(ttt.games_played(token_id) == 1, "Each token should have played 1 game");
         game += 1;
     }
-
-    assert!(ttt.games_played(token_id) == 3, "Should have played 3 games");
 }
 
 #[test]
 fn test_different_tokens_independent() {
-    let (ttt, _) = setup_tic_tac_toe();
-    let token1: felt252 = 1;
-    let token2: felt252 = 2;
+    let (ttt, address) = setup_tic_tac_toe();
+    let token1 = mint_token(address, ALICE(), 0);
+    let token2 = mint_token(address, ALICE(), 1);
 
     ttt.new_game(token1);
     ttt.new_game(token2);
@@ -354,7 +369,7 @@ fn test_different_tokens_independent() {
 #[test]
 fn test_token_data_score() {
     let (_ttt, address) = setup_tic_tac_toe();
-    let token_id: felt252 = 1;
+    let token_id = mint_token(address, ALICE(), 0);
     let token_data = IMinigameTokenDataDispatcher { contract_address: address };
 
     // Initial score is 0
@@ -364,7 +379,7 @@ fn test_token_data_score() {
 #[test]
 fn test_token_data_game_over() {
     let (ttt, address) = setup_tic_tac_toe();
-    let token_id: felt252 = 1;
+    let token_id = mint_token(address, ALICE(), 0);
     let token_data = IMinigameTokenDataDispatcher { contract_address: address };
 
     ttt.new_game(token_id);
@@ -382,7 +397,7 @@ fn test_details_token_name() {
 #[test]
 fn test_details_game_details() {
     let (ttt, address) = setup_tic_tac_toe();
-    let token_id: felt252 = 1;
+    let token_id = mint_token(address, ALICE(), 0);
     ttt.new_game(token_id);
 
     let details = IMinigameDetailsDispatcher { contract_address: address };
@@ -417,9 +432,13 @@ fn test_objectives_exist() {
 #[test]
 fn test_objectives_completed() {
     let (_, address) = setup_tic_tac_toe();
+    let token_id = mint_token(address, ALICE(), 0);
     let objectives = IMinigameObjectivesDispatcher { contract_address: address };
-    // Token 1 hasn't won any games, so objective (win 3) should not be completed
-    assert!(!objectives.completed_objective(1, 1), "Objective should not be completed with 0 wins");
+    // Token hasn't won any games, so objective (win 3) should not be completed
+    assert!(
+        !objectives.completed_objective(token_id, 1),
+        "Objective should not be completed with 0 wins",
+    );
 }
 
 // ==========================================================================
@@ -429,11 +448,13 @@ fn test_objectives_completed() {
 #[test]
 fn test_score_batch() {
     let (ttt, address) = setup_tic_tac_toe();
-    ttt.new_game(1);
-    ttt.new_game(2);
+    let token1 = mint_token(address, ALICE(), 0);
+    let token2 = mint_token(address, ALICE(), 1);
+    ttt.new_game(token1);
+    ttt.new_game(token2);
 
     let token_data = IMinigameTokenDataDispatcher { contract_address: address };
-    let scores = token_data.score_batch(array![1, 2].span());
+    let scores = token_data.score_batch(array![token1, token2].span());
     assert!(scores.len() == 2, "Should return 2 scores");
     assert!(*scores.at(0) == 0, "Token 1 score should be 0");
     assert!(*scores.at(1) == 0, "Token 2 score should be 0");
@@ -442,11 +463,13 @@ fn test_score_batch() {
 #[test]
 fn test_game_over_batch() {
     let (ttt, address) = setup_tic_tac_toe();
-    ttt.new_game(1);
-    ttt.new_game(2);
+    let token1 = mint_token(address, ALICE(), 0);
+    let token2 = mint_token(address, ALICE(), 1);
+    ttt.new_game(token1);
+    ttt.new_game(token2);
 
     let token_data = IMinigameTokenDataDispatcher { contract_address: address };
-    let results = token_data.game_over_batch(array![1, 2].span());
+    let results = token_data.game_over_batch(array![token1, token2].span());
     assert!(results.len() == 2, "Should return 2 results");
     assert!(!*results.at(0), "Token 1 game should not be over");
     assert!(!*results.at(1), "Token 2 game should not be over");
@@ -488,8 +511,8 @@ fn test_objective_exists_batch() {
 /// Sequence: Player at 0 -> AI should take center (4).
 #[test]
 fn test_ai_takes_center_when_open() {
-    let (ttt, _) = setup_tic_tac_toe();
-    let token_id: felt252 = 100;
+    let (ttt, address) = setup_tic_tac_toe();
+    let token_id = mint_token(address, ALICE(), 0);
     ttt.new_game(token_id);
     ttt.make_move(token_id, 0); // Player at corner 0
     let board = ttt.board(token_id);
@@ -503,8 +526,8 @@ fn test_ai_takes_center_when_open() {
 ///   Move 2: Player at 1 -> X at 0,1 threatens top row 0,1,2. AI must block at 2.
 #[test]
 fn test_ai_blocks_player_winning_move() {
-    let (ttt, _) = setup_tic_tac_toe();
-    let token_id: felt252 = 101;
+    let (ttt, address) = setup_tic_tac_toe();
+    let token_id = mint_token(address, ALICE(), 0);
     ttt.new_game(token_id);
     ttt.make_move(token_id, 0); // Player at 0, AI takes 4
     ttt.make_move(token_id, 1); // Player at 1 (X at 0,1 -> threatens 0,1,2)
@@ -521,7 +544,7 @@ fn test_ai_blocks_player_winning_move() {
 #[test]
 fn test_ai_wins_when_possible() {
     let (ttt, address) = setup_tic_tac_toe();
-    let token_id: felt252 = 102;
+    let token_id = mint_token(address, ALICE(), 0);
     ttt.new_game(token_id);
     ttt.make_move(token_id, 0); // Player 0, AI 4
     ttt.make_move(token_id, 2); // Player 2, AI blocks at 1
@@ -546,8 +569,8 @@ fn test_ai_wins_when_possible() {
 ///   Move 1: Player at 4 (center) -> AI takes corner 0.
 #[test]
 fn test_ai_takes_corner_when_center_occupied() {
-    let (ttt, _) = setup_tic_tac_toe();
-    let token_id: felt252 = 103;
+    let (ttt, address) = setup_tic_tac_toe();
+    let token_id = mint_token(address, ALICE(), 0);
     ttt.new_game(token_id);
     ttt.make_move(token_id, 4); // Player takes center
     let board = ttt.board(token_id);
@@ -561,8 +584,8 @@ fn test_ai_takes_corner_when_center_occupied() {
 ///   Player at 4 -> AI at 0. Player at 8 -> AI at 2 (corner).
 #[test]
 fn test_ai_takes_corner_2_fallback() {
-    let (ttt, _) = setup_tic_tac_toe();
-    let token_id: felt252 = 104;
+    let (ttt, address) = setup_tic_tac_toe();
+    let token_id = mint_token(address, ALICE(), 0);
     ttt.new_game(token_id);
     ttt.make_move(token_id, 4); // Player at center, AI takes corner 0
     ttt.make_move(token_id, 8); // Player at corner 8
@@ -584,7 +607,7 @@ fn test_ai_takes_corner_2_fallback() {
 #[test]
 fn test_player_wins_bottom_row() {
     let (ttt, address) = setup_tic_tac_toe();
-    let token_id: felt252 = 110;
+    let token_id = mint_token(address, ALICE(), 0);
     ttt.new_game(token_id);
     ttt.make_move(token_id, 0); // X:0, O:4
     ttt.make_move(token_id, 8); // X:8, O:2
@@ -598,33 +621,37 @@ fn test_player_wins_bottom_row() {
 }
 
 /// Verify score increments when the player wins.
+/// Each game requires a separate token since post_action marks game_over on Denshokan.
 #[test]
 fn test_score_increments_on_player_win() {
     let (ttt, address) = setup_tic_tac_toe();
-    let token_id: felt252 = 111;
     let token_data = IMinigameTokenDataDispatcher { contract_address: address };
 
-    assert!(token_data.score(token_id) == 0, "Initial score should be 0");
+    // Win game 1 on token 1
+    let token_id_1 = mint_token(address, ALICE(), 0);
+    assert!(token_data.score(token_id_1) == 0, "Initial score should be 0");
 
-    // Win game 1
-    ttt.new_game(token_id);
-    ttt.make_move(token_id, 0);
-    ttt.make_move(token_id, 8);
-    ttt.make_move(token_id, 6);
-    ttt.make_move(token_id, 7); // Player wins
+    ttt.new_game(token_id_1);
+    ttt.make_move(token_id_1, 0);
+    ttt.make_move(token_id_1, 8);
+    ttt.make_move(token_id_1, 6);
+    ttt.make_move(token_id_1, 7); // Player wins
 
-    assert!(token_data.score(token_id) == 1, "Score should be 1 after first win");
+    assert!(token_data.score(token_id_1) == 1, "Score should be 1 after first win");
+    assert!(ttt.games_won(token_id_1) == 1, "Should have 1 win on token 1");
+    assert!(ttt.games_played(token_id_1) == 1, "Should have 1 game played on token 1");
 
-    // Win game 2 (same sequence works after new_game since board resets)
-    ttt.new_game(token_id);
-    ttt.make_move(token_id, 0);
-    ttt.make_move(token_id, 8);
-    ttt.make_move(token_id, 6);
-    ttt.make_move(token_id, 7);
+    // Win game 2 on token 2 (same sequence works on a fresh token)
+    let token_id_2 = mint_token(address, ALICE(), 1);
+    ttt.new_game(token_id_2);
+    ttt.make_move(token_id_2, 0);
+    ttt.make_move(token_id_2, 8);
+    ttt.make_move(token_id_2, 6);
+    ttt.make_move(token_id_2, 7);
 
-    assert!(token_data.score(token_id) == 2, "Score should be 2 after second win");
-    assert!(ttt.games_won(token_id) == 2, "Should have 2 wins");
-    assert!(ttt.games_played(token_id) == 2, "Should have 2 games played");
+    assert!(token_data.score(token_id_2) == 1, "Score should be 1 on token 2");
+    assert!(ttt.games_won(token_id_2) == 1, "Should have 1 win on token 2");
+    assert!(ttt.games_played(token_id_2) == 1, "Should have 1 game played on token 2");
 }
 
 // ==========================================================================
@@ -635,7 +662,7 @@ fn test_score_increments_on_player_win() {
 #[test]
 fn test_token_description_after_games() {
     let (ttt, address) = setup_tic_tac_toe();
-    let token_id: felt252 = 120;
+    let token_id = mint_token(address, ALICE(), 0);
     let details = IMinigameDetailsDispatcher { contract_address: address };
 
     // Play a game where the player wins
@@ -659,7 +686,7 @@ fn test_token_description_after_games() {
 #[test]
 fn test_game_details_player_won_status() {
     let (ttt, address) = setup_tic_tac_toe();
-    let token_id: felt252 = 121;
+    let token_id = mint_token(address, ALICE(), 0);
     let details = IMinigameDetailsDispatcher { contract_address: address };
 
     ttt.new_game(token_id);
@@ -677,7 +704,7 @@ fn test_game_details_player_won_status() {
 #[test]
 fn test_game_details_ai_won_status() {
     let (ttt, address) = setup_tic_tac_toe();
-    let token_id: felt252 = 122;
+    let token_id = mint_token(address, ALICE(), 0);
     let details = IMinigameDetailsDispatcher { contract_address: address };
 
     ttt.new_game(token_id);
@@ -693,7 +720,7 @@ fn test_game_details_ai_won_status() {
 #[test]
 fn test_game_details_playing_status() {
     let (ttt, address) = setup_tic_tac_toe();
-    let token_id: felt252 = 123;
+    let token_id = mint_token(address, ALICE(), 0);
     let details = IMinigameDetailsDispatcher { contract_address: address };
 
     ttt.new_game(token_id);
@@ -708,7 +735,7 @@ fn test_game_details_playing_status() {
 #[test]
 fn test_game_details_draw_status() {
     let (ttt, address) = setup_tic_tac_toe();
-    let token_id: felt252 = 124;
+    let token_id = mint_token(address, ALICE(), 0);
     let details = IMinigameDetailsDispatcher { contract_address: address };
 
     // Play a game to completion, hoping for a draw.
@@ -743,7 +770,7 @@ fn test_game_details_draw_status() {
 #[test]
 fn test_token_description_after_ai_win() {
     let (ttt, address) = setup_tic_tac_toe();
-    let token_id: felt252 = 125;
+    let token_id = mint_token(address, ALICE(), 0);
     let details = IMinigameDetailsDispatcher { contract_address: address };
 
     // Play game where AI wins
@@ -765,10 +792,12 @@ fn test_token_description_batch() {
     let (ttt, address) = setup_tic_tac_toe();
     let details = IMinigameDetailsDispatcher { contract_address: address };
 
-    ttt.new_game(1);
-    ttt.new_game(2);
+    let token1 = mint_token(address, ALICE(), 0);
+    let token2 = mint_token(address, ALICE(), 1);
+    ttt.new_game(token1);
+    ttt.new_game(token2);
 
-    let descriptions = details.token_description_batch(array![1, 2].span());
+    let descriptions = details.token_description_batch(array![token1, token2].span());
     assert!(descriptions.len() == 2, "Should return 2 descriptions");
 }
 
@@ -778,10 +807,12 @@ fn test_game_details_batch() {
     let (ttt, address) = setup_tic_tac_toe();
     let details = IMinigameDetailsDispatcher { contract_address: address };
 
-    ttt.new_game(1);
-    ttt.new_game(2);
+    let token1 = mint_token(address, ALICE(), 0);
+    let token2 = mint_token(address, ALICE(), 1);
+    ttt.new_game(token1);
+    ttt.new_game(token2);
 
-    let batch = details.game_details_batch(array![1, 2].span());
+    let batch = details.game_details_batch(array![token1, token2].span());
     assert!(batch.len() == 2, "Should return 2 game detail sets");
     assert!((*batch.at(0)).len() == 6, "Each set should have 6 details");
 }
@@ -790,34 +821,32 @@ fn test_game_details_batch() {
 // OBJECTIVES COMPLETION AND DETAILS TESTS
 // ==========================================================================
 
-/// Win 3 games to satisfy the default objective (target_wins=3).
+/// Win 1 game and verify the objective (target_wins=3) is not yet completed.
+/// With pre_action/post_action hooks, each token can only play one game before
+/// game_over is permanently set on the Denshokan token, so we cannot accumulate
+/// 3 wins on a single token.
 #[test]
-fn test_objective_completed_after_3_wins() {
+fn test_objective_not_completed_after_1_win() {
     let (ttt, address) = setup_tic_tac_toe();
-    let token_id: felt252 = 130;
+    let token_id = mint_token(address, ALICE(), 0);
     let objectives = IMinigameObjectivesDispatcher { contract_address: address };
 
     assert!(
         !objectives.completed_objective(token_id, 1), "Objective should not be completed initially",
     );
 
-    // Win 3 games using the proven winning sequence: 0, 8, 6, 7
-    let mut game: u32 = 0;
-    loop {
-        if game >= 3 {
-            break;
-        }
-        ttt.new_game(token_id);
-        ttt.make_move(token_id, 0);
-        ttt.make_move(token_id, 8);
-        ttt.make_move(token_id, 6);
-        ttt.make_move(token_id, 7); // Player wins
-        game += 1;
-    }
+    // Win 1 game using the proven winning sequence: 0, 8, 6, 7
+    ttt.new_game(token_id);
+    ttt.make_move(token_id, 0);
+    ttt.make_move(token_id, 8);
+    ttt.make_move(token_id, 6);
+    ttt.make_move(token_id, 7); // Player wins
 
-    assert!(ttt.games_won(token_id) == 3, "Should have 3 wins");
+    assert!(ttt.games_won(token_id) == 1, "Should have 1 win");
+    // Objective requires 3 wins, so 1 win should not complete it
     assert!(
-        objectives.completed_objective(token_id, 1), "Objective 1 should be completed after 3 wins",
+        !objectives.completed_objective(token_id, 1),
+        "Objective 1 should not be completed after only 1 win",
     );
 }
 
@@ -896,13 +925,13 @@ fn test_settings_details_batch() {
 // GAMES DRAWN ACCUMULATION AND MULTIPLE OUTCOMES
 // ==========================================================================
 
-/// Play multiple games with different outcomes and verify all stats accumulate correctly.
+/// Play multiple games with different outcomes on separate tokens and verify stats.
 /// Uses two tokens: one wins, one loses (AI wins).
 #[test]
 fn test_multiple_tokens_different_outcomes() {
     let (ttt, address) = setup_tic_tac_toe();
-    let token_win: felt252 = 140;
-    let token_loss: felt252 = 141;
+    let token_win = mint_token(address, ALICE(), 0);
+    let token_loss = mint_token(address, ALICE(), 1);
 
     // Token 1: player wins (sequence: 0, 8, 6, 7)
     ttt.new_game(token_win);
@@ -934,7 +963,7 @@ fn test_multiple_tokens_different_outcomes() {
 #[test]
 fn test_full_game_to_completion_draw_path() {
     let (ttt, address) = setup_tic_tac_toe();
-    let token_id: felt252 = 142;
+    let token_id = mint_token(address, ALICE(), 0);
     let token_data = IMinigameTokenDataDispatcher { contract_address: address };
 
     // Play a game by trying all positions in order
@@ -966,19 +995,20 @@ fn test_full_game_to_completion_draw_path() {
     assert!(won + drawn <= played, "Won + drawn should not exceed played");
 }
 
-/// Play multiple games on same token to accumulate drawn games counter.
+/// Play multiple games on separate tokens and verify stats accumulate correctly per-token.
+/// Each token plays one game since post_action marks game_over on the Denshokan token.
 #[test]
 fn test_games_drawn_accumulation() {
     let (ttt, address) = setup_tic_tac_toe();
-    let token_id: felt252 = 143;
     let token_data = IMinigameTokenDataDispatcher { contract_address: address };
 
-    // Play 5 games in sequence
+    // Play 5 games on separate tokens
     let mut game: u32 = 0;
     loop {
         if game >= 5 {
             break;
         }
+        let token_id = mint_token(address, ALICE(), game.try_into().unwrap());
         ttt.new_game(token_id);
         let mut i: u8 = 0;
         loop {
@@ -994,16 +1024,16 @@ fn test_games_drawn_accumulation() {
             }
             i += 1;
         }
+
+        // Verify per-token stats consistency: won + drawn + lost = played
+        let won = ttt.games_won(token_id);
+        let drawn = ttt.games_drawn(token_id);
+        let played = ttt.games_played(token_id);
+        assert!(played == 1, "Each token should have 1 game played");
+        let lost = played - won - drawn;
+        assert!(won + drawn + lost == played, "Stats should add up");
         game += 1;
     }
-
-    assert!(ttt.games_played(token_id) == 5, "Should have 5 games played");
-    // Verify consistency: won + drawn + lost = played
-    let won = ttt.games_won(token_id);
-    let drawn = ttt.games_drawn(token_id);
-    let played = ttt.games_played(token_id);
-    let lost = played - won - drawn;
-    assert!(won + drawn + lost == played, "Stats should add up");
 }
 
 // ==========================================================================
@@ -1017,42 +1047,46 @@ fn test_batch_queries_mixed_states() {
     let token_data = IMinigameTokenDataDispatcher { contract_address: address };
 
     // Token 1: player wins
-    ttt.new_game(1);
-    ttt.make_move(1, 0);
-    ttt.make_move(1, 8);
-    ttt.make_move(1, 6);
-    ttt.make_move(1, 7);
+    let token1 = mint_token(address, ALICE(), 0);
+    ttt.new_game(token1);
+    ttt.make_move(token1, 0);
+    ttt.make_move(token1, 8);
+    ttt.make_move(token1, 6);
+    ttt.make_move(token1, 7);
 
     // Token 2: still playing
-    ttt.new_game(2);
-    ttt.make_move(2, 0);
+    let token2 = mint_token(address, ALICE(), 1);
+    ttt.new_game(token2);
+    ttt.make_move(token2, 0);
 
     // Token 3: AI wins
-    ttt.new_game(3);
-    ttt.make_move(3, 0);
-    ttt.make_move(3, 2);
-    ttt.make_move(3, 6);
+    let token3 = mint_token(address, ALICE(), 2);
+    ttt.new_game(token3);
+    ttt.make_move(token3, 0);
+    ttt.make_move(token3, 2);
+    ttt.make_move(token3, 6);
 
-    let scores = token_data.score_batch(array![1, 2, 3].span());
+    let scores = token_data.score_batch(array![token1, token2, token3].span());
     assert!(*scores.at(0) == 1, "Token 1 score should be 1 (player won)");
     assert!(*scores.at(1) == 0, "Token 2 score should be 0 (still playing)");
     assert!(*scores.at(2) == 0, "Token 3 score should be 0 (AI won)");
 
-    let game_overs = token_data.game_over_batch(array![1, 2, 3].span());
+    let game_overs = token_data.game_over_batch(array![token1, token2, token3].span());
     assert!(*game_overs.at(0), "Token 1 game should be over");
     assert!(!*game_overs.at(1), "Token 2 game should not be over");
     assert!(*game_overs.at(2), "Token 3 game should be over");
 }
 
 // ==========================================================================
-// EDGE CASE: NEW GAME RESETS STATUS AFTER DIFFERENT OUTCOMES
+// EDGE CASE: NEW GAME NOT POSSIBLE AFTER GAME OVER
 // ==========================================================================
 
-/// Verify new_game resets status after AI wins, allowing play to continue.
+/// Verify new_game panics after AI wins because post_action marks token as game_over.
 #[test]
-fn test_new_game_after_ai_win() {
+#[should_panic(expected: "Game is not playable")]
+fn test_new_game_after_ai_win_panics() {
     let (ttt, address) = setup_tic_tac_toe();
-    let token_id: felt252 = 150;
+    let token_id = mint_token(address, ALICE(), 0);
     let token_data = IMinigameTokenDataDispatcher { contract_address: address };
 
     // AI wins
@@ -1062,21 +1096,16 @@ fn test_new_game_after_ai_win() {
     ttt.make_move(token_id, 6);
     assert!(token_data.game_over(token_id), "Game should be over after AI wins");
 
-    // Start new game - should be able to play again
+    // Attempting new game should panic -- Denshokan token has game_over=true
     ttt.new_game(token_id);
-    assert!(!token_data.game_over(token_id), "Game should not be over after new_game");
-    assert!(ttt.board(token_id) == 0, "Board should be reset");
-
-    // Can make a move
-    ttt.make_move(token_id, 4);
-    assert!(get_cell(ttt.board(token_id), 4) == PLAYER_X, "Should be able to play after reset");
 }
 
-/// Verify new_game resets status after player win.
+/// Verify new_game panics after player win because post_action marks token as game_over.
 #[test]
-fn test_new_game_after_player_win() {
+#[should_panic(expected: "Game is not playable")]
+fn test_new_game_after_player_win_panics() {
     let (ttt, address) = setup_tic_tac_toe();
-    let token_id: felt252 = 151;
+    let token_id = mint_token(address, ALICE(), 0);
     let token_data = IMinigameTokenDataDispatcher { contract_address: address };
 
     // Player wins
@@ -1087,14 +1116,37 @@ fn test_new_game_after_player_win() {
     ttt.make_move(token_id, 7);
     assert!(token_data.game_over(token_id), "Game should be over after player wins");
 
-    // Stats should persist across new_game
+    // Stats should persist
     assert!(ttt.games_won(token_id) == 1, "Wins should persist");
     assert!(ttt.games_played(token_id) == 1, "Games played should persist");
 
-    // Start new game
+    // Attempting new game should panic -- Denshokan token has game_over=true
     ttt.new_game(token_id);
-    assert!(!token_data.game_over(token_id), "Should be able to play again");
-    assert!(ttt.games_won(token_id) == 1, "Wins should still persist after new_game");
+}
+
+/// Verify a new token can be used to play after a game ends on a previous token.
+#[test]
+fn test_new_token_after_game_over() {
+    let (ttt, address) = setup_tic_tac_toe();
+    let token_data = IMinigameTokenDataDispatcher { contract_address: address };
+
+    // Token 1: AI wins
+    let token1 = mint_token(address, ALICE(), 0);
+    ttt.new_game(token1);
+    ttt.make_move(token1, 0);
+    ttt.make_move(token1, 2);
+    ttt.make_move(token1, 6);
+    assert!(token_data.game_over(token1), "Token 1 game should be over");
+
+    // Token 2: can play a new game
+    let token2 = mint_token(address, ALICE(), 1);
+    ttt.new_game(token2);
+    assert!(!token_data.game_over(token2), "Token 2 game should not be over");
+    assert!(ttt.board(token2) == 0, "Token 2 board should be empty");
+
+    // Can make a move on token 2
+    ttt.make_move(token2, 4);
+    assert!(get_cell(ttt.board(token2), 4) == PLAYER_X, "Should be able to play on new token");
 }
 
 // ==========================================================================
@@ -1110,8 +1162,8 @@ fn test_new_game_after_player_win() {
 ///   No two-X unblocked threat. Center occupied. Corners: 0=X, 2=X, 6 empty -> AI at 6.
 #[test]
 fn test_ai_takes_corner_6() {
-    let (ttt, _) = setup_tic_tac_toe();
-    let token_id: felt252 = 160;
+    let (ttt, address) = setup_tic_tac_toe();
+    let token_id = mint_token(address, ALICE(), 0);
     ttt.new_game(token_id);
     ttt.make_move(token_id, 0); // X:0, O:4
     ttt.make_move(token_id, 2); // X:2, O:1 (blocks 0,1,2)
@@ -1151,8 +1203,8 @@ fn test_ai_takes_corner_6() {
 /// After a known game, verify every cell on the board.
 #[test]
 fn test_board_encoding_full_verification() {
-    let (ttt, _) = setup_tic_tac_toe();
-    let token_id: felt252 = 170;
+    let (ttt, address) = setup_tic_tac_toe();
+    let token_id = mint_token(address, ALICE(), 0);
     ttt.new_game(token_id);
 
     // Move 1: Player at 0, AI at 4
@@ -1184,16 +1236,16 @@ fn test_board_encoding_full_verification() {
 /// Verify games_drawn returns 0 for a fresh token.
 #[test]
 fn test_games_drawn_initial_zero() {
-    let (ttt, _) = setup_tic_tac_toe();
-    let token_id: felt252 = 180;
+    let (ttt, address) = setup_tic_tac_toe();
+    let token_id = mint_token(address, ALICE(), 0);
     assert!(ttt.games_drawn(token_id) == 0, "Initial games_drawn should be 0");
 }
 
 /// Verify games_drawn is 0 after a player win (not a draw).
 #[test]
 fn test_games_drawn_zero_after_win() {
-    let (ttt, _) = setup_tic_tac_toe();
-    let token_id: felt252 = 181;
+    let (ttt, address) = setup_tic_tac_toe();
+    let token_id = mint_token(address, ALICE(), 0);
     ttt.new_game(token_id);
     ttt.make_move(token_id, 0);
     ttt.make_move(token_id, 8);
@@ -1205,8 +1257,8 @@ fn test_games_drawn_zero_after_win() {
 /// Verify games_drawn is 0 after an AI win (not a draw).
 #[test]
 fn test_games_drawn_zero_after_ai_win() {
-    let (ttt, _) = setup_tic_tac_toe();
-    let token_id: felt252 = 182;
+    let (ttt, address) = setup_tic_tac_toe();
+    let token_id = mint_token(address, ALICE(), 0);
     ttt.new_game(token_id);
     ttt.make_move(token_id, 0);
     ttt.make_move(token_id, 2);
@@ -1222,7 +1274,7 @@ fn test_games_drawn_zero_after_ai_win() {
 #[test]
 fn test_game_details_all_fields_after_player_win() {
     let (ttt, address) = setup_tic_tac_toe();
-    let token_id: felt252 = 190;
+    let token_id = mint_token(address, ALICE(), 0);
     let details = IMinigameDetailsDispatcher { contract_address: address };
 
     ttt.new_game(token_id);
@@ -1262,7 +1314,7 @@ fn test_game_details_all_fields_after_player_win() {
 #[test]
 fn test_game_details_all_fields_after_ai_win() {
     let (ttt, address) = setup_tic_tac_toe();
-    let token_id: felt252 = 191;
+    let token_id = mint_token(address, ALICE(), 0);
     let details = IMinigameDetailsDispatcher { contract_address: address };
 
     ttt.new_game(token_id);
@@ -1280,45 +1332,52 @@ fn test_game_details_all_fields_after_ai_win() {
 }
 
 // ==========================================================================
-// MIXED WINS AND LOSSES ON SAME TOKEN
+// MIXED WINS AND LOSSES ON SEPARATE TOKENS
 // ==========================================================================
 
-/// Play multiple games on same token: some player wins, some AI wins.
-/// Verify cumulative stats are correct.
+/// Play multiple games on separate tokens: some player wins, some AI wins.
+/// Verify per-token stats are correct.
 #[test]
-fn test_mixed_wins_losses_same_token() {
+fn test_mixed_wins_losses_separate_tokens() {
     let (ttt, address) = setup_tic_tac_toe();
-    let token_id: felt252 = 200;
     let token_data = IMinigameTokenDataDispatcher { contract_address: address };
 
-    // Game 1: Player wins (0, 8, 6, 7)
-    ttt.new_game(token_id);
-    ttt.make_move(token_id, 0);
-    ttt.make_move(token_id, 8);
-    ttt.make_move(token_id, 6);
-    ttt.make_move(token_id, 7);
-    assert!(ttt.games_won(token_id) == 1, "1 win after game 1");
+    // Game 1: Player wins (0, 8, 6, 7) on token 1
+    let token1 = mint_token(address, ALICE(), 0);
+    ttt.new_game(token1);
+    ttt.make_move(token1, 0);
+    ttt.make_move(token1, 8);
+    ttt.make_move(token1, 6);
+    ttt.make_move(token1, 7);
+    assert!(ttt.games_won(token1) == 1, "1 win on token 1");
 
-    // Game 2: AI wins (0, 2, 6)
-    ttt.new_game(token_id);
-    ttt.make_move(token_id, 0);
-    ttt.make_move(token_id, 2);
-    ttt.make_move(token_id, 6);
-    assert!(ttt.games_won(token_id) == 1, "Still 1 win after AI wins game 2");
+    // Game 2: AI wins (0, 2, 6) on token 2
+    let token2 = mint_token(address, ALICE(), 1);
+    ttt.new_game(token2);
+    ttt.make_move(token2, 0);
+    ttt.make_move(token2, 2);
+    ttt.make_move(token2, 6);
+    assert!(ttt.games_won(token2) == 0, "0 wins on token 2 (AI won)");
 
-    // Game 3: Player wins again
-    ttt.new_game(token_id);
-    ttt.make_move(token_id, 0);
-    ttt.make_move(token_id, 8);
-    ttt.make_move(token_id, 6);
-    ttt.make_move(token_id, 7);
-    assert!(ttt.games_won(token_id) == 2, "2 wins after game 3");
+    // Game 3: Player wins again on token 3
+    let token3 = mint_token(address, ALICE(), 2);
+    ttt.new_game(token3);
+    ttt.make_move(token3, 0);
+    ttt.make_move(token3, 8);
+    ttt.make_move(token3, 6);
+    ttt.make_move(token3, 7);
+    assert!(ttt.games_won(token3) == 1, "1 win on token 3");
 
-    // Verify cumulative stats
-    assert!(ttt.games_played(token_id) == 3, "3 games played");
-    assert!(token_data.score(token_id) == 2, "Score should be 2");
-    // Losses = played - won - drawn = 3 - 2 - 0 = 1
-    assert!(ttt.games_drawn(token_id) == 0, "No draws");
+    // Verify per-token stats
+    assert!(ttt.games_played(token1) == 1, "Token 1: 1 game played");
+    assert!(token_data.score(token1) == 1, "Token 1 score should be 1");
+
+    assert!(ttt.games_played(token2) == 1, "Token 2: 1 game played");
+    assert!(token_data.score(token2) == 0, "Token 2 score should be 0");
+
+    assert!(ttt.games_played(token3) == 1, "Token 3: 1 game played");
+    assert!(token_data.score(token3) == 1, "Token 3 score should be 1");
+    assert!(ttt.games_drawn(token3) == 0, "No draws on token 3");
 }
 
 // ==========================================================================

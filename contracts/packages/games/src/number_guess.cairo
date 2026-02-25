@@ -603,6 +603,8 @@ pub mod NumberGuess {
     #[abi(embed_v0)]
     impl NumberGuessImpl of super::INumberGuess<ContractState> {
         fn new_game(ref self: ContractState, token_id: felt252, settings_id: u32) {
+            self.minigame.pre_action(token_id);
+
             // Verify settings exist
             let (_, _, min, max, max_attempts, exists) = self
                 .settings_data
@@ -622,9 +624,13 @@ pub mod NumberGuess {
             self.range_min.entry(token_id).write(min);
             self.range_max.entry(token_id).write(max);
             self.max_attempts.entry(token_id).write(max_attempts);
+
+            self.minigame.post_action(token_id);
         }
 
         fn guess(ref self: ContractState, token_id: felt252, number: u32) -> i8 {
+            self.minigame.pre_action(token_id);
+
             // Verify game is active
             let status = self.game_status.entry(token_id).read();
             assert!(status == STATUS_PLAYING, "No active game");
@@ -641,8 +647,8 @@ pub mod NumberGuess {
             // Get secret number
             let secret = self.secret_numbers.entry(token_id).read();
 
-            // Check guess
-            if number == secret {
+            // Determine result
+            let result = if number == secret {
                 // Correct guess - player wins
                 self.game_status.entry(token_id).write(STATUS_WON);
 
@@ -673,32 +679,28 @@ pub mod NumberGuess {
                 // Check and record single-game objective completions
                 self.check_and_record_objectives(token_id, guess_count);
 
-                return 0; // Correct
-            }
-
-            // Check if max attempts reached
-            let max_attempts = self.max_attempts.entry(token_id).read();
-            if max_attempts > 0 && guess_count >= max_attempts {
-                // Game over - player loses
-                self.game_status.entry(token_id).write(STATUS_LOST);
-
-                let played = self.games_played.entry(token_id).read() + 1;
-                self.games_played.entry(token_id).write(played);
-
-                // Return feedback even on loss
-                if number < secret {
-                    return -1; // Too low
-                } else {
-                    return 1; // Too high
-                }
-            }
-
-            // Return feedback
-            if number < secret {
-                -1 // Too low
+                0_i8 // Correct
             } else {
-                1 // Too high
-            }
+                // Check if max attempts reached
+                let max_attempts = self.max_attempts.entry(token_id).read();
+                if max_attempts > 0 && guess_count >= max_attempts {
+                    // Game over - player loses
+                    self.game_status.entry(token_id).write(STATUS_LOST);
+
+                    let played = self.games_played.entry(token_id).read() + 1;
+                    self.games_played.entry(token_id).write(played);
+                }
+
+                // Return feedback
+                if number < secret {
+                    -1_i8 // Too low
+                } else {
+                    1_i8 // Too high
+                }
+            };
+
+            self.minigame.post_action(token_id);
+            result
         }
 
         fn guess_count(self: @ContractState, token_id: felt252) -> u32 {
