@@ -624,11 +624,17 @@ pub mod TicTacToe {
     #[abi(embed_v0)]
     impl TicTacToeImpl of super::ITicTacToe<ContractState> {
         fn new_game(ref self: ContractState, token_id: felt252) {
+            self.minigame.pre_action(token_id);
+
             self.boards.entry(token_id).write(0);
             self.status.entry(token_id).write(STATUS_PLAYING);
+
+            self.minigame.post_action(token_id);
         }
 
         fn make_move(ref self: ContractState, token_id: felt252, position: u8) {
+            self.minigame.pre_action(token_id);
+
             assert!(position < 9, "Position must be 0-8");
             assert!(self.status.entry(token_id).read() == STATUS_PLAYING, "Game is already over");
 
@@ -648,46 +654,40 @@ pub mod TicTacToe {
                 self.games_won.entry(token_id).write(won + 1);
                 let score = self.scores.entry(token_id).read();
                 self.scores.entry(token_id).write(score + 1);
-                return;
-            }
-
-            // Check draw after player move
-            if board_full(board) {
+            } else if board_full(board) {
+                // Draw after player move
                 self.boards.entry(token_id).write(board);
                 self.status.entry(token_id).write(STATUS_DRAW);
                 let played = self.games_played.entry(token_id).read();
                 self.games_played.entry(token_id).write(played + 1);
                 let drawn = self.games_drawn.entry(token_id).read();
                 self.games_drawn.entry(token_id).write(drawn + 1);
-                return;
+            } else {
+                // AI move
+                let ai_pos = ai_move(board);
+                board = set_cell(board, ai_pos, AI_O);
+
+                // Check AI win
+                if check_winner(board, AI_O) {
+                    self.boards.entry(token_id).write(board);
+                    self.status.entry(token_id).write(STATUS_AI_WIN);
+                    let played = self.games_played.entry(token_id).read();
+                    self.games_played.entry(token_id).write(played + 1);
+                } else if board_full(board) {
+                    // Draw after AI move
+                    self.boards.entry(token_id).write(board);
+                    self.status.entry(token_id).write(STATUS_DRAW);
+                    let played = self.games_played.entry(token_id).read();
+                    self.games_played.entry(token_id).write(played + 1);
+                    let drawn = self.games_drawn.entry(token_id).read();
+                    self.games_drawn.entry(token_id).write(drawn + 1);
+                } else {
+                    // Game continues
+                    self.boards.entry(token_id).write(board);
+                }
             }
 
-            // AI move
-            let ai_pos = ai_move(board);
-            board = set_cell(board, ai_pos, AI_O);
-
-            // Check AI win
-            if check_winner(board, AI_O) {
-                self.boards.entry(token_id).write(board);
-                self.status.entry(token_id).write(STATUS_AI_WIN);
-                let played = self.games_played.entry(token_id).read();
-                self.games_played.entry(token_id).write(played + 1);
-                return;
-            }
-
-            // Check draw after AI move
-            if board_full(board) {
-                self.boards.entry(token_id).write(board);
-                self.status.entry(token_id).write(STATUS_DRAW);
-                let played = self.games_played.entry(token_id).read();
-                self.games_played.entry(token_id).write(played + 1);
-                let drawn = self.games_drawn.entry(token_id).read();
-                self.games_drawn.entry(token_id).write(drawn + 1);
-                return;
-            }
-
-            // Game continues
-            self.boards.entry(token_id).write(board);
+            self.minigame.post_action(token_id);
         }
 
         fn board(self: @ContractState, token_id: felt252) -> u32 {
