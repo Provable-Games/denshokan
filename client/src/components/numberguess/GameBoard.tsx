@@ -1,18 +1,15 @@
 import { useState, useCallback } from "react";
 import { Box, Paper, Typography, Button, Alert, Grid } from "@mui/material";
 import { motion } from "framer-motion";
-import { Refresh } from "@mui/icons-material";
+import { PlayArrow, Refresh, Replay } from "@mui/icons-material";
 import {
   useNumberGuess,
   GameStatus,
 } from "../../hooks/useNumberGuess";
-import { useNumberGuessConfig } from "../../hooks/useNumberGuessConfig";
-import DifficultySelector from "./DifficultySelector";
 import GuessInput from "./GuessInput";
 import FeedbackDisplay from "./FeedbackDisplay";
 import GameStats from "./GameStats";
 import ResultModal from "./ResultModal";
-import CreateSettingsDialog from "./CreateSettingsDialog";
 import LoadingSpinner from "../common/LoadingSpinner";
 
 interface Props {
@@ -22,14 +19,7 @@ interface Props {
 
 export default function GameBoard({ gameAddress, tokenId }: Props) {
   const [showResultModal, setShowResultModal] = useState(false);
-  const [showCreateSettings, setShowCreateSettings] = useState(false);
   const [lastGameStatus, setLastGameStatus] = useState<number | null>(null);
-
-  const {
-    createSettings,
-    isCreatingSettings,
-    error: configError,
-  } = useNumberGuessConfig(gameAddress);
 
   const {
     startGame,
@@ -49,14 +39,6 @@ export default function GameBoard({ gameAddress, tokenId }: Props) {
   // Calculate attempts remaining
   const attemptsRemaining =
     maxAttempts > 0 ? maxAttempts - guessCount : null;
-
-  // Handle difficulty selection
-  const handleSelectDifficulty = useCallback(
-    async (settingsId: number) => {
-      await startGame(settingsId);
-    },
-    [startGame]
-  );
 
   // Handle guess submission
   const handleGuess = useCallback(
@@ -92,16 +74,6 @@ export default function GameBoard({ gameAddress, tokenId }: Props) {
     setShowResultModal(false);
   }, []);
 
-  // Handle custom settings creation
-  const handleCreateSettings = useCallback(async (params: Parameters<typeof createSettings>[0]) => {
-    const newId = await createSettings(params);
-    if (newId) {
-      // Automatically start a game with the new settings
-      await startGame(newId);
-    }
-    return newId;
-  }, [createSettings, startGame]);
-
   if (isLoading) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}>
@@ -126,16 +98,30 @@ export default function GameBoard({ gameAddress, tokenId }: Props) {
               </Alert>
             )}
 
-            {/* No active game - show difficulty selector */}
+            {/* No active game - show start/play again button */}
             {(gameStatus === GameStatus.NO_GAME ||
               gameStatus === GameStatus.WON ||
               gameStatus === GameStatus.LOST) &&
               !isStarting && (
-                <DifficultySelector
-                  onSelect={handleSelectDifficulty}
-                  onCreateCustom={() => setShowCreateSettings(true)}
-                  isLoading={isStarting}
-                />
+                <Box sx={{ textAlign: "center", py: 4 }}>
+                  <Button
+                    variant="contained"
+                    size="large"
+                    startIcon={
+                      gameStatus === GameStatus.NO_GAME ? (
+                        <PlayArrow />
+                      ) : (
+                        <Replay />
+                      )
+                    }
+                    onClick={startGame}
+                    disabled={isStarting}
+                  >
+                    {gameStatus === GameStatus.NO_GAME
+                      ? "Start Game"
+                      : "Play Again"}
+                  </Button>
+                </Box>
               )}
 
             {/* Starting game */}
@@ -230,15 +216,6 @@ export default function GameBoard({ gameAddress, tokenId }: Props) {
         stats={stats}
         onPlayAgain={handlePlayAgain}
         onClose={() => setShowResultModal(false)}
-      />
-
-      {/* Create Settings Dialog */}
-      <CreateSettingsDialog
-        open={showCreateSettings}
-        onClose={() => setShowCreateSettings(false)}
-        onSubmit={handleCreateSettings}
-        isLoading={isCreatingSettings}
-        error={configError}
       />
     </motion.div>
   );
