@@ -58,12 +58,14 @@ fn setup_number_guess() -> (INumberGuessDispatcher, ContractAddress) {
     (ng, ng_address)
 }
 
-fn mint_token(game_address: ContractAddress, player: ContractAddress, salt: u16) -> felt252 {
+fn mint_token(
+    game_address: ContractAddress, player: ContractAddress, salt: u16, settings_id: u32,
+) -> felt252 {
     let minigame = IMinigameDispatcher { contract_address: game_address };
     minigame
         .mint_game(
             Option::None,
-            Option::None,
+            Option::Some(settings_id),
             Option::None,
             Option::None,
             Option::None,
@@ -85,9 +87,9 @@ fn mint_token(game_address: ContractAddress, player: ContractAddress, salt: u16)
 #[test]
 fn test_new_game_initializes_state() {
     let (ng, address) = setup_number_guess();
-    let token_id = mint_token(address, ALICE(), 0);
+    let token_id = mint_token(address, ALICE(), 0, 1);
 
-    ng.new_game(token_id, 1); // Easy mode
+    ng.new_game(token_id); // Easy mode
 
     assert!(ng.guess_count(token_id) == 0, "Guess count should be 0");
     let (min, max) = ng.get_range(token_id);
@@ -99,9 +101,9 @@ fn test_new_game_initializes_state() {
 #[test]
 fn test_new_game_medium_difficulty() {
     let (ng, address) = setup_number_guess();
-    let token_id = mint_token(address, ALICE(), 0);
+    let token_id = mint_token(address, ALICE(), 0, 2);
 
-    ng.new_game(token_id, 2); // Medium mode
+    ng.new_game(token_id); // Medium mode
 
     let (min, max) = ng.get_range(token_id);
     assert!(min == 1, "Min should be 1");
@@ -112,9 +114,9 @@ fn test_new_game_medium_difficulty() {
 #[test]
 fn test_new_game_hard_difficulty() {
     let (ng, address) = setup_number_guess();
-    let token_id = mint_token(address, ALICE(), 0);
+    let token_id = mint_token(address, ALICE(), 0, 3);
 
-    ng.new_game(token_id, 3); // Hard mode
+    ng.new_game(token_id); // Hard mode
 
     let (min, max) = ng.get_range(token_id);
     assert!(min == 1, "Min should be 1");
@@ -126,18 +128,34 @@ fn test_new_game_hard_difficulty() {
 #[should_panic(expected: "Settings do not exist")]
 fn test_new_game_invalid_settings() {
     let (ng, address) = setup_number_guess();
-    let token_id = mint_token(address, ALICE(), 0);
-
-    ng.new_game(token_id, 99); // Invalid settings
+    // Mint without specifying settings_id — packs 0 into the token
+    let minigame = IMinigameDispatcher { contract_address: address };
+    let token_id = minigame
+        .mint_game(
+            Option::None,
+            Option::None,
+            Option::None,
+            Option::None,
+            Option::None,
+            Option::None,
+            Option::None,
+            Option::None,
+            ALICE(),
+            false,
+            false,
+            0,
+            0,
+        );
+    ng.new_game(token_id); // settings_id=0 doesn't exist
 }
 
 #[test]
 fn test_new_game_initializes_state_clean() {
     let (ng, address) = setup_number_guess();
-    let token_id = mint_token(address, ALICE(), 0);
+    let token_id = mint_token(address, ALICE(), 0, 1);
 
     // Start a new game and verify initial state
-    ng.new_game(token_id, 1);
+    ng.new_game(token_id);
     assert!(ng.guess_count(token_id) == 0, "Guess count should be 0");
 
     // Should not be game over after starting a new game
@@ -152,9 +170,9 @@ fn test_new_game_initializes_state_clean() {
 #[test]
 fn test_guess_too_low_returns_negative_one() {
     let (ng, address) = setup_number_guess();
-    let token_id = mint_token(address, ALICE(), 0);
+    let token_id = mint_token(address, ALICE(), 0, 1);
 
-    ng.new_game(token_id, 1); // Easy: 1-10
+    ng.new_game(token_id); // Easy: 1-10
 
     // Binary search to find the secret and test feedback
     // Start with 1 - if secret > 1, we get -1
@@ -166,9 +184,9 @@ fn test_guess_too_low_returns_negative_one() {
 #[test]
 fn test_guess_too_high_returns_positive_one() {
     let (ng, address) = setup_number_guess();
-    let token_id = mint_token(address, ALICE(), 0);
+    let token_id = mint_token(address, ALICE(), 0, 1);
 
-    ng.new_game(token_id, 1); // Easy: 1-10
+    ng.new_game(token_id); // Easy: 1-10
 
     // Guess the max - if secret < max, we get 1
     let result = ng.guess(token_id, 10);
@@ -179,9 +197,9 @@ fn test_guess_too_high_returns_positive_one() {
 #[test]
 fn test_guess_increments_count() {
     let (ng, address) = setup_number_guess();
-    let token_id = mint_token(address, ALICE(), 0);
+    let token_id = mint_token(address, ALICE(), 0, 1);
 
-    ng.new_game(token_id, 1);
+    ng.new_game(token_id);
 
     assert!(ng.guess_count(token_id) == 0, "Initial guess count should be 0");
 
@@ -190,8 +208,8 @@ fn test_guess_increments_count() {
 
     // Continue if game not over
     let (ng2, address2) = setup_number_guess();
-    let token_id2 = mint_token(address2, ALICE(), 0);
-    ng2.new_game(token_id2, 1);
+    let token_id2 = mint_token(address2, ALICE(), 0, 1);
+    ng2.new_game(token_id2);
     ng2.guess(token_id2, 1);
 
     let token_data = IMinigameTokenDataDispatcher { contract_address: address2 };
@@ -205,7 +223,7 @@ fn test_guess_increments_count() {
 #[should_panic(expected: "No active game")]
 fn test_guess_without_active_game() {
     let (ng, address) = setup_number_guess();
-    let token_id = mint_token(address, ALICE(), 0);
+    let token_id = mint_token(address, ALICE(), 0, 1);
 
     // No new_game called
     ng.guess(token_id, 5);
@@ -215,9 +233,9 @@ fn test_guess_without_active_game() {
 #[should_panic(expected: "Guess out of range")]
 fn test_guess_below_range() {
     let (ng, address) = setup_number_guess();
-    let token_id = mint_token(address, ALICE(), 0);
+    let token_id = mint_token(address, ALICE(), 0, 1);
 
-    ng.new_game(token_id, 1); // Easy: 1-10
+    ng.new_game(token_id); // Easy: 1-10
     ng.guess(token_id, 0); // Below minimum
 }
 
@@ -225,9 +243,9 @@ fn test_guess_below_range() {
 #[should_panic(expected: "Guess out of range")]
 fn test_guess_above_range() {
     let (ng, address) = setup_number_guess();
-    let token_id = mint_token(address, ALICE(), 0);
+    let token_id = mint_token(address, ALICE(), 0, 1);
 
-    ng.new_game(token_id, 1); // Easy: 1-10
+    ng.new_game(token_id); // Easy: 1-10
     ng.guess(token_id, 11); // Above maximum
 }
 
@@ -238,9 +256,9 @@ fn test_guess_above_range() {
 #[test]
 fn test_correct_guess_wins_game() {
     let (ng, address) = setup_number_guess();
-    let token_id = mint_token(address, ALICE(), 0);
+    let token_id = mint_token(address, ALICE(), 0, 1);
 
-    ng.new_game(token_id, 1); // Easy: 1-10
+    ng.new_game(token_id); // Easy: 1-10
 
     // Binary search to find the secret
     let mut low: u32 = 1;
@@ -281,9 +299,9 @@ fn test_correct_guess_wins_game() {
 #[test]
 fn test_max_attempts_reached_loses_game() {
     let (ng, address) = setup_number_guess();
-    let token_id = mint_token(address, ALICE(), 0);
+    let token_id = mint_token(address, ALICE(), 0, 2);
 
-    ng.new_game(token_id, 2); // Medium: 1-100, 10 attempts
+    ng.new_game(token_id); // Medium: 1-100, 10 attempts
 
     // Make 10 wrong guesses (guess 1 repeatedly if secret != 1)
     let mut attempts: u32 = 0;
@@ -316,9 +334,9 @@ fn test_max_attempts_reached_loses_game() {
 #[test]
 fn test_unlimited_attempts_mode() {
     let (ng, address) = setup_number_guess();
-    let token_id = mint_token(address, ALICE(), 0);
+    let token_id = mint_token(address, ALICE(), 0, 1);
 
-    ng.new_game(token_id, 1); // Easy: unlimited attempts
+    ng.new_game(token_id); // Easy: unlimited attempts
 
     // Make many guesses
     let mut attempts: u32 = 0;
@@ -351,10 +369,10 @@ fn test_unlimited_attempts_mode() {
 #[test]
 fn test_best_score_tracks_lowest() {
     let (ng, address) = setup_number_guess();
-    let token_id = mint_token(address, ALICE(), 0);
+    let token_id = mint_token(address, ALICE(), 0, 1);
 
     // Play first game with binary search
-    ng.new_game(token_id, 1);
+    ng.new_game(token_id);
     let mut low: u32 = 1;
     let mut high: u32 = 10;
     loop {
@@ -391,8 +409,8 @@ fn test_perfect_game_tracked() {
             break;
         }
 
-        let token_id = mint_token(address, ALICE(), game_num.try_into().unwrap());
-        ng.new_game(token_id, 1); // Easy: 1-10
+        let token_id = mint_token(address, ALICE(), game_num.try_into().unwrap(), 1);
+        ng.new_game(token_id); // Easy: 1-10
 
         // Try to guess on first attempt
         let result = ng.guess(token_id, 5); // Middle guess
@@ -411,10 +429,10 @@ fn test_perfect_game_tracked() {
 #[test]
 fn test_single_game_stats() {
     let (ng, address) = setup_number_guess();
-    let token_id = mint_token(address, ALICE(), 0);
+    let token_id = mint_token(address, ALICE(), 0, 1);
 
     // Play 1 game and verify stats
-    ng.new_game(token_id, 1);
+    ng.new_game(token_id);
 
     // Binary search to win
     let mut low: u32 = 1;
@@ -445,13 +463,13 @@ fn test_single_game_stats() {
 #[test]
 fn test_score_accumulates() {
     let (ng, address) = setup_number_guess();
-    let token_id = mint_token(address, ALICE(), 0);
+    let token_id = mint_token(address, ALICE(), 0, 1);
     let token_data = IMinigameTokenDataDispatcher { contract_address: address };
 
     assert!(token_data.score(token_id) == 0, "Initial score should be 0");
 
     // Win a game
-    ng.new_game(token_id, 1);
+    ng.new_game(token_id);
     let mut low: u32 = 1;
     let mut high: u32 = 10;
     loop {
@@ -483,11 +501,11 @@ fn test_score_accumulates() {
 #[test]
 fn test_different_tokens_independent() {
     let (ng, address) = setup_number_guess();
-    let token1 = mint_token(address, ALICE(), 0);
-    let token2 = mint_token(address, ALICE(), 1);
+    let token1 = mint_token(address, ALICE(), 0, 1);
+    let token2 = mint_token(address, ALICE(), 1, 2);
 
-    ng.new_game(token1, 1);
-    ng.new_game(token2, 2);
+    ng.new_game(token1);
+    ng.new_game(token2);
 
     // Token 1 is easy, token 2 is medium
     let (_min1, max1) = ng.get_range(token1);
@@ -510,7 +528,7 @@ fn test_different_tokens_independent() {
 #[test]
 fn test_token_data_score() {
     let (_, address) = setup_number_guess();
-    let token_id = mint_token(address, ALICE(), 0);
+    let token_id = mint_token(address, ALICE(), 0, 1);
     let token_data = IMinigameTokenDataDispatcher { contract_address: address };
 
     assert!(token_data.score(token_id) == 0, "Initial score should be 0");
@@ -519,17 +537,17 @@ fn test_token_data_score() {
 #[test]
 fn test_token_data_game_over() {
     let (ng, address) = setup_number_guess();
-    let token_id = mint_token(address, ALICE(), 0);
+    let token_id = mint_token(address, ALICE(), 0, 1);
     let token_data = IMinigameTokenDataDispatcher { contract_address: address };
 
-    ng.new_game(token_id, 1);
+    ng.new_game(token_id);
     assert!(!token_data.game_over(token_id), "Game should not be over after new_game");
 }
 
 #[test]
 fn test_details_token_name() {
     let (_, address) = setup_number_guess();
-    let token_id = mint_token(address, ALICE(), 0);
+    let token_id = mint_token(address, ALICE(), 0, 1);
     let details = IMinigameDetailsDispatcher { contract_address: address };
     let name = details.token_name(token_id);
     assert!(name == "Number Guess", "Token name should be 'Number Guess'");
@@ -538,8 +556,8 @@ fn test_details_token_name() {
 #[test]
 fn test_details_game_details() {
     let (ng, address) = setup_number_guess();
-    let token_id = mint_token(address, ALICE(), 0);
-    ng.new_game(token_id, 1);
+    let token_id = mint_token(address, ALICE(), 0, 1);
+    ng.new_game(token_id);
 
     let details = IMinigameDetailsDispatcher { contract_address: address };
     let game_details = details.game_details(token_id);
@@ -596,14 +614,14 @@ fn test_objectives_exist() {
 #[test]
 fn test_objective_first_win() {
     let (ng, address) = setup_number_guess();
-    let token_id = mint_token(address, ALICE(), 0);
+    let token_id = mint_token(address, ALICE(), 0, 1);
     let objectives = IMinigameObjectivesDispatcher { contract_address: address };
 
     // Initially not completed
     assert!(!objectives.completed_objective(token_id, 1), "First Win should not be completed yet");
 
     // Win a game
-    ng.new_game(token_id, 1);
+    ng.new_game(token_id);
     let mut low: u32 = 1;
     let mut high: u32 = 10;
     let token_data = IMinigameTokenDataDispatcher { contract_address: address };
@@ -632,12 +650,12 @@ fn test_objective_first_win() {
 #[test]
 fn test_objective_quick_thinker() {
     let (ng, address) = setup_number_guess();
-    let token_id = mint_token(address, ALICE(), 0);
+    let token_id = mint_token(address, ALICE(), 0, 1);
     let objectives = IMinigameObjectivesDispatcher { contract_address: address };
 
     // Win a game with binary search on easy mode (1-10)
     // Binary search should take at most 4 guesses (log2(10) ~ 3.3)
-    ng.new_game(token_id, 1);
+    ng.new_game(token_id);
     let mut low: u32 = 1;
     let mut high: u32 = 10;
     let token_data = IMinigameTokenDataDispatcher { contract_address: address };
@@ -685,8 +703,8 @@ fn test_objective_lucky_guess() {
             break;
         }
 
-        let token_id = mint_token(address, ALICE(), attempts.try_into().unwrap());
-        ng.new_game(token_id, 1); // Easy: 1-10
+        let token_id = mint_token(address, ALICE(), attempts.try_into().unwrap(), 1);
+        ng.new_game(token_id); // Easy: 1-10
 
         // Try each number 1-10 as first guess
         let guess: u32 = (attempts % 10) + 1;
@@ -735,10 +753,10 @@ fn test_objectives_details() {
 #[test]
 fn test_score_batch() {
     let (ng, address) = setup_number_guess();
-    let token1 = mint_token(address, ALICE(), 0);
-    let token2 = mint_token(address, ALICE(), 1);
-    ng.new_game(token1, 1);
-    ng.new_game(token2, 1);
+    let token1 = mint_token(address, ALICE(), 0, 1);
+    let token2 = mint_token(address, ALICE(), 1, 1);
+    ng.new_game(token1);
+    ng.new_game(token2);
 
     let token_data = IMinigameTokenDataDispatcher { contract_address: address };
     let scores = token_data.score_batch(array![token1, token2].span());
@@ -750,10 +768,10 @@ fn test_score_batch() {
 #[test]
 fn test_game_over_batch() {
     let (ng, address) = setup_number_guess();
-    let token1 = mint_token(address, ALICE(), 0);
-    let token2 = mint_token(address, ALICE(), 1);
-    ng.new_game(token1, 1);
-    ng.new_game(token2, 1);
+    let token1 = mint_token(address, ALICE(), 0, 1);
+    let token2 = mint_token(address, ALICE(), 1, 1);
+    ng.new_game(token1);
+    ng.new_game(token2);
 
     let token_data = IMinigameTokenDataDispatcher { contract_address: address };
     let results = token_data.game_over_batch(array![token1, token2].span());
@@ -765,8 +783,8 @@ fn test_game_over_batch() {
 #[test]
 fn test_token_name_batch() {
     let (_, address) = setup_number_guess();
-    let token1 = mint_token(address, ALICE(), 0);
-    let token2 = mint_token(address, ALICE(), 1);
+    let token1 = mint_token(address, ALICE(), 0, 1);
+    let token2 = mint_token(address, ALICE(), 1, 1);
     let details = IMinigameDetailsDispatcher { contract_address: address };
     let names = details.token_name_batch(array![token1, token2].span());
     assert!(names.len() == 2, "Should return 2 names");
@@ -859,7 +877,7 @@ fn test_create_objective_invalid_type() {
 #[test]
 fn test_per_game_objective_completion() {
     let (ng, address) = setup_number_guess();
-    let token_id = mint_token(address, ALICE(), 0);
+    let token_id = mint_token(address, ALICE(), 0, 1);
     let objectives = IMinigameObjectivesDispatcher { contract_address: address };
     let token_data = IMinigameTokenDataDispatcher { contract_address: address };
 
@@ -867,7 +885,7 @@ fn test_per_game_objective_completion() {
     assert!(!objectives.completed_objective(token_id, 1), "First Win should not be completed yet");
 
     // Win a game
-    ng.new_game(token_id, 1);
+    ng.new_game(token_id);
     let mut low: u32 = 1;
     let mut high: u32 = 10;
     loop {
@@ -902,13 +920,14 @@ fn test_per_game_objective_completion() {
 fn test_custom_settings_game() {
     let (ng, address) = setup_number_guess();
     let config = INumberGuessConfigDispatcher { contract_address: address };
-    let token_id = mint_token(address, ALICE(), 0);
 
     // Create custom settings: 1-5 range, 3 attempts
     let custom_id = config.create_settings("Tiny", "Very small range", 1, 5, 3);
 
+    let token_id = mint_token(address, ALICE(), 0, custom_id);
+
     // Start a game with custom settings
-    ng.new_game(token_id, custom_id);
+    ng.new_game(token_id);
 
     let (min, max) = ng.get_range(token_id);
     assert!(min == 1, "Custom min should be 1");
@@ -922,13 +941,13 @@ fn test_custom_objective_completion() {
     let config = INumberGuessConfigDispatcher { contract_address: address };
     let objectives = IMinigameObjectivesDispatcher { contract_address: address };
     let token_data = IMinigameTokenDataDispatcher { contract_address: address };
-    let token_id = mint_token(address, ALICE(), 0);
+    let token_id = mint_token(address, ALICE(), 0, 1);
 
     // Create a custom objective: Win in 3 or fewer guesses
     let custom_obj_id = config.create_objective("Speed Demon", "Win in 3 or fewer guesses", 2, 3);
 
     // Win a game with <= 3 guesses (easy mode binary search should do it)
-    ng.new_game(token_id, 1);
+    ng.new_game(token_id);
     let mut low: u32 = 1;
     let mut high: u32 = 10;
     loop {
@@ -969,11 +988,10 @@ fn discover_secret_and_win(
     ng: INumberGuessDispatcher,
     address: ContractAddress,
     token_id: felt252,
-    settings_id: u32,
     range_min: u32,
     range_max: u32,
 ) -> u32 {
-    ng.new_game(token_id, settings_id);
+    ng.new_game(token_id);
     let token_data = IMinigameTokenDataDispatcher { contract_address: address };
     let mut guess_val = range_min;
     let mut found: u32 = 0;
@@ -1010,8 +1028,8 @@ fn win_perfect_game(
             break;
         }
         let salt: u16 = (salt_offset + attempt).try_into().unwrap();
-        let token_id = mint_token(address, ALICE(), salt);
-        ng.new_game(token_id, settings_id);
+        let token_id = mint_token(address, ALICE(), salt, settings_id);
+        ng.new_game(token_id);
         // Try guessing different values
         let try_val = if attempt % 2 == 0 {
             range_min
@@ -1088,7 +1106,7 @@ fn test_objective_type2_failure_win_with_too_many_guesses() {
     let config = INumberGuessConfigDispatcher { contract_address: address };
     let objectives = IMinigameObjectivesDispatcher { contract_address: address };
     let token_data = IMinigameTokenDataDispatcher { contract_address: address };
-    let token_id = mint_token(address, ALICE(), 0);
+    let token_id = mint_token(address, ALICE(), 0, 1);
 
     // Create objective type 2 (WinWithinN) with threshold 2: must win in <= 2 guesses
     let obj_id = config.create_objective("Win In 2", "Win in 2 or fewer guesses", 2, 2);
@@ -1096,7 +1114,7 @@ fn test_objective_type2_failure_win_with_too_many_guesses() {
     // Create settings with range 1-10, unlimited attempts
     // We need to win but with MORE than 2 guesses.
     // Use easy mode (1-10). We will intentionally make wrong guesses before finding the secret.
-    ng.new_game(token_id, 1); // Easy: 1-10
+    ng.new_game(token_id); // Easy: 1-10
 
     // Make two deliberate wrong guesses, then find the secret
     // First, iterate to find the secret but count guesses
@@ -1135,11 +1153,11 @@ fn test_objective_type3_failure_not_perfect_game() {
     let (ng, address) = setup_number_guess();
     let objectives = IMinigameObjectivesDispatcher { contract_address: address };
     let token_data = IMinigameTokenDataDispatcher { contract_address: address };
-    let token_id = mint_token(address, ALICE(), 0);
+    let token_id = mint_token(address, ALICE(), 0, 1);
 
     // Default objective 3 is PerfectGame (type 3, threshold 1).
     // Win a game with MORE than 1 guess.
-    ng.new_game(token_id, 1); // Easy: 1-10
+    ng.new_game(token_id); // Easy: 1-10
 
     // Iterate from 1 upward to find the secret. We will almost certainly need > 1 guess.
     let mut guess_val: u32 = 1;
@@ -1177,10 +1195,10 @@ fn test_already_completed_objective_stays_completed() {
     let (ng, address) = setup_number_guess();
     let objectives = IMinigameObjectivesDispatcher { contract_address: address };
     let token_data = IMinigameTokenDataDispatcher { contract_address: address };
-    let token_id = mint_token(address, ALICE(), 0);
+    let token_id = mint_token(address, ALICE(), 0, 1);
 
     // Win a game
-    ng.new_game(token_id, 1);
+    ng.new_game(token_id);
     let mut low: u32 = 1;
     let mut high: u32 = 10;
     loop {
@@ -1221,14 +1239,14 @@ fn test_token_description_after_gameplay() {
     let (ng, address) = setup_number_guess();
     let details = IMinigameDetailsDispatcher { contract_address: address };
     let token_data = IMinigameTokenDataDispatcher { contract_address: address };
-    let token_id_win = mint_token(address, ALICE(), 0);
+    let token_id_win = mint_token(address, ALICE(), 0, 1);
 
     // Description before any games
     let desc_before = details.token_description(token_id_win);
     assert!(desc_before.len() > 0, "Description should not be empty before games");
 
     // Win a game (Easy mode, binary search)
-    ng.new_game(token_id_win, 1);
+    ng.new_game(token_id_win);
     let mut low: u32 = 1;
     let mut high: u32 = 10;
     loop {
@@ -1250,8 +1268,8 @@ fn test_token_description_after_gameplay() {
     assert!(desc_after_win.len() > 0, "Description should not be empty after win");
 
     // Lose a game on a different token (Medium mode, 10 attempts)
-    let token_id_loss = mint_token(address, ALICE(), 1);
-    ng.new_game(token_id_loss, 2); // Medium: 1-100, 10 attempts
+    let token_id_loss = mint_token(address, ALICE(), 1, 2);
+    ng.new_game(token_id_loss); // Medium: 1-100, 10 attempts
     let mut attempts: u32 = 0;
     loop {
         if attempts >= 10 || token_data.game_over(token_id_loss) {
@@ -1279,7 +1297,7 @@ fn test_token_description_after_gameplay() {
 fn test_game_details_status_no_game() {
     let (_, address) = setup_number_guess();
     let details = IMinigameDetailsDispatcher { contract_address: address };
-    let token_id = mint_token(address, ALICE(), 0);
+    let token_id = mint_token(address, ALICE(), 0, 1);
 
     // No game started - STATUS_NO_GAME
     let game_details = details.game_details(token_id);
@@ -1292,9 +1310,9 @@ fn test_game_details_status_no_game() {
 fn test_game_details_status_playing() {
     let (ng, address) = setup_number_guess();
     let details = IMinigameDetailsDispatcher { contract_address: address };
-    let token_id = mint_token(address, ALICE(), 0);
+    let token_id = mint_token(address, ALICE(), 0, 1);
 
-    ng.new_game(token_id, 1); // Start playing
+    ng.new_game(token_id); // Start playing
 
     let game_details = details.game_details(token_id);
     let status_detail = game_details.at(5);
@@ -1306,10 +1324,10 @@ fn test_game_details_status_won() {
     let (ng, address) = setup_number_guess();
     let details = IMinigameDetailsDispatcher { contract_address: address };
     let token_data = IMinigameTokenDataDispatcher { contract_address: address };
-    let token_id = mint_token(address, ALICE(), 0);
+    let token_id = mint_token(address, ALICE(), 0, 1);
 
     // Win a game
-    ng.new_game(token_id, 1);
+    ng.new_game(token_id);
     let mut low: u32 = 1;
     let mut high: u32 = 10;
     loop {
@@ -1337,10 +1355,10 @@ fn test_game_details_status_lost() {
     let (ng, address) = setup_number_guess();
     let details = IMinigameDetailsDispatcher { contract_address: address };
     let token_data = IMinigameTokenDataDispatcher { contract_address: address };
-    let token_id = mint_token(address, ALICE(), 0);
+    let token_id = mint_token(address, ALICE(), 0, 2);
 
     // Lose a game (medium: 1-100, 10 attempts)
-    ng.new_game(token_id, 2);
+    ng.new_game(token_id);
     let mut attempts: u32 = 0;
     loop {
         if attempts >= 10 || token_data.game_over(token_id) {
@@ -1409,11 +1427,11 @@ fn test_token_description_batch() {
     let (ng, address) = setup_number_guess();
     let details = IMinigameDetailsDispatcher { contract_address: address };
     let token_data = IMinigameTokenDataDispatcher { contract_address: address };
-    let token1 = mint_token(address, ALICE(), 0);
-    let token2 = mint_token(address, ALICE(), 1);
+    let token1 = mint_token(address, ALICE(), 0, 1);
+    let token2 = mint_token(address, ALICE(), 1, 1);
 
     // Win a game for token1 so descriptions differ
-    ng.new_game(token1, 1);
+    ng.new_game(token1);
     let mut low: u32 = 1;
     let mut high: u32 = 10;
     loop {
@@ -1441,11 +1459,11 @@ fn test_token_description_batch() {
 fn test_game_details_batch() {
     let (ng, address) = setup_number_guess();
     let details = IMinigameDetailsDispatcher { contract_address: address };
-    let token1 = mint_token(address, ALICE(), 0);
-    let token2 = mint_token(address, ALICE(), 1);
+    let token1 = mint_token(address, ALICE(), 0, 1);
+    let token2 = mint_token(address, ALICE(), 1, 2);
 
-    ng.new_game(token1, 1);
-    ng.new_game(token2, 2);
+    ng.new_game(token1);
+    ng.new_game(token2);
 
     let batch = details.game_details_batch(array![token1, token2].span());
     assert!(batch.len() == 2, "Should return 2 game detail spans");
@@ -1507,7 +1525,7 @@ fn test_create_objective_type_zero_panics() {
 #[test]
 fn test_game_status_returns_no_game() {
     let (ng, address) = setup_number_guess();
-    let token_id = mint_token(address, ALICE(), 0);
+    let token_id = mint_token(address, ALICE(), 0, 1);
 
     // No game started: status should be 0 (STATUS_NO_GAME)
     assert!(ng.game_status(token_id) == 0, "Status should be 0 (no game)");
@@ -1516,9 +1534,9 @@ fn test_game_status_returns_no_game() {
 #[test]
 fn test_game_status_returns_playing() {
     let (ng, address) = setup_number_guess();
-    let token_id = mint_token(address, ALICE(), 0);
+    let token_id = mint_token(address, ALICE(), 0, 1);
 
-    ng.new_game(token_id, 1);
+    ng.new_game(token_id);
     // Game started: status should be 1 (STATUS_PLAYING)
     assert!(ng.game_status(token_id) == 1, "Status should be 1 (playing)");
 }
@@ -1527,9 +1545,9 @@ fn test_game_status_returns_playing() {
 fn test_game_status_returns_won() {
     let (ng, address) = setup_number_guess();
     let token_data = IMinigameTokenDataDispatcher { contract_address: address };
-    let token_id = mint_token(address, ALICE(), 0);
+    let token_id = mint_token(address, ALICE(), 0, 1);
 
-    ng.new_game(token_id, 1);
+    ng.new_game(token_id);
     // Binary search to win
     let mut low: u32 = 1;
     let mut high: u32 = 10;
@@ -1556,9 +1574,9 @@ fn test_game_status_returns_won() {
 fn test_game_status_returns_lost() {
     let (ng, address) = setup_number_guess();
     let token_data = IMinigameTokenDataDispatcher { contract_address: address };
-    let token_id = mint_token(address, ALICE(), 0);
+    let token_id = mint_token(address, ALICE(), 0, 2);
 
-    ng.new_game(token_id, 2); // Medium: 1-100, 10 attempts
+    ng.new_game(token_id); // Medium: 1-100, 10 attempts
     let mut attempts: u32 = 0;
     loop {
         if attempts >= 10 || token_data.game_over(token_id) {
@@ -1585,7 +1603,7 @@ fn test_game_status_returns_lost() {
 fn test_completed_objective_nonexistent_returns_false() {
     let (_, address) = setup_number_guess();
     let objectives = IMinigameObjectivesDispatcher { contract_address: address };
-    let token_id = mint_token(address, ALICE(), 0);
+    let token_id = mint_token(address, ALICE(), 0, 1);
 
     // Objective 999 does not exist. completed_objective should return false.
     assert!(
@@ -1621,10 +1639,10 @@ fn test_objectives_details_batch() {
 fn test_game_details_unlimited_max_attempts() {
     let (ng, address) = setup_number_guess();
     let details = IMinigameDetailsDispatcher { contract_address: address };
-    let token_id = mint_token(address, ALICE(), 0);
+    let token_id = mint_token(address, ALICE(), 0, 1);
 
     // Easy mode has unlimited attempts (max_attempts=0)
-    ng.new_game(token_id, 1);
+    ng.new_game(token_id);
 
     let game_details = details.game_details(token_id);
     // "Max Attempts" is at index 7
@@ -1637,10 +1655,10 @@ fn test_game_details_unlimited_max_attempts() {
 fn test_game_details_limited_max_attempts() {
     let (ng, address) = setup_number_guess();
     let details = IMinigameDetailsDispatcher { contract_address: address };
-    let token_id = mint_token(address, ALICE(), 0);
+    let token_id = mint_token(address, ALICE(), 0, 2);
 
     // Medium mode has max_attempts=10
-    ng.new_game(token_id, 2);
+    ng.new_game(token_id);
 
     let game_details = details.game_details(token_id);
     let max_attempts_detail = game_details.at(7);
@@ -1656,11 +1674,11 @@ fn test_game_details_limited_max_attempts() {
 fn test_score_batch_with_gameplay() {
     let (ng, address) = setup_number_guess();
     let token_data = IMinigameTokenDataDispatcher { contract_address: address };
-    let token1 = mint_token(address, ALICE(), 0);
-    let token2 = mint_token(address, ALICE(), 1);
+    let token1 = mint_token(address, ALICE(), 0, 1);
+    let token2 = mint_token(address, ALICE(), 1, 1);
 
     // Win a game for token1
-    ng.new_game(token1, 1);
+    ng.new_game(token1);
     let mut low: u32 = 1;
     let mut high: u32 = 10;
     loop {
@@ -1688,11 +1706,11 @@ fn test_score_batch_with_gameplay() {
 fn test_game_over_batch_mixed_states() {
     let (ng, address) = setup_number_guess();
     let token_data = IMinigameTokenDataDispatcher { contract_address: address };
-    let token1 = mint_token(address, ALICE(), 0);
-    let token2 = mint_token(address, ALICE(), 1);
+    let token1 = mint_token(address, ALICE(), 0, 1);
+    let token2 = mint_token(address, ALICE(), 1, 1);
 
     // Win a game for token1
-    ng.new_game(token1, 1);
+    ng.new_game(token1);
     let mut low: u32 = 1;
     let mut high: u32 = 10;
     loop {
@@ -1711,7 +1729,7 @@ fn test_game_over_batch_mixed_states() {
     }
 
     // token2 is still playing
-    ng.new_game(token2, 1);
+    ng.new_game(token2);
 
     let results = token_data.game_over_batch(array![token1, token2].span());
     assert!(*results.at(0), "Token1 game should be over (won)");

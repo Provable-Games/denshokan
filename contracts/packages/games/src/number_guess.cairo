@@ -6,8 +6,9 @@ use starknet::ContractAddress;
 
 #[starknet::interface]
 pub trait INumberGuess<TContractState> {
-    /// Start a new game for a token with specified settings (difficulty level).
-    fn new_game(ref self: TContractState, token_id: felt252, settings_id: u32);
+    /// Start a new game for a token. Settings (difficulty level) are extracted from the packed
+    /// token ID.
+    fn new_game(ref self: TContractState, token_id: felt252);
     /// Make a guess. Returns: -1 (too low), 0 (correct), 1 (too high).
     fn guess(ref self: TContractState, token_id: felt252, number: u32) -> i8;
     /// Get the current guess count for the active game.
@@ -183,6 +184,7 @@ pub mod NumberGuess {
     };
     use game_components_embeddable_game_standard::minigame::minigame_component::MinigameComponent;
     use game_components_embeddable_game_standard::minigame::structs::GameDetail;
+    use game_components_embeddable_game_standard::token::structs::unpack_settings_id;
     use openzeppelin_introspection::src5::SRC5Component;
     use starknet::storage::{
         Map, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess,
@@ -602,8 +604,11 @@ pub mod NumberGuess {
 
     #[abi(embed_v0)]
     impl NumberGuessImpl of super::INumberGuess<ContractState> {
-        fn new_game(ref self: ContractState, token_id: felt252, settings_id: u32) {
+        fn new_game(ref self: ContractState, token_id: felt252) {
             self.minigame.pre_action(token_id);
+
+            // Extract settings_id from packed token_id (immutable, set at mint time)
+            let settings_id = unpack_settings_id(token_id);
 
             // Verify settings exist
             let (_, _, min, max, max_attempts, exists) = self

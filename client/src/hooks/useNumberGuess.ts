@@ -39,7 +39,7 @@ export interface GameStats {
 
 export interface UseNumberGuessReturn {
   // Actions
-  startGame: (settingsId: number) => Promise<void>;
+  startGame: () => Promise<void>;
   makeGuess: (number: number) => Promise<GuessFeedback>;
 
   // Game State
@@ -175,33 +175,30 @@ export function useNumberGuess(
     refetchScore,
   ]);
 
-  const startGame = useCallback(
-    async (settingsId: number) => {
-      if (!address || !contract) {
-        setError("Wallet not connected");
-        return;
-      }
+  const startGame = useCallback(async () => {
+    if (!address || !contract) {
+      setError("Wallet not connected");
+      return;
+    }
 
-      setIsStarting(true);
-      setError(null);
-      setLastFeedback(null);
+    setIsStarting(true);
+    setError(null);
+    setLastFeedback(null);
 
-      try {
-        const call = contract.populate("new_game", [tokenId, settingsId]);
-        await sendAsync([call]);
+    try {
+      const call = contract.populate("new_game", [tokenId]);
+      await sendAsync([call]);
 
-        // Refetch state after transaction
-        setTimeout(() => {
-          refetch();
-        }, 1000);
-      } catch (e: any) {
-        setError(e.message || "Failed to start game");
-      } finally {
-        setIsStarting(false);
-      }
-    },
-    [address, contract, sendAsync, tokenId, refetch]
-  );
+      // Refetch state after transaction
+      setTimeout(() => {
+        refetch();
+      }, 1000);
+    } catch (e: any) {
+      setError(e.message || "Failed to start game");
+    } finally {
+      setIsStarting(false);
+    }
+  }, [address, contract, sendAsync, tokenId, refetch]);
 
   const makeGuess = useCallback(
     async (number: number): Promise<GuessFeedback> => {
