@@ -5,8 +5,9 @@
 
 use core::num::traits::Zero;
 use denshokan_interfaces::filter::{
-    FilterResult, IDenshokanFilter, IDenshokanSettingsObjectives, ObjectiveEntry, ObjectivesResult,
-    SettingsEntry, SettingsResult, TokenFullState,
+    FilterResult, IDenshokanFilter, IDenshokanSettingsObjectives, IDenshokanTokenUriBatch,
+    IDenshokanTokenUriBatchDispatcher, IDenshokanTokenUriBatchDispatcherTrait, ObjectiveEntry,
+    ObjectivesResult, SettingsEntry, SettingsResult, TokenFullState,
 };
 use game_components_embeddable_game_standard::minigame::extensions::objectives::interface::{
     IMINIGAME_OBJECTIVES_ID, IMinigameObjectivesDetailsDispatcher,
@@ -29,7 +30,7 @@ use game_components_embeddable_game_standard::token::structs::{
 use openzeppelin_access::ownable::OwnableComponent;
 use openzeppelin_interfaces::erc721::{
     IERC721Dispatcher, IERC721DispatcherTrait, IERC721EnumerableDispatcher,
-    IERC721EnumerableDispatcherTrait,
+    IERC721EnumerableDispatcherTrait, IERC721MetadataDispatcher, IERC721MetadataDispatcherTrait,
 };
 use openzeppelin_interfaces::introspection::{ISRC5Dispatcher, ISRC5DispatcherTrait};
 use openzeppelin_interfaces::upgrades::IUpgradeable;
@@ -132,6 +133,10 @@ pub mod DenshokanViewer {
 
         fn _get_enumerable(self: @ContractState) -> IERC721EnumerableDispatcher {
             IERC721EnumerableDispatcher { contract_address: self._get_denshokan_address() }
+        }
+
+        fn _get_erc721_metadata(self: @ContractState) -> IERC721MetadataDispatcher {
+            IERC721MetadataDispatcher { contract_address: self._get_denshokan_address() }
         }
 
         fn _get_token(self: @ContractState) -> IMinigameTokenMixinDispatcher {
@@ -780,33 +785,19 @@ pub mod DenshokanViewer {
         fn tokens_full_state_batch(
             self: @ContractState, token_ids: Array<felt252>,
         ) -> Array<TokenFullState> {
-            let erc721 = self._get_erc721();
+            // Single dispatch: viewer → denshokan (component handles everything locally)
             let token = self._get_token();
-            let mut result: Array<TokenFullState> = array![];
+            token.token_full_state_batch(token_ids.span())
+        }
 
-            for token_id in token_ids {
-                let metadata = token.token_metadata(token_id);
-                let owner = erc721.owner_of(token_id.into());
-                let player_name = token.player_name(token_id);
-                let is_playable = token.is_playable(token_id);
-                let game_address = token.token_game_address(token_id);
-
-                result
-                    .append(
-                        TokenFullState {
-                            token_id,
-                            owner,
-                            player_name,
-                            is_playable,
-                            game_address,
-                            game_over: metadata.game_over,
-                            completed_objective: metadata.completed_objective,
-                            lifecycle: metadata.lifecycle,
-                        },
-                    );
-            }
-
-            result
+        fn token_uri_batch(
+            self: @ContractState, token_ids: Array<felt252>,
+        ) -> Array<ByteArray> {
+            // Single dispatch: viewer → denshokan (contract handles caching internally)
+            let denshokan = IDenshokanTokenUriBatchDispatcher {
+                contract_address: self._get_denshokan_address(),
+            };
+            denshokan.token_uri_batch(token_ids)
         }
     }
 

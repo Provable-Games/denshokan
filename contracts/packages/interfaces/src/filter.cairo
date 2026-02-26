@@ -4,8 +4,10 @@
 
 use game_components_embeddable_game_standard::minigame::extensions::objectives::structs::GameObjectiveDetails;
 use game_components_embeddable_game_standard::minigame::extensions::settings::structs::GameSettingDetails;
-use game_components_embeddable_game_standard::token::structs::Lifecycle;
 use starknet::ContractAddress;
+
+// Re-export TokenFullState from game-components (canonical definition)
+pub use game_components_embeddable_game_standard::token::structs::TokenFullState;
 
 /// Maximum number of tokens returned per filter call
 /// Prevents gas exhaustion on large queries
@@ -17,20 +19,6 @@ pub const MAX_FILTER_LIMIT: u256 = 100;
 pub struct FilterResult {
     pub token_ids: Array<felt252>, // Matching token IDs
     pub total: u256 // Total matches (for pagination UI)
-}
-
-/// Full state for a token including mutable state not in packed token ID
-/// Used for batch queries to minimize RPC calls
-#[derive(Drop, Serde)]
-pub struct TokenFullState {
-    pub token_id: felt252,
-    pub owner: ContractAddress,
-    pub player_name: felt252,
-    pub is_playable: bool,
-    pub game_address: ContractAddress,
-    pub game_over: bool,
-    pub completed_objective: bool,
-    pub lifecycle: Lifecycle,
 }
 
 /// Filter interface for querying tokens by various criteria
@@ -317,6 +305,10 @@ pub trait IDenshokanFilter<TState> {
     /// Includes: owner, player_name, is_playable, game_address, game_over, completed_objective,
     /// lifecycle
     fn tokens_full_state_batch(self: @TState, token_ids: Array<felt252>) -> Array<TokenFullState>;
+
+    /// Returns token URIs for multiple tokens in one call
+    /// Each URI is fetched via ERC721Metadata::token_uri
+    fn token_uri_batch(self: @TState, token_ids: Array<felt252>) -> Array<ByteArray>;
 }
 
 #[derive(Drop, Serde)]
@@ -344,6 +336,13 @@ pub struct SettingsResult {
 pub struct ObjectivesResult {
     pub entries: Array<ObjectiveEntry>,
     pub total: u32,
+}
+
+/// Interface for batch token URI generation on the Denshokan contract itself.
+/// Enables the viewer to delegate via a single dispatch instead of N dispatches.
+#[starknet::interface]
+pub trait IDenshokanTokenUriBatch<TState> {
+    fn token_uri_batch(self: @TState, token_ids: Array<felt252>) -> Array<ByteArray>;
 }
 
 #[starknet::interface]

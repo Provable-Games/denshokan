@@ -139,7 +139,7 @@ source = "git+https://github.com/EkuboProtocol/starknet-contracts.git?tag=v4.0.1
 [[package]]
 name = "game_components_embeddable_game_standard"
 version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=next#83a682ab0269534e896744a7c8fb9502a886fb6f"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=feat%2Ftoken-full-state-batch#389a6dd9c3eff6dd9c67d178c3005bb39632dc93"
 dependencies = [
  "game_components_interfaces",
  "game_components_metagame",
@@ -153,7 +153,7 @@ dependencies = [
 [[package]]
 name = "game_components_interfaces"
 version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=next#83a682ab0269534e896744a7c8fb9502a886fb6f"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=feat%2Ftoken-full-state-batch#389a6dd9c3eff6dd9c67d178c3005bb39632dc93"
 dependencies = [
  "ekubo",
  "interfaces",
@@ -162,7 +162,7 @@ dependencies = [
 [[package]]
 name = "game_components_metagame"
 version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=next#83a682ab0269534e896744a7c8fb9502a886fb6f"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=feat%2Ftoken-full-state-batch#389a6dd9c3eff6dd9c67d178c3005bb39632dc93"
 dependencies = [
  "game_components_interfaces",
  "game_components_utilities",
@@ -174,7 +174,7 @@ dependencies = [
 [[package]]
 name = "game_components_test_common"
 version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=next#83a682ab0269534e896744a7c8fb9502a886fb6f"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=feat%2Ftoken-full-state-batch#389a6dd9c3eff6dd9c67d178c3005bb39632dc93"
 dependencies = [
  "game_components_embeddable_game_standard",
  "game_components_interfaces",
@@ -191,7 +191,7 @@ dependencies = [
 [[package]]
 name = "game_components_utilities"
 version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=next#83a682ab0269534e896744a7c8fb9502a886fb6f"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=feat%2Ftoken-full-state-batch#389a6dd9c3eff6dd9c67d178c3005bb39632dc93"
 dependencies = [
  "alexandria_encoding",
  "game_components_embeddable_game_standard",

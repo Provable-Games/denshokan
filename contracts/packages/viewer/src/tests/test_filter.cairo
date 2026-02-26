@@ -917,6 +917,22 @@ fn test_tokens_full_state_batch_empty() {
 }
 
 // ================================================================================================
+// BATCH TOKEN URI TESTS
+// ================================================================================================
+
+#[test]
+fn test_token_uri_batch_empty() {
+    let tc = setup_with_registry();
+    let filter = get_filter_dispatcher(tc.denshokan_address);
+
+    // Query with empty array
+    let token_ids: Array<felt252> = array![];
+    let uris = filter.token_uri_batch(token_ids);
+
+    assert!(uris.len() == 0, "Should return empty array");
+}
+
+// ================================================================================================
 // NEW FILTER COMBINATION TESTS
 // ================================================================================================
 
