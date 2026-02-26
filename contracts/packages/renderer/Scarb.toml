@@ -1,0 +1,17 @@
+[package]
+name = "denshokan_renderer"
+version = "0.1.0"
+edition.workspace = true
+cairo-version.workspace = true
+
+[dependencies]
+starknet.workspace = true
+game_components_embeddable_game_standard.workspace = true
+game_components_utilities.workspace = true
+
+[[target.starknet-contract]]
+sierra = true
+casm = true
+
+[lib]
+name = "denshokan_renderer"

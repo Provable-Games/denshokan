@@ -4,10 +4,10 @@
 
 use game_components_embeddable_game_standard::minigame::extensions::objectives::structs::GameObjectiveDetails;
 use game_components_embeddable_game_standard::minigame::extensions::settings::structs::GameSettingDetails;
-use starknet::ContractAddress;
 
 // Re-export TokenFullState from game-components (canonical definition)
 pub use game_components_embeddable_game_standard::token::structs::TokenFullState;
+use starknet::ContractAddress;
 
 /// Maximum number of tokens returned per filter call
 /// Prevents gas exhaustion on large queries

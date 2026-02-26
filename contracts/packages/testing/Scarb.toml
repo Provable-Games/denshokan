@@ -9,6 +9,7 @@ starknet.workspace = true
 snforge_std.workspace = true
 game_components_embeddable_game_standard.workspace = true
 game_components_test_common.workspace = true
+denshokan_renderer.workspace = true
 
 openzeppelin_interfaces.workspace = true
 openzeppelin_introspection.workspace = true
@@ -18,6 +19,7 @@ sierra = true
 casm = true
 build-external-contracts = [
     "game_components_test_common::mocks::minigame_mock::minigame_mock",
+    "denshokan_renderer::default_renderer::DefaultRenderer",
 ]
 
 [lib]

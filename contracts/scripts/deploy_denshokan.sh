@@ -125,6 +125,11 @@ if [ ! -f "$CONTRACTS_DIR/target/dev/denshokan_viewer_DenshokanViewer.contract_c
     exit 1
 fi
 
+if [ ! -f "$CONTRACTS_DIR/target/dev/denshokan_renderer_DefaultRenderer.contract_class.json" ]; then
+    print_error "DefaultRenderer contract artifact not found"
+    exit 1
+fi
+
 print_info "Contract artifacts found"
 
 # ============================
@@ -177,6 +182,49 @@ else
 fi
 
 # ============================
+# DEPLOY DEFAULT RENDERER
+# ============================
+
+print_info "Declaring DefaultRenderer contract..."
+
+RENDERER_DECLARE_OUTPUT=$(sncast --profile "$PROFILE" --wait \
+    declare \
+    --contract-name DefaultRenderer \
+    --package denshokan_renderer 2>&1) || {
+    if echo "$RENDERER_DECLARE_OUTPUT" | grep -q "already declared"; then
+        print_warning "DefaultRenderer already declared"
+        RENDERER_CLASS_HASH=$(echo "$RENDERER_DECLARE_OUTPUT" | grep -oE '0x[0-9a-fA-F]+' | head -1)
+    else
+        print_error "Failed to declare DefaultRenderer"
+        echo "$RENDERER_DECLARE_OUTPUT"
+        exit 1
+    fi
+}
+
+if [ -z "${RENDERER_CLASS_HASH:-}" ]; then
+    RENDERER_CLASS_HASH=$(echo "$RENDERER_DECLARE_OUTPUT" | grep -oE 'class_hash: 0x[0-9a-fA-F]+' | grep -oE '0x[0-9a-fA-F]+' || echo "$RENDERER_DECLARE_OUTPUT" | grep -oE '0x[0-9a-fA-F]+' | tail -1)
+fi
+
+print_info "DefaultRenderer class hash: $RENDERER_CLASS_HASH"
+
+print_info "Deploying DefaultRenderer contract..."
+
+# Constructor: no arguments (stateless contract)
+RENDERER_DEPLOY_OUTPUT=$(sncast --profile "$PROFILE" --wait \
+    deploy \
+    --class-hash "$RENDERER_CLASS_HASH" 2>&1)
+
+DEFAULT_RENDERER_ADDRESS=$(echo "$RENDERER_DEPLOY_OUTPUT" | grep -oE 'contract_address: 0x[0-9a-fA-F]+' | grep -oE '0x[0-9a-fA-F]+' || echo "$RENDERER_DEPLOY_OUTPUT" | grep -oE '0x[0-9a-fA-F]{64}' | head -1)
+
+if [ -z "$DEFAULT_RENDERER_ADDRESS" ]; then
+    print_error "Failed to deploy DefaultRenderer"
+    echo "$RENDERER_DEPLOY_OUTPUT"
+    exit 1
+fi
+
+print_info "DefaultRenderer deployed at: $DEFAULT_RENDERER_ADDRESS"
+
+# ============================
 # DEPLOY DENSHOKAN TOKEN
 # ============================
 
@@ -205,11 +253,11 @@ print_info "Denshokan class hash: $DENSHOKAN_CLASS_HASH"
 print_info "Deploying Denshokan contract..."
 
 # Constructor: name: ByteArray, symbol: ByteArray, base_uri: ByteArray,
-#              game_registry_address: ContractAddress
+#              game_registry_address: ContractAddress, default_renderer_address: ContractAddress
 DENSHOKAN_DEPLOY_OUTPUT=$(sncast --profile "$PROFILE" --wait \
     deploy \
     --class-hash "$DENSHOKAN_CLASS_HASH" \
-    --arguments "\"$TOKEN_NAME\", \"$TOKEN_SYMBOL\", \"$TOKEN_BASE_URI\", $GAME_REGISTRY_ADDRESS" 2>&1)
+    --arguments "\"$TOKEN_NAME\", \"$TOKEN_SYMBOL\", \"$TOKEN_BASE_URI\", $GAME_REGISTRY_ADDRESS, $DEFAULT_RENDERER_ADDRESS" 2>&1)
 
 CONTRACT_ADDRESS=$(echo "$DENSHOKAN_DEPLOY_OUTPUT" | grep -oE 'contract_address: 0x[0-9a-fA-F]+' | grep -oE '0x[0-9a-fA-F]+' || echo "$DENSHOKAN_DEPLOY_OUTPUT" | grep -oE '0x[0-9a-fA-F]{64}' | head -1)
 
@@ -294,8 +342,13 @@ cat > "$DEPLOYMENT_FILE" << EOF
       "name": "$TOKEN_NAME",
       "symbol": "$TOKEN_SYMBOL",
       "base_uri": "$TOKEN_BASE_URI",
-      "game_registry_address": "$GAME_REGISTRY_ADDRESS"
+      "game_registry_address": "$GAME_REGISTRY_ADDRESS",
+      "default_renderer_address": "$DEFAULT_RENDERER_ADDRESS"
     }
+  },
+  "default_renderer_contract": {
+    "address": "$DEFAULT_RENDERER_ADDRESS",
+    "class_hash": "$RENDERER_CLASS_HASH"
   },
   "denshokan_viewer_contract": {
     "address": "$VIEWER_ADDRESS",
@@ -332,6 +385,10 @@ if [ -n "${REGISTRY_CLASS_HASH:-}" ]; then
     echo "  Class Hash: $REGISTRY_CLASS_HASH"
 fi
 echo
+echo "DefaultRenderer Contract (SVG generation):"
+echo "  Address: $DEFAULT_RENDERER_ADDRESS"
+echo "  Class Hash: $RENDERER_CLASS_HASH"
+echo
 echo "Denshokan Token Contract:"
 echo "  Address: $CONTRACT_ADDRESS"
 echo "  Class Hash: $DENSHOKAN_CLASS_HASH"
@@ -339,6 +396,7 @@ echo "  Token Name: $TOKEN_NAME"
 echo "  Token Symbol: $TOKEN_SYMBOL"
 echo "  Base URI: $TOKEN_BASE_URI"
 echo "  Game Registry: $GAME_REGISTRY_ADDRESS"
+echo "  Default Renderer: $DEFAULT_RENDERER_ADDRESS"
 echo
 echo "DenshokanViewer Contract (Filter/Query API):"
 echo "  Address: $VIEWER_ADDRESS"

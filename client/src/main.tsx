@@ -21,6 +21,7 @@ const denshokanConfig = {
   denshokanAddress: config.denshokanAddress,
   registryAddress: config.registryAddress,
   viewerAddress: config.viewerAddress,
+  primarySource: "api" as const,
 };
 
 ReactDOM.createRoot(document.getElementById("root")!).render(

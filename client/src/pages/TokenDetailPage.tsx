@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Box, Typography, Grid, Button } from "@mui/material";
+import { Box, Typography, Grid, Button, Card } from "@mui/material";
 import { PlayArrow } from "@mui/icons-material";
 import { motion } from "framer-motion";
 import {
@@ -11,6 +11,7 @@ import {
 import type { ScoreEvent, GameOverEvent } from "@provable-games/denshokan-sdk";
 import { useTokenDetail } from "../hooks/useTokenDetail";
 import LoadingSpinner from "../components/common/LoadingSpinner";
+import TokenImage from "../components/tokens/TokenImage";
 import TokenScoreCard from "../components/tokens/TokenScoreCard";
 import TokenInfoCard from "../components/tokens/TokenInfoCard";
 import TokenGameInfoCard from "../components/tokens/TokenGameInfoCard";
@@ -121,6 +122,19 @@ export default function TokenDetailPage() {
 
       {/* Main content grid */}
       <Grid container spacing={3}>
+        {/* Token Artwork */}
+        {token.tokenUri && (
+          <Grid size={{ xs: 12, md: 6 }}>
+            <Card variant="outlined" sx={{ overflow: "hidden" }}>
+              <TokenImage
+                tokenUri={token.tokenUri}
+                alt={token.playerName || `Token ${token.tokenId}`}
+                height={360}
+              />
+            </Card>
+          </Grid>
+        )}
+
         {/* Score Card */}
         <Grid size={{ xs: 12, md: 6 }}>
           <TokenScoreCard

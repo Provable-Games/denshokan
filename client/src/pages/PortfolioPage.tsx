@@ -17,8 +17,15 @@ export default function PortfolioPage() {
   const { isConnected } = useController();
   const { stats, tokens, loading } = usePlayerPortfolio();
 
+  console.log(tokens);
+
   if (!isConnected) {
-    return <EmptyState title="Connect your wallet" description="Connect your wallet to view your game tokens." />;
+    return (
+      <EmptyState
+        title="Connect your wallet"
+        description="Connect your wallet to view your game tokens."
+      />
+    );
   }
 
   if (loading) return <LoadingSpinner message="Loading game tokens..." />;
@@ -54,7 +61,10 @@ export default function PortfolioPage() {
         Tokens
       </Typography>
       {tokens.length === 0 ? (
-        <EmptyState title="No tokens yet" description="Mint a game token to get started." />
+        <EmptyState
+          title="No tokens yet"
+          description="Mint a game token to get started."
+        />
       ) : (
         <TokenGrid tokens={tokens} />
       )}

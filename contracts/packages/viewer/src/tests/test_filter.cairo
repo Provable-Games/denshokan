@@ -905,15 +905,14 @@ fn test_tokens_full_state_batch() {
 }
 
 #[test]
+#[should_panic(expected: "MinigameToken: token_ids array cannot be empty")]
 fn test_tokens_full_state_batch_empty() {
     let tc = setup_with_registry();
     let filter = get_filter_dispatcher(tc.denshokan_address);
 
-    // Query with empty array
+    // Query with empty array panics
     let token_ids: Array<felt252> = array![];
-    let states = filter.tokens_full_state_batch(token_ids);
-
-    assert!(states.len() == 0, "Should return empty array");
+    filter.tokens_full_state_batch(token_ids);
 }
 
 // ================================================================================================

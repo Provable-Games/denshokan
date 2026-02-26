@@ -3,7 +3,10 @@
 // a full token implementation using the modular component system.
 
 use core::num::traits::Zero;
-use denshokan_interfaces::filter::{IDenshokanTokenUriBatch};
+use denshokan_interfaces::filter::IDenshokanTokenUriBatch;
+use denshokan_renderer::default_renderer::{
+    IDefaultRendererDispatcher, IDefaultRendererDispatcherTrait,
+};
 use game_components_embeddable_game_standard::metagame::extensions::context::structs::GameContextDetails;
 use game_components_embeddable_game_standard::minigame::extensions::objectives::structs::GameObjectiveDetails;
 use game_components_embeddable_game_standard::minigame::extensions::settings::structs::GameSettingDetails;
@@ -20,7 +23,7 @@ use game_components_embeddable_game_standard::token::extensions::renderer::rende
 use game_components_embeddable_game_standard::token::extensions::settings::settings::SettingsComponent;
 use game_components_embeddable_game_standard::token::structs::TokenMetadata;
 use game_components_embeddable_game_standard::token::token_component::CoreTokenComponent;
-use game_components_utilities::utils::renderer::{create_custom_metadata, create_default_svg};
+use game_components_utilities::utils::renderer::create_custom_metadata;
 use openzeppelin_interfaces::erc2981::{IERC2981, IERC2981_ID};
 use openzeppelin_interfaces::erc721::{
     IERC721Dispatcher, IERC721DispatcherTrait, IERC721Metadata, IERC721MetadataCamelOnly,
@@ -30,7 +33,7 @@ use openzeppelin_token::common::erc2981::erc2981::{DefaultConfig, ERC2981Compone
 use openzeppelin_token::erc721::ERC721Component;
 use openzeppelin_token::erc721::extensions::erc721_enumerable::ERC721EnumerableComponent;
 use starknet::ContractAddress;
-use starknet::storage::StoragePointerReadAccess;
+use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
 use starknet::syscalls::call_contract_syscall;
 
 fn try_call_and_deserialize<T, +Serde<T>, +Drop<T>>(
@@ -153,6 +156,8 @@ pub mod Denshokan {
         core_token: CoreTokenComponent::Storage,
         #[substorage(v0)]
         erc721_enumerable: ERC721EnumerableComponent::Storage,
+        // Default renderer contract address (for SVG generation)
+        default_renderer_address: ContractAddress,
         // Optional storage (only included if features are enabled)
         #[substorage(v0)]
         minter: MinterComponent::Storage,
@@ -264,9 +269,7 @@ pub mod Denshokan {
 
             let token_id_felt: felt252 = token_id.try_into().unwrap();
 
-            let token_metadata: TokenMetadata = self
-                .core_token
-                .token_metadata(token_id_felt);
+            let token_metadata: TokenMetadata = self.core_token.token_metadata(token_id_felt);
 
             assert!(token_metadata.game_id != 0, "Token has invalid game ID");
 
@@ -307,21 +310,6 @@ pub mod Denshokan {
                 "An NFT representing ownership of an embeddable game.",
             );
 
-            let game_details_svg = try_call_and_deserialize::<
-                ByteArray,
-            >(
-                renderer_address,
-                selector!("game_details_svg"),
-                token_calldata.span(),
-                create_default_svg(
-                    token_id_felt, game_metadata.clone(), score, player_name,
-                ),
-            );
-
-            let game_details = try_call_and_deserialize::<
-                Span<GameDetail>,
-            >(renderer_address, selector!("game_details"), token_calldata.span(), array![].span());
-
             let mut settings_calldata = array![];
             settings_calldata.append(token_metadata.settings_id.into());
 
@@ -347,24 +335,52 @@ pub mod Denshokan {
                 },
             );
 
-            let objective_name: ByteArray = if token_metadata.objective_id != 0 {
+            let objective_details = if token_metadata.objective_id != 0 {
                 let objectives_address = try_call_and_deserialize::<
                     ContractAddress,
                 >(game_address, selector!("objectives_address"), array![].span(), Zero::zero());
                 let mut obj_calldata = array![];
                 obj_calldata.append(token_metadata.objective_id.into());
-                let obj_details = try_call_and_deserialize::<
+                try_call_and_deserialize::<
                     GameObjectiveDetails,
                 >(
                     objectives_address,
                     selector!("objectives_details"),
                     obj_calldata.span(),
                     GameObjectiveDetails { name: "", description: "", objectives: array![].span() },
-                );
-                obj_details.name
+                )
             } else {
-                ""
+                GameObjectiveDetails { name: "", description: "", objectives: array![].span() }
             };
+
+            let objective_name: ByteArray = objective_details.name.clone();
+
+            // Try per-token renderer first, fall back to default renderer
+            let game_details_svg = try_call_and_deserialize::<
+                ByteArray,
+            >(renderer_address, selector!("game_details_svg"), token_calldata.span(), "");
+
+            let game_details_svg = if game_details_svg.len() > 0 {
+                game_details_svg
+            } else {
+                let default_renderer = IDefaultRendererDispatcher {
+                    contract_address: self.default_renderer_address.read(),
+                };
+                default_renderer
+                    .create_default_svg(
+                        game_metadata.clone(),
+                        token_metadata.clone(),
+                        score,
+                        player_name,
+                        settings_details.clone(),
+                        objective_details,
+                        context_details.clone(),
+                    )
+            };
+
+            let game_details = try_call_and_deserialize::<
+                Span<GameDetail>,
+            >(renderer_address, selector!("game_details"), token_calldata.span(), array![].span());
 
             create_custom_metadata(
                 token_id_felt,
@@ -397,9 +413,7 @@ pub mod Denshokan {
 
     #[abi(embed_v0)]
     impl TokenUriBatchImpl of IDenshokanTokenUriBatch<ContractState> {
-        fn token_uri_batch(
-            self: @ContractState, token_ids: Array<felt252>,
-        ) -> Array<ByteArray> {
+        fn token_uri_batch(self: @ContractState, token_ids: Array<felt252>) -> Array<ByteArray> {
             let game_registry_address = self.core_token.game_registry_address();
             let game_registry_dispatcher = IMinigameRegistryDispatcher {
                 contract_address: game_registry_address,
@@ -469,24 +483,6 @@ pub mod Denshokan {
                     "An NFT representing ownership of an embeddable game.",
                 );
 
-                let game_details_svg = try_call_and_deserialize::<
-                    ByteArray,
-                >(
-                    renderer_address,
-                    selector!("game_details_svg"),
-                    token_calldata.span(),
-                    create_default_svg(token_id, game_metadata.clone(), score, player_name),
-                );
-
-                let game_details = try_call_and_deserialize::<
-                    Span<GameDetail>,
-                >(
-                    renderer_address,
-                    selector!("game_details"),
-                    token_calldata.span(),
-                    array![].span(),
-                );
-
                 // Per-token: settings_details
                 let mut settings_calldata = array![];
                 settings_calldata.append(token_metadata.settings_id.into());
@@ -501,9 +497,7 @@ pub mod Denshokan {
                 );
 
                 // Per-token: context_details
-                let minted_by_address = self
-                    .minter
-                    .get_minter_address(token_metadata.minted_by);
+                let minted_by_address = self.minter.get_minter_address(token_metadata.minted_by);
 
                 let context_details = try_call_and_deserialize::<
                     GameContextDetails,
@@ -517,7 +511,7 @@ pub mod Denshokan {
                 );
 
                 // Cached: objectives_address per game (conditional)
-                let objective_name: ByteArray = if token_metadata.objective_id != 0 {
+                let objective_details = if token_metadata.objective_id != 0 {
                     let objectives_address = _lookup_or_fetch_address(
                         ref objectives_addr_keys,
                         ref objectives_addr_vals,
@@ -526,7 +520,7 @@ pub mod Denshokan {
                     );
                     let mut obj_calldata = array![];
                     obj_calldata.append(token_metadata.objective_id.into());
-                    let obj_details = try_call_and_deserialize::<
+                    try_call_and_deserialize::<
                         GameObjectiveDetails,
                     >(
                         objectives_address,
@@ -535,11 +529,44 @@ pub mod Denshokan {
                         GameObjectiveDetails {
                             name: "", description: "", objectives: array![].span(),
                         },
-                    );
-                    obj_details.name
+                    )
                 } else {
-                    ""
+                    GameObjectiveDetails { name: "", description: "", objectives: array![].span() }
                 };
+
+                let objective_name: ByteArray = objective_details.name.clone();
+
+                // Try per-token renderer first, fall back to default renderer
+                let game_details_svg = try_call_and_deserialize::<
+                    ByteArray,
+                >(renderer_address, selector!("game_details_svg"), token_calldata.span(), "");
+
+                let game_details_svg = if game_details_svg.len() > 0 {
+                    game_details_svg
+                } else {
+                    let default_renderer = IDefaultRendererDispatcher {
+                        contract_address: self.default_renderer_address.read(),
+                    };
+                    default_renderer
+                        .create_default_svg(
+                            game_metadata.clone(),
+                            token_metadata.clone(),
+                            score,
+                            player_name,
+                            settings_details.clone(),
+                            objective_details,
+                            context_details.clone(),
+                        )
+                };
+
+                let game_details = try_call_and_deserialize::<
+                    Span<GameDetail>,
+                >(
+                    renderer_address,
+                    selector!("game_details"),
+                    token_calldata.span(),
+                    array![].span(),
+                );
 
                 result
                     .append(
@@ -559,7 +586,7 @@ pub mod Denshokan {
                             objective_name,
                         ),
                     );
-            };
+            }
 
             result
         }
@@ -653,6 +680,7 @@ pub mod Denshokan {
         symbol: ByteArray,
         base_uri: ByteArray,
         game_registry_address: ContractAddress,
+        default_renderer_address: ContractAddress,
     ) {
         // Initialize core components
         self.erc721.initializer(name, symbol, base_uri);
@@ -661,9 +689,15 @@ pub mod Denshokan {
         assert!(
             !game_registry_address.is_zero(), "Denshokan: Game registry address cannot be zero",
         );
+        assert!(
+            !default_renderer_address.is_zero(),
+            "Denshokan: Default renderer address cannot be zero",
+        );
         self
             .core_token
             .initializer(Option::None, Option::None, Option::Some(game_registry_address));
+
+        self.default_renderer_address.write(default_renderer_address);
 
         self.erc721_enumerable.initializer();
         self.minter.initializer();

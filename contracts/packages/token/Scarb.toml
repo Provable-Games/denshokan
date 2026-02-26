@@ -7,6 +7,7 @@ cairo-version.workspace = true
 [dependencies]
 starknet.workspace = true
 denshokan_interfaces.workspace = true
+denshokan_renderer.workspace = true
 game_components_embeddable_game_standard.workspace = true
 game_components_utilities.workspace = true
 
@@ -19,6 +20,7 @@ openzeppelin_access.workspace = true
 snforge_std.workspace = true
 denshokan_testing.workspace = true
 denshokan_registry.workspace = true
+denshokan_renderer.workspace = true
 game_components_test_common.workspace = true
 
 
@@ -27,8 +29,12 @@ sierra = true
 casm = true
 build-external-contracts = [
     "denshokan_registry::minigame_registry::MinigameRegistry",
+    "denshokan_renderer::default_renderer::DefaultRenderer",
     "game_components_test_common::mocks::minigame_mock::minigame_mock",
 ]
+
+[tool.snforge]
+max_n_steps = 40000000
 
 [lib]
 name = "denshokan_token"

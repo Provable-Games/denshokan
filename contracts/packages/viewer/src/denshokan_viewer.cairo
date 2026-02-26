@@ -790,9 +790,7 @@ pub mod DenshokanViewer {
             token.token_full_state_batch(token_ids.span())
         }
 
-        fn token_uri_batch(
-            self: @ContractState, token_ids: Array<felt252>,
-        ) -> Array<ByteArray> {
+        fn token_uri_batch(self: @ContractState, token_ids: Array<felt252>) -> Array<ByteArray> {
             // Single dispatch: viewer → denshokan (contract handles caching internally)
             let denshokan = IDenshokanTokenUriBatchDispatcher {
                 contract_address: self._get_denshokan_address(),

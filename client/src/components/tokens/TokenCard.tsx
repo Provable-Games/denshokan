@@ -1,6 +1,15 @@
-import { Card, CardContent, CardActionArea, Typography, Chip, Stack, Box } from "@mui/material";
+import {
+  Card,
+  CardContent,
+  CardActionArea,
+  Typography,
+  Chip,
+  Stack,
+  Box,
+} from "@mui/material";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+import TokenImage from "./TokenImage";
 
 interface Props {
   token: {
@@ -13,6 +22,7 @@ interface Props {
     soulbound: boolean;
     settingsId?: number;
     mintedAt?: string;
+    tokenUri?: string;
   };
 }
 
@@ -21,7 +31,10 @@ export default function TokenCard({ token }: Props) {
   const statusColor = token.gameOver ? "success" : "primary";
 
   return (
-    <motion.div whileHover={{ scale: 1.02 }} transition={{ type: "spring", stiffness: 300, damping: 20 }}>
+    <motion.div
+      whileHover={{ scale: 1.02 }}
+      transition={{ type: "spring", stiffness: 300, damping: 20 }}
+    >
       <Card sx={{ overflow: "hidden" }}>
         <Box
           sx={{
@@ -30,10 +43,16 @@ export default function TokenCard({ token }: Props) {
           }}
         />
         <CardActionArea onClick={() => navigate(`/tokens/${token.tokenId}`)}>
+          <TokenImage
+            tokenUri={token.tokenUri}
+            alt={token.playerName || `Token ${token.tokenId}`}
+            height={160}
+          />
           <CardContent>
             <Typography variant="caption" color="text.secondary">
               Game #{token.gameId}
-              {token.settingsId !== undefined && ` / Settings #${token.settingsId}`}
+              {token.settingsId !== undefined &&
+                ` / Settings #${token.settingsId}`}
             </Typography>
 
             <Typography variant="subtitle1" sx={{ fontWeight: 600, mt: 0.5 }}>
@@ -43,12 +62,20 @@ export default function TokenCard({ token }: Props) {
             <Typography variant="h4" sx={{ my: 1, fontWeight: 700 }}>
               {Number(token.currentScore).toLocaleString()}
             </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: "block", mb: 1 }}
+            >
               Score
             </Typography>
 
             {token.mintedAt && (
-              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: "block", mb: 1 }}
+              >
                 Minted {new Date(token.mintedAt).toLocaleDateString()}
               </Typography>
             )}
@@ -59,7 +86,9 @@ export default function TokenCard({ token }: Props) {
                 color={statusColor}
                 size="small"
               />
-              {token.soulbound && <Chip label="Soulbound" size="small" variant="outlined" />}
+              {token.soulbound && (
+                <Chip label="Soulbound" size="small" variant="outlined" />
+              )}
             </Stack>
           </CardContent>
         </CardActionArea>
