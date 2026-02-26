@@ -6,6 +6,7 @@ interface Props {
   tokenUri?: string | null;
   alt?: string;
   height?: number | string;
+  objectFit?: "contain" | "cover";
   sx?: Record<string, unknown>;
 }
 
@@ -58,7 +59,7 @@ function resolveImageSrc(tokenUri: string): string | null {
   return null;
 }
 
-export default function TokenImage({ tokenUri, alt = "Token", height = 200, sx }: Props) {
+export default function TokenImage({ tokenUri, alt = "Token", height = 200, objectFit = "contain", sx }: Props) {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
 
@@ -102,7 +103,7 @@ export default function TokenImage({ tokenUri, alt = "Token", height = 200, sx }
         sx={{
           width: "100%",
           height,
-          objectFit: "contain",
+          objectFit,
           display: loaded ? "block" : "none",
           bgcolor: "rgba(0,0,0,0.2)",
         }}

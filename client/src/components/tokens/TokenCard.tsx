@@ -24,11 +24,39 @@ interface Props {
     mintedAt?: string;
     tokenUri?: string;
   };
+  variant?: "full" | "image";
 }
 
-export default function TokenCard({ token }: Props) {
+export default function TokenCard({ token, variant = "full" }: Props) {
   const navigate = useNavigate();
   const statusColor = token.gameOver ? "success" : "primary";
+
+  if (variant === "image") {
+    return (
+      <motion.div
+        whileHover={{ scale: 1.03 }}
+        transition={{ type: "spring", stiffness: 300, damping: 20 }}
+      >
+        <Card
+          sx={{
+            overflow: "hidden",
+            borderRadius: 2,
+            cursor: "pointer",
+          }}
+        >
+          <CardActionArea onClick={() => navigate(`/tokens/${token.tokenId}`)}>
+            <TokenImage
+              tokenUri={token.tokenUri}
+              alt={token.playerName || `Token ${token.tokenId}`}
+              height="auto"
+              objectFit="cover"
+              sx={{ aspectRatio: "1" }}
+            />
+          </CardActionArea>
+        </Card>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div

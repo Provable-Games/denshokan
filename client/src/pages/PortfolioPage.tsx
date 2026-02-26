@@ -17,8 +17,6 @@ export default function PortfolioPage() {
   const { isConnected } = useController();
   const { stats, tokens, loading } = usePlayerPortfolio();
 
-  console.log(tokens);
-
   if (!isConnected) {
     return (
       <EmptyState
@@ -66,7 +64,7 @@ export default function PortfolioPage() {
           description="Mint a game token to get started."
         />
       ) : (
-        <TokenGrid tokens={tokens} />
+        <TokenGrid tokens={tokens} variant="image" />
       )}
     </Box>
   );
