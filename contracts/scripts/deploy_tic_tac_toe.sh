@@ -149,6 +149,46 @@ print_info "Initializing TicTacToe..."
 #   game_genre, game_image, game_color, client_url, renderer_address,
 #   settings_address, objectives_address, minigame_token_address, royalty_fraction
 # )
+
+# Encode a string to ByteArray calldata (31-byte chunks)
+encode_bytearray() {
+    local str="$1"
+    local len=${#str}
+    local hex=$(printf '%s' "$str" | xxd -p | tr -d '\n')
+    if [ "$len" -le 31 ]; then
+        echo "0 0x$hex $len"
+    else
+        local full_chunks=$((len / 31))
+        local pending_len=$((len % 31))
+        local result="$full_chunks"
+        local i=0
+        while [ "$i" -lt "$full_chunks" ]; do
+            local chunk_hex=${hex:$((i * 62)):62}
+            result="$result 0x$chunk_hex"
+            i=$((i + 1))
+        done
+        if [ "$pending_len" -gt 0 ]; then
+            local pending_hex=${hex:$((full_chunks * 62))}
+            result="$result 0x$pending_hex $pending_len"
+        else
+            result="$result 0x0 0"
+        fi
+        echo "$result"
+    fi
+}
+
+# Load 32x32 base64 data URI for game image
+IMAGE_FILE="$CONTRACTS_DIR/../client/public/tic-tac-toe-base64.txt"
+if [ ! -f "$IMAGE_FILE" ]; then
+    print_error "Game image not found: $IMAGE_FILE"
+    print_info "Generate with: node scripts/png-to-base64.mjs client/public/tic-tac-toe.png"
+    exit 1
+fi
+GAME_IMAGE=$(cat "$IMAGE_FILE")
+print_info "Game image: ${#GAME_IMAGE} bytes (base64 data URI)"
+
+IMAGE_CD=$(encode_bytearray "$GAME_IMAGE")
+
 sncast --profile "$PROFILE" --wait \
     invoke \
     --contract-address "$GAME_ADDRESS" \
@@ -160,7 +200,7 @@ sncast --profile "$PROFILE" --wait \
         0 0x50726f7661626c652047616d6573 14 \
         0 0x50726f7661626c652047616d6573 14 \
         0 0x50757a7a6c65 6 \
-        1 0x68747470733a2f2f7777772e66756e666163746f72792e67672f7469632d74 0x61632d746f652e706e67 10 \
+        $IMAGE_CD \
         0 0 0x323139364633 6 \
         1 \
         1 \
