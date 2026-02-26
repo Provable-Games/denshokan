@@ -155,8 +155,8 @@ print_info "Initializing NumberGuess..."
 #   "On-chain Number Guessing Game" (29 bytes) = 0 0x4f6e2d636861696e204e756d626572204775657373696e672047616d65 29
 #   "Provable Games" (14 bytes) = 0 0x50726f7661626c652047616d6573 14
 #   "Puzzle" (6 bytes) = 0 0x50757a7a6c65 6
-#   "https://denshokan.dev/games/numberguess.png" (43 bytes) = 1 chunk + pending
-#     = 1 0x68747470733a2f2f64656e73686f6b616e2e6465762f67616d65732f6e756d 0x62657267756573732e706e67 12
+#   "https://www.funfactory.gg/number-guess.png" (42 bytes) = 1 chunk + pending
+#     = 1 0x68747470733a2f2f7777772e66756e666163746f72792e67672f6e756d6265 0x722d67756573732e706e67 11
 sncast --profile "$PROFILE" --wait \
     invoke \
     --contract-address "$GAME_ADDRESS" \
@@ -168,7 +168,7 @@ sncast --profile "$PROFILE" --wait \
         0 0x50726f7661626c652047616d6573 14 \
         0 0x50726f7661626c652047616d6573 14 \
         0 0x50757a7a6c65 6 \
-        1 0x68747470733a2f2f64656e73686f6b616e2e6465762f67616d65732f6e756d 0x62657267756573732e706e67 12 \
+        1 0x68747470733a2f2f7777772e66756e666163746f72792e67672f6e756d6265 0x722d67756573732e706e67 11 \
         1 \
         1 \
         1 \

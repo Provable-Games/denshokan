@@ -23,6 +23,7 @@ interface ClientToken {
   soulbound: boolean;
   settingsId: number;
   mintedAt: string;
+  tokenUri?: string;
 }
 
 export function usePlayerPortfolio() {
@@ -38,7 +39,7 @@ export function usePlayerPortfolio() {
     data: sdkTokens,
     isLoading: tokensLoading,
     refetch: refetchTokens,
-  } = usePlayerTokens(isConnected ? address : undefined);
+  } = usePlayerTokens(isConnected ? address : undefined, { includeUri: true });
 
   const stats: ClientPlayerStats | null = sdkStats
     ? {
@@ -60,6 +61,7 @@ export function usePlayerPortfolio() {
       soulbound: t.soulbound,
       settingsId: t.settingsId,
       mintedAt: t.mintedAt,
+      tokenUri: t.tokenUri,
     })) ?? [];
 
   const refetch = useCallback(() => {

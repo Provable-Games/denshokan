@@ -1,6 +1,7 @@
 import {
   useToken,
   useTokenScores,
+  useTokenUri,
   useGame,
 } from "@provable-games/denshokan-sdk/react";
 import { useSettingsList, type ClientSetting } from "./useSettingsList";
@@ -24,6 +25,7 @@ export interface ClientToken {
   paymaster: boolean;
   mintedBy: number;
   isPlayable: boolean;
+  tokenUri?: string;
 }
 
 export interface ClientGame {
@@ -47,6 +49,9 @@ export function useTokenDetail(tokenId: string) {
     isLoading: scoresLoading,
     refetch: refetchScores,
   } = useTokenScores(tokenId || undefined, 100);
+
+  // Fetch token URI for artwork
+  const { data: tokenUri } = useTokenUri(tokenId || undefined);
 
   // Fetch game info
   const gameAddress = sdkToken?.gameAddress || undefined;
@@ -80,6 +85,7 @@ export function useTokenDetail(tokenId: string) {
         paymaster: sdkToken.paymaster,
         mintedBy: sdkToken.mintedBy,
         isPlayable: sdkToken.isPlayable,
+        tokenUri: tokenUri ?? undefined,
       }
     : null;
 

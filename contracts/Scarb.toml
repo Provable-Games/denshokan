@@ -5,6 +5,7 @@ members = [
     "packages/viewer",
     "packages/registry",
     "packages/games",
+    "packages/renderer",
     "packages/testing",
 ]
 
@@ -33,6 +34,7 @@ denshokan_token = { path = "packages/token" }
 denshokan_viewer = { path = "packages/viewer" }
 denshokan_registry = { path = "packages/registry" }
 denshokan_games = { path = "packages/games" }
+denshokan_renderer = { path = "packages/renderer" }
 denshokan_testing = { path = "packages/testing" }
 
 [workspace.tool.fmt]

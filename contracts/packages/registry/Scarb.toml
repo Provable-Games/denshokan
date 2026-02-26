@@ -15,6 +15,7 @@ openzeppelin_interfaces.workspace = true
 snforge_std.workspace = true
 denshokan_testing.workspace = true
 denshokan_token.workspace = true
+denshokan_renderer.workspace = true
 game_components_test_common.workspace = true
 
 
@@ -23,6 +24,7 @@ sierra = true
 casm = true
 build-external-contracts = [
     "denshokan_token::denshokan::Denshokan",
+    "denshokan_renderer::default_renderer::DefaultRenderer",
     "game_components_test_common::mocks::minigame_mock::minigame_mock",
 ]
 

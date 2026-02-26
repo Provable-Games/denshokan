@@ -18,6 +18,7 @@ snforge_std.workspace = true
 denshokan_testing.workspace = true
 denshokan_token.workspace = true
 denshokan_registry.workspace = true
+denshokan_renderer.workspace = true
 
 [[target.starknet-contract]]
 sierra = true
@@ -25,6 +26,7 @@ casm = true
 build-external-contracts = [
     "denshokan_token::denshokan::Denshokan",
     "denshokan_registry::minigame_registry::MinigameRegistry",
+    "denshokan_renderer::default_renderer::DefaultRenderer",
 ]
 
 [lib]

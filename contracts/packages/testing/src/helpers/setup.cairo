@@ -61,10 +61,19 @@ pub fn deploy_mock_game() -> (
     (minigame_dispatcher, minigame_init_dispatcher, minigame_mock_dispatcher)
 }
 
+/// Deploy DefaultRenderer contract (stateless SVG generator)
+pub fn deploy_default_renderer() -> ContractAddress {
+    let contract = declare("DefaultRenderer").unwrap().contract_class();
+    let (contract_address, _) = contract.deploy(@array![]).unwrap();
+    contract_address
+}
+
 /// Deploy Denshokan token contract
 pub fn deploy_denshokan(
     registry_address: ContractAddress,
 ) -> (ContractAddress, IERC721Dispatcher, IERC2981Dispatcher, IMinigameTokenMixinDispatcher) {
+    let default_renderer_address = deploy_default_renderer();
+
     let contract = declare("Denshokan").unwrap().contract_class();
 
     let mut constructor_calldata = array![];
@@ -77,6 +86,9 @@ pub fn deploy_denshokan(
 
     // Serialize game_registry_address (required)
     constructor_calldata.append(registry_address.into());
+
+    // Serialize default_renderer_address (required)
+    constructor_calldata.append(default_renderer_address.into());
 
     let (contract_address, _) = contract.deploy(@constructor_calldata).unwrap();
 
