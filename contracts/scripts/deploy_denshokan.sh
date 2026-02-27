@@ -63,6 +63,9 @@ VIEWER_OWNER="${VIEWER_OWNER:-}"
 # Optional: existing registry address (skip registry deployment if set)
 GAME_REGISTRY_ADDRESS="${GAME_REGISTRY_ADDRESS:-}"
 
+# Optional: existing renderer address (skip renderer deployment if set)
+DEFAULT_RENDERER_ADDRESS="${DEFAULT_RENDERER_ADDRESS:-}"
+
 # ============================
 # DISPLAY CONFIGURATION
 # ============================
@@ -105,27 +108,33 @@ fi
 # BUILD CONTRACTS
 # ============================
 
-print_info "Building contracts..."
+# Always use release profile for deployment (optimized, smaller artifacts, cheaper gas)
+# Dev profile is only useful for local testing with snforge (debug info, no inlining)
+SCARB_PROFILE="release"
+ARTIFACT_DIR="target/release"
+
 cd "$CONTRACTS_DIR"
-scarb build
+
+print_info "Building contracts ($SCARB_PROFILE profile)..."
+scarb --profile "$SCARB_PROFILE" build --workspace
 
 # Verify contract artifacts exist
-if [ ! -f "$CONTRACTS_DIR/target/dev/denshokan_token_Denshokan.contract_class.json" ]; then
+if [ ! -f "$CONTRACTS_DIR/$ARTIFACT_DIR/denshokan_token_Denshokan.contract_class.json" ]; then
     print_error "Denshokan contract artifact not found"
     exit 1
 fi
 
-if [ ! -f "$CONTRACTS_DIR/target/dev/denshokan_registry_MinigameRegistry.contract_class.json" ]; then
+if [ ! -f "$CONTRACTS_DIR/$ARTIFACT_DIR/denshokan_registry_MinigameRegistry.contract_class.json" ]; then
     print_error "MinigameRegistry contract artifact not found"
     exit 1
 fi
 
-if [ ! -f "$CONTRACTS_DIR/target/dev/denshokan_viewer_DenshokanViewer.contract_class.json" ]; then
+if [ ! -f "$CONTRACTS_DIR/$ARTIFACT_DIR/denshokan_viewer_DenshokanViewer.contract_class.json" ]; then
     print_error "DenshokanViewer contract artifact not found"
     exit 1
 fi
 
-if [ ! -f "$CONTRACTS_DIR/target/dev/denshokan_renderer_DefaultRenderer.contract_class.json" ]; then
+if [ ! -f "$CONTRACTS_DIR/$ARTIFACT_DIR/denshokan_renderer_DefaultRenderer.contract_class.json" ]; then
     print_error "DefaultRenderer contract artifact not found"
     exit 1
 fi
@@ -185,44 +194,48 @@ fi
 # DEPLOY DEFAULT RENDERER
 # ============================
 
-print_info "Declaring DefaultRenderer contract..."
+if [ -z "$DEFAULT_RENDERER_ADDRESS" ]; then
+    print_info "Declaring DefaultRenderer contract..."
 
-RENDERER_DECLARE_OUTPUT=$(sncast --profile "$PROFILE" --wait \
-    declare \
-    --contract-name DefaultRenderer \
-    --package denshokan_renderer 2>&1) || {
-    if echo "$RENDERER_DECLARE_OUTPUT" | grep -q "already declared"; then
-        print_warning "DefaultRenderer already declared"
-        RENDERER_CLASS_HASH=$(echo "$RENDERER_DECLARE_OUTPUT" | grep -oE '0x[0-9a-fA-F]+' | head -1)
-    else
-        print_error "Failed to declare DefaultRenderer"
-        echo "$RENDERER_DECLARE_OUTPUT"
+    RENDERER_DECLARE_OUTPUT=$(sncast --profile "$PROFILE" --wait \
+        declare \
+        --contract-name DefaultRenderer \
+        --package denshokan_renderer 2>&1) || {
+        if echo "$RENDERER_DECLARE_OUTPUT" | grep -q "already declared"; then
+            print_warning "DefaultRenderer already declared"
+            RENDERER_CLASS_HASH=$(echo "$RENDERER_DECLARE_OUTPUT" | grep -oE '0x[0-9a-fA-F]+' | head -1)
+        else
+            print_error "Failed to declare DefaultRenderer"
+            echo "$RENDERER_DECLARE_OUTPUT"
+            exit 1
+        fi
+    }
+
+    if [ -z "${RENDERER_CLASS_HASH:-}" ]; then
+        RENDERER_CLASS_HASH=$(echo "$RENDERER_DECLARE_OUTPUT" | grep -oE 'class_hash: 0x[0-9a-fA-F]+' | grep -oE '0x[0-9a-fA-F]+' || echo "$RENDERER_DECLARE_OUTPUT" | grep -oE '0x[0-9a-fA-F]+' | tail -1)
+    fi
+
+    print_info "DefaultRenderer class hash: $RENDERER_CLASS_HASH"
+
+    print_info "Deploying DefaultRenderer contract..."
+
+    # Constructor: no arguments (stateless contract)
+    RENDERER_DEPLOY_OUTPUT=$(sncast --profile "$PROFILE" --wait \
+        deploy \
+        --class-hash "$RENDERER_CLASS_HASH" 2>&1)
+
+    DEFAULT_RENDERER_ADDRESS=$(echo "$RENDERER_DEPLOY_OUTPUT" | grep -oE 'contract_address: 0x[0-9a-fA-F]+' | grep -oE '0x[0-9a-fA-F]+' || echo "$RENDERER_DEPLOY_OUTPUT" | grep -oE '0x[0-9a-fA-F]{64}' | head -1)
+
+    if [ -z "$DEFAULT_RENDERER_ADDRESS" ]; then
+        print_error "Failed to deploy DefaultRenderer"
+        echo "$RENDERER_DEPLOY_OUTPUT"
         exit 1
     fi
-}
 
-if [ -z "${RENDERER_CLASS_HASH:-}" ]; then
-    RENDERER_CLASS_HASH=$(echo "$RENDERER_DECLARE_OUTPUT" | grep -oE 'class_hash: 0x[0-9a-fA-F]+' | grep -oE '0x[0-9a-fA-F]+' || echo "$RENDERER_DECLARE_OUTPUT" | grep -oE '0x[0-9a-fA-F]+' | tail -1)
+    print_info "DefaultRenderer deployed at: $DEFAULT_RENDERER_ADDRESS"
+else
+    print_info "Using existing renderer at: $DEFAULT_RENDERER_ADDRESS"
 fi
-
-print_info "DefaultRenderer class hash: $RENDERER_CLASS_HASH"
-
-print_info "Deploying DefaultRenderer contract..."
-
-# Constructor: no arguments (stateless contract)
-RENDERER_DEPLOY_OUTPUT=$(sncast --profile "$PROFILE" --wait \
-    deploy \
-    --class-hash "$RENDERER_CLASS_HASH" 2>&1)
-
-DEFAULT_RENDERER_ADDRESS=$(echo "$RENDERER_DEPLOY_OUTPUT" | grep -oE 'contract_address: 0x[0-9a-fA-F]+' | grep -oE '0x[0-9a-fA-F]+' || echo "$RENDERER_DEPLOY_OUTPUT" | grep -oE '0x[0-9a-fA-F]{64}' | head -1)
-
-if [ -z "$DEFAULT_RENDERER_ADDRESS" ]; then
-    print_error "Failed to deploy DefaultRenderer"
-    echo "$RENDERER_DEPLOY_OUTPUT"
-    exit 1
-fi
-
-print_info "DefaultRenderer deployed at: $DEFAULT_RENDERER_ADDRESS"
 
 # ============================
 # DEPLOY DENSHOKAN TOKEN
@@ -348,7 +361,7 @@ cat > "$DEPLOYMENT_FILE" << EOF
   },
   "default_renderer_contract": {
     "address": "$DEFAULT_RENDERER_ADDRESS",
-    "class_hash": "$RENDERER_CLASS_HASH"
+    "class_hash": "${RENDERER_CLASS_HASH:-existing}"
   },
   "denshokan_viewer_contract": {
     "address": "$VIEWER_ADDRESS",
@@ -387,7 +400,9 @@ fi
 echo
 echo "DefaultRenderer Contract (SVG generation):"
 echo "  Address: $DEFAULT_RENDERER_ADDRESS"
-echo "  Class Hash: $RENDERER_CLASS_HASH"
+if [ -n "${RENDERER_CLASS_HASH:-}" ]; then
+    echo "  Class Hash: $RENDERER_CLASS_HASH"
+fi
 echo
 echo "Denshokan Token Contract:"
 echo "  Address: $CONTRACT_ADDRESS"

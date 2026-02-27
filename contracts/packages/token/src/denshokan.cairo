@@ -23,7 +23,7 @@ use game_components_embeddable_game_standard::token::extensions::renderer::rende
 use game_components_embeddable_game_standard::token::extensions::settings::settings::SettingsComponent;
 use game_components_embeddable_game_standard::token::structs::TokenMetadata;
 use game_components_embeddable_game_standard::token::token_component::CoreTokenComponent;
-use game_components_utilities::utils::renderer::create_custom_metadata;
+use game_components_utilities::renderer::svg::create_custom_metadata;
 use openzeppelin_interfaces::erc2981::{IERC2981, IERC2981_ID};
 use openzeppelin_interfaces::erc721::{
     IERC721Dispatcher, IERC721DispatcherTrait, IERC721Metadata, IERC721MetadataCamelOnly,
@@ -375,6 +375,8 @@ pub mod Denshokan {
                         settings_details.clone(),
                         objective_details,
                         context_details.clone(),
+                        token_name.clone(),
+                        self.erc721.ERC721_symbol.read(),
                     )
             };
 
@@ -556,6 +558,8 @@ pub mod Denshokan {
                             settings_details.clone(),
                             objective_details,
                             context_details.clone(),
+                            token_name.clone(),
+                            self.erc721.ERC721_symbol.read(),
                         )
                 };
 
