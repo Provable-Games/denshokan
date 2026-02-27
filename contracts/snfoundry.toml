@@ -23,6 +23,7 @@ show-explorer-links = true
 # Mainnet profile
 [sncast.mainnet]
 url = "https://api.cartridge.gg/x/starknet/mainnet"
+account = "deployer"
 wait-params = { timeout = 500, retry-interval = 10 }
 block-explorer = "StarkScan"
 show-explorer-links = true

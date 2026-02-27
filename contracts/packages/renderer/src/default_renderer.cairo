@@ -15,6 +15,8 @@ pub trait IDefaultRenderer<TContractState> {
         settings_details: GameSettingDetails,
         objective_details: GameObjectiveDetails,
         context_details: GameContextDetails,
+        token_name: ByteArray,
+        token_symbol: ByteArray,
     ) -> ByteArray;
 }
 
@@ -25,7 +27,7 @@ pub mod DefaultRenderer {
     use game_components_embeddable_game_standard::minigame::extensions::settings::structs::GameSettingDetails;
     use game_components_embeddable_game_standard::registry::interface::GameMetadata;
     use game_components_embeddable_game_standard::token::structs::TokenMetadata;
-    use game_components_utilities::utils::renderer::create_default_svg as _create_default_svg;
+    use game_components_utilities::renderer::svg::create_default_svg as _create_default_svg;
 
     #[storage]
     struct Storage {}
@@ -41,6 +43,8 @@ pub mod DefaultRenderer {
             settings_details: GameSettingDetails,
             objective_details: GameObjectiveDetails,
             context_details: GameContextDetails,
+            token_name: ByteArray,
+            token_symbol: ByteArray,
         ) -> ByteArray {
             _create_default_svg(
                 game_metadata,
@@ -50,6 +54,8 @@ pub mod DefaultRenderer {
                 settings_details,
                 objective_details,
                 context_details,
+                token_name,
+                token_symbol,
             )
         }
     }
