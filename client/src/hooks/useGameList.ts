@@ -15,13 +15,18 @@ export interface ClientGame {
   createdAt: string;
 }
 
+const GAME_IMAGE_OVERRIDES: Record<string, string> = {
+  "Number Guess": "/number-guess.png",
+  "Tic Tac Toe": "/tic-tac-toe.png",
+};
+
 function adaptGame(g: Game): ClientGame {
   return {
     gameId: g.gameId,
     contractAddress: g.contractAddress,
     name: g.name || null,
     description: g.description || null,
-    imageUrl: g.imageUrl ?? null,
+    imageUrl: (g.name && GAME_IMAGE_OVERRIDES[g.name]) || (g.imageUrl ?? null),
     createdAt: g.createdAt,
   };
 }

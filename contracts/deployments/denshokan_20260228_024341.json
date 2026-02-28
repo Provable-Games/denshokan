@@ -1,0 +1,36 @@
+{
+  "profile": "sepolia",
+  "timestamp": "2026-02-28T10:43:41Z",
+  "denshokan_contract": {
+    "address": "0x04c5c1c662dabf2698052b8a1413420d4dd7b74ef373c33015feb50cffa46fdb",
+    "class_hash": "0x031f0e1310545c9d16e612aad3c56f806b767b97e4f241d1f89882a6e34f6063",
+    "parameters": {
+      "name": "TestToken",
+      "symbol": "TT",
+      "base_uri": "https://api.denshokan.dev/token/",
+      "game_registry_address": "0x00901bfe1da0d447c4f3b81dfc19505f4796bc1968794de1ce8e0e6ee9fb086b",
+      "default_renderer_address": "0x03befe0278f5ec2fdb0e38c2652396d36d27947dd4749e50adb8ca632fb23fff"
+    }
+  },
+  "default_renderer_contract": {
+    "address": "0x03befe0278f5ec2fdb0e38c2652396d36d27947dd4749e50adb8ca632fb23fff",
+    "class_hash": "0x6e288264ae229f983a9bc9c8e2990c3357b0355f53e33f0363092b2812f3205"
+  },
+  "denshokan_viewer_contract": {
+    "address": "0x030ee3ee602255c135ec92e21d1b9eac279b850063e06e4a6a8df1d13495e53d",
+    "class_hash": "0x02e6b61ccb2c031153c14f3aeaf1c709fbee568dce0d7b405c0a8130572eebb6",
+    "parameters": {
+      "owner": "0x65d2ab17338b5affdebaf95e2d79834b5f30bac596ff55563c62c3c98700150",
+      "denshokan_address": "0x04c5c1c662dabf2698052b8a1413420d4dd7b74ef373c33015feb50cffa46fdb"
+    }
+  },
+  "minigame_registry_contract": {
+    "address": "0x00901bfe1da0d447c4f3b81dfc19505f4796bc1968794de1ce8e0e6ee9fb086b",
+    "class_hash": "0x0149587264391e96fed173f9904b8d4cf2ed5ba9d621103993b7a07341f0c694",
+    "parameters": {
+      "name": "TestRegistry",
+      "symbol": "TR",
+      "base_uri": "https://api.denshokan.dev/registry/"
+    }
+  }
+}

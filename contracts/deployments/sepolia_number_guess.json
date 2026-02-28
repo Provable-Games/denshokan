@@ -1,12 +1,12 @@
 {
   "profile": "sepolia",
-  "timestamp": "2026-02-28T10:49:56Z",
+  "timestamp": "2026-02-28T10:47:07Z",
   "registry_address": "0x00901bfe1da0d447c4f3b81dfc19505f4796bc1968794de1ce8e0e6ee9fb086b",
   "denshokan_address": "0x04c5c1c662dabf2698052b8a1413420d4dd7b74ef373c33015feb50cffa46fdb",
-  "tic_tac_toe": {
-    "class_hash": "0x0681262784608f3ecff38bf2653b2eaef59584facc387cceeeef6baf5f7e0df1",
-    "address": "0x03e2b0ec812689075808fa18a76d5d193f5fa13b223fbcc9005c889d7dd190f7",
-    "name": "Tic Tac Toe",
+  "number_guess": {
+    "class_hash": "0x49135b42ec9be6aaf71a0ffabdba5ddaaa8000bea63444f25ece7069376f5b",
+    "address": "0x03bd957e4f01d940d571701394b1d92995fb9c4c852712edeb1608f0d91951b1",
+    "name": "Number Guess",
     "genre": "Puzzle",
     "royalty_bps": 500
   }

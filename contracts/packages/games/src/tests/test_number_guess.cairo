@@ -125,8 +125,7 @@ fn test_new_game_hard_difficulty() {
 }
 
 #[test]
-#[should_panic(expected: "Settings do not exist")]
-fn test_new_game_invalid_settings() {
+fn test_new_game_no_settings_uses_defaults() {
     let (ng, address) = setup_number_guess();
     // Mint without specifying settings_id — packs 0 into the token
     let minigame = IMinigameDispatcher { contract_address: address };
@@ -146,7 +145,12 @@ fn test_new_game_invalid_settings() {
             0,
             0,
         );
-    ng.new_game(token_id); // settings_id=0 doesn't exist
+    ng.new_game(token_id); // settings_id=0 uses defaults
+
+    let (min, max) = ng.get_range(token_id);
+    assert!(min == 1, "Default min should be 1");
+    assert!(max == 10, "Default max should be 10");
+    assert!(ng.get_max_attempts(token_id) == 0, "Default max attempts should be 0 (unlimited)");
 }
 
 #[test]

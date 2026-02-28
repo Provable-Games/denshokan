@@ -45,13 +45,48 @@ export default function TokenCard({ token, variant = "full" }: Props) {
           }}
         >
           <CardActionArea onClick={() => navigate(`/tokens/${token.tokenId}`)}>
-            <TokenImage
-              tokenUri={token.tokenUri}
-              alt={token.playerName || `Token ${token.tokenId}`}
-              height="auto"
-              objectFit="cover"
-              sx={{ aspectRatio: "1" }}
-            />
+            <Box sx={{ position: "relative", aspectRatio: "1" }}>
+              <TokenImage
+                tokenUri={token.tokenUri}
+                alt={token.playerName || `Token ${token.tokenId}`}
+                height="100%"
+                objectFit="cover"
+              />
+              <Box
+                sx={{
+                  position: "absolute",
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  px: 1,
+                  py: 0.5,
+                  background:
+                    "linear-gradient(transparent, rgba(0,0,0,0.7))",
+                }}
+              >
+                <Typography
+                  variant="caption"
+                  sx={{ color: "white", fontWeight: 600, display: "block" }}
+                  noWrap
+                >
+                  {token.playerName || `Game #${token.gameId}`}
+                </Typography>
+                <Stack direction="row" spacing={0.5} alignItems="center">
+                  <Typography
+                    variant="caption"
+                    sx={{ color: "rgba(255,255,255,0.8)" }}
+                  >
+                    {Number(token.currentScore).toLocaleString()}
+                  </Typography>
+                  <Chip
+                    label={token.gameOver ? "Done" : "Live"}
+                    color={statusColor}
+                    size="small"
+                    sx={{ height: 16, fontSize: "0.6rem" }}
+                  />
+                </Stack>
+              </Box>
+            </Box>
           </CardActionArea>
         </Card>
       </motion.div>

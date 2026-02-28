@@ -63,7 +63,15 @@ export default function TokenImage({ tokenUri, alt = "Token", height = 200, obje
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
 
-  if (!tokenUri) return null;
+  if (!tokenUri) {
+    return (
+      <Skeleton
+        variant="rectangular"
+        animation="wave"
+        sx={{ height, width: "100%", ...sx }}
+      />
+    );
+  }
 
   const src = resolveImageSrc(tokenUri);
   if (!src) return null;

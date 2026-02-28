@@ -2,7 +2,7 @@ import { useState, useCallback } from "react";
 import { useAccount, useContract, useSendTransaction } from "@starknet-react/core";
 import { CairoOption, CairoOptionVariant } from "starknet";
 import { MintSaltCounter } from "@provable-games/denshokan-sdk";
-import { config } from "../config";
+import { useChainConfig } from "../contexts/NetworkContext";
 import denshokanAbi from "../abi/denshokan.json";
 
 interface MintParams {
@@ -24,12 +24,13 @@ interface MintResult {
 
 export function useMint() {
   const { address } = useAccount();
+  const { chainConfig } = useChainConfig();
   const [minting, setMinting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const { contract } = useContract({
     abi: denshokanAbi as any,
-    address: config.denshokanAddress as `0x${string}`,
+    address: chainConfig.denshokanAddress as `0x${string}`,
   });
 
   const { sendAsync } = useSendTransaction({});

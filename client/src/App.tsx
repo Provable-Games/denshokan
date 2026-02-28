@@ -10,8 +10,15 @@ import NumberGuessPlayPage from "./pages/NumberGuessPlayPage";
 import MintersPage from "./pages/MintersPage";
 import SettingsPage from "./pages/SettingsPage";
 import ObjectivesPage from "./pages/ObjectivesPage";
+import { useSwitchToUrlNetwork } from "./hooks/useSwitchToUrlNetwork";
+import { useSyncNetworkUrl } from "./hooks/useSyncNetworkUrl";
+import { useResetOnNetworkChange } from "./hooks/useResetOnNetworkChange";
 
 export default function App() {
+  useSwitchToUrlNetwork();
+  useSyncNetworkUrl();
+  useResetOnNetworkChange();
+
   return (
     <Routes>
       <Route element={<Layout />}>

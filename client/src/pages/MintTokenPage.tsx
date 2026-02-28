@@ -4,10 +4,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import MintForm, { MintFormParams } from "../components/mint/MintForm";
 import { useController } from "../contexts/ControllerContext";
 import { useMint } from "../hooks/useMint";
-import { config } from "../config";
+import { useChainConfig } from "../contexts/NetworkContext";
 
 export default function MintTokenPage() {
   const { isConnected } = useController();
+  const { chainConfig } = useChainConfig();
   const { mint, mintBatchCount, minting, error } = useMint();
   const [txHash, setTxHash] = useState<string | null>(null);
   const [mintedCount, setMintedCount] = useState(1);
@@ -48,7 +49,7 @@ export default function MintTokenPage() {
             <Alert severity="success" sx={{ mb: 2 }}>
               {mintedCount > 1 ? `${mintedCount} tokens minted!` : "Token minted!"}{" "}
               <a
-                href={`${config.explorerUrl}/tx/${txHash}`}
+                href={`${chainConfig.explorerUrl}/tx/${txHash}`}
                 target="_blank"
                 rel="noopener noreferrer"
               >
