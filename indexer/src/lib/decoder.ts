@@ -625,7 +625,7 @@ export interface GameRegistryUpdateEvent {
  * Keys: [selector, id(u32)]
  * Data: [contract_address, name(ByteArray), description(ByteArray), developer(ByteArray),
  *        publisher(ByteArray), genre(ByteArray), image(ByteArray), color(ByteArray),
- *        client_url(ByteArray), renderer_address, royalty_fraction(u128)]
+ *        client_url(ByteArray), renderer_address, royalty_fraction(u128), agent_skills(ByteArray)]
  */
 export interface GameMetadataUpdateEvent {
   gameId: number;
@@ -640,6 +640,7 @@ export interface GameMetadataUpdateEvent {
   clientUrl: string;
   rendererAddress: string;
   royaltyFraction: string;
+  agentSkills: string;
 }
 
 /**
@@ -691,6 +692,9 @@ export function decodeGameMetadataUpdate(keys: readonly string[], data: readonly
   idx += 1;
 
   const royaltyFraction = hexToBigInt(data[idx]).toString();
+  idx += 1;
+
+  const agentSkills = decodeByteArray(data, idx);
 
   return {
     gameId: Number(hexToBigInt(keys[1])),
@@ -705,6 +709,7 @@ export function decodeGameMetadataUpdate(keys: readonly string[], data: readonly
     clientUrl: clientUrl.value,
     rendererAddress,
     royaltyFraction,
+    agentSkills: agentSkills.value,
   };
 }
 
