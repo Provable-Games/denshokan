@@ -305,16 +305,16 @@ Additional deployment scripts:
 
 ### Syncing Environment Variables
 
-After deploying contracts, sync addresses to all `.env` files:
+After deploying contracts, sync addresses to all targets:
 
 ```bash
 ./scripts/sync-env.sh            # Apply updates
 ./scripts/sync-env.sh --dry-run  # Preview changes without writing
 ```
 
-Source of truth is `contracts/.env`. The script updates:
-- `client/.env` — `VITE_DENSHOKAN_ADDRESS`, `VITE_REGISTRY_ADDRESS`, `VITE_VIEWER_ADDRESS`
+Source of truth is `contracts/.env`. Game addresses are loaded from deployment JSON files in `contracts/deployments/`. The script updates:
 - `indexer/.env` — `DENSHOKAN_ADDRESS`, `REGISTRY_ADDRESS`
+- `client/src/networks.ts` — address fields in the `SN_MAIN` or `SN_SEPOLIA` section (based on `PROFILE`)
 
 ### Indexer Deployment
 

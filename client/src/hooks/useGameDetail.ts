@@ -15,13 +15,18 @@ export function useGameDetail(gameId: number) {
   const { data: gameData, isLoading: gameLoading, error: gameError, refetch: refetchGame } = useGame(gameAddress);
   const { data: statsData, isLoading: statsLoading, error: statsError, refetch: refetchStats } = useGameStats(gameAddress);
 
+  const GAME_IMAGE_OVERRIDES: Record<string, string> = {
+    "Number Guess": "/number-guess.png",
+    "Tic Tac Toe": "/tic-tac-toe.png",
+  };
+
   const game: ClientGame | null = gameData
     ? {
         gameId: gameData.gameId,
         contractAddress: gameData.contractAddress,
         name: gameData.name || null,
         description: gameData.description || null,
-        imageUrl: gameData.imageUrl ?? null,
+        imageUrl: (gameData.name && GAME_IMAGE_OVERRIDES[gameData.name]) || (gameData.imageUrl ?? null),
         createdAt: gameData.createdAt,
       }
     : null;

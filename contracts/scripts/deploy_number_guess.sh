@@ -60,11 +60,11 @@ GAME_CREATOR="${GAME_CREATOR:-0x127fd5f1fe78a71f8bcd1fec63e3fe2f0486b6ecd5c86a04
 # BUILD CONTRACTS
 # ============================
 
-print_info "Building contracts..."
+print_info "Building contracts (release profile)..."
 cd "$CONTRACTS_DIR"
-scarb build
+scarb --profile release build --workspace
 
-ARTIFACT="$CONTRACTS_DIR/target/dev/denshokan_games_NumberGuess.contract_class.json"
+ARTIFACT="$CONTRACTS_DIR/target/release/denshokan_games_NumberGuess.contract_class.json"
 if [ ! -f "$ARTIFACT" ]; then
     print_error "NumberGuess contract artifact not found at $ARTIFACT"
     echo "Available artifacts:"

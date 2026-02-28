@@ -66,18 +66,11 @@ GAME_CREATOR="${GAME_CREATOR:-0x127fd5f1fe78a71f8bcd1fec63e3fe2f0486b6ecd5c86a04
 # BUILD CONTRACTS
 # ============================
 
-print_info "Building contracts..."
+print_info "Building contracts (release profile)..."
 cd "$CONTRACTS_DIR"
-scarb build
+scarb --profile release build --workspace
 
-ARTIFACT="$CONTRACTS_DIR/target/dev/denshokan_testing_minigame_mock.contract_class.json"
-if [ ! -f "$ARTIFACT" ]; then
-    # Try alternative prefixes in case naming differs
-    ARTIFACT="$CONTRACTS_DIR/target/dev/denshokan_testing_minigame_starknet_mock.contract_class.json"
-fi
-if [ ! -f "$ARTIFACT" ]; then
-    ARTIFACT="$CONTRACTS_DIR/target/dev/denshokan_minigame_starknet_mock.contract_class.json"
-fi
+ARTIFACT="$CONTRACTS_DIR/target/release/denshokan_testing_minigame_mock.contract_class.json"
 
 if [ ! -f "$ARTIFACT" ]; then
     print_error "Mock game contract artifact not found"

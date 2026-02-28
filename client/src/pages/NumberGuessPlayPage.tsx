@@ -11,16 +11,12 @@ import { ArrowBack, Home } from "@mui/icons-material";
 import { useTokenDetail } from "../hooks/useTokenDetail";
 import { GameBoard } from "../components/numberguess";
 import LoadingSpinner from "../components/common/LoadingSpinner";
-
-// This would ideally come from config or API based on game ID
-// For now, we'll need to configure this
-const NUMBER_GUESS_ADDRESS =
-  import.meta.env.VITE_NUMBER_GUESS_ADDRESS ||
-  "0x0"; // Placeholder - needs to be configured after deployment
+import { useChainConfig } from "../contexts/NetworkContext";
 
 export default function NumberGuessPlayPage() {
   const { tokenId } = useParams<{ tokenId: string }>();
   const navigate = useNavigate();
+  const { chainConfig } = useChainConfig();
   const { token, isLoading, error } = useTokenDetail(tokenId || "");
 
   if (isLoading) {
@@ -46,14 +42,13 @@ export default function NumberGuessPlayPage() {
 
   // Get the game address from the token data
   // This assumes the token has the game's contract address
-  const gameAddress = token.gameAddress || NUMBER_GUESS_ADDRESS;
+  const gameAddress = token.gameAddress || chainConfig.numberGuessAddress;
 
   if (!gameAddress || gameAddress === "0x0") {
     return (
       <Box sx={{ p: 3 }}>
         <Alert severity="warning" sx={{ mb: 2 }}>
-          Number Guess game address not configured. Please set
-          VITE_NUMBER_GUESS_ADDRESS in your environment.
+          Number Guess game address not configured for this network.
         </Alert>
         <Button
           variant="outlined"

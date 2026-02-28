@@ -1,5 +1,4 @@
 import { ReactNode, useMemo } from "react";
-import { sepolia, mainnet } from "@starknet-react/chains";
 import {
   StarknetConfig,
   jsonRpcProvider,
@@ -7,24 +6,41 @@ import {
   InjectedConnector,
 } from "@starknet-react/core";
 import ControllerConnector from "@cartridge/connector/controller";
-import { config, networkName } from "../config";
+import {
+  getDefaultChainId,
+  getNetworkConfig,
+  getAllChains,
+  CHAIN_ID_FELTS,
+} from "../networks";
 
-const chain = networkName === "sepolia" ? sepolia : mainnet;
+const defaultChainId = getDefaultChainId();
+const mainnetConfig = getNetworkConfig("SN_MAIN");
+const sepoliaConfig = getNetworkConfig("SN_SEPOLIA");
+const chains = getAllChains();
 
-// Chain IDs as felt252 hex strings
-const CHAIN_IDS = {
-  sepolia: "0x534e5f5345504f4c4941", // "SN_SEPOLIA" as felt
-  mainnet: "0x534e5f4d41494e", // "SN_MAIN" as felt
-} as const;
+const orderedChains =
+  defaultChainId === "SN_SEPOLIA"
+    ? ([chains[1], chains[0]] as const)
+    : ([chains[0], chains[1]] as const);
 
 const cartridgeConnector =
   typeof window !== "undefined"
     ? new ControllerConnector({
-        chains: [{ rpcUrl: config.rpcUrl }],
-        defaultChainId: CHAIN_IDS[networkName === "sepolia" ? "sepolia" : "mainnet"],
+        chains: [
+          { rpcUrl: mainnetConfig.rpcUrl },
+          { rpcUrl: sepoliaConfig.rpcUrl },
+        ],
+        defaultChainId: CHAIN_ID_FELTS[defaultChainId],
         policies: {
           contracts: {
-            [config.denshokanAddress]: {
+            [mainnetConfig.denshokanAddress]: {
+              methods: [
+                { name: "update_player_name", entrypoint: "update_player_name" },
+                { name: "update_game", entrypoint: "update_game" },
+                { name: "mint", entrypoint: "mint" },
+              ],
+            },
+            [sepoliaConfig.denshokanAddress]: {
               methods: [
                 { name: "update_player_name", entrypoint: "update_player_name" },
                 { name: "update_game", entrypoint: "update_game" },
@@ -44,6 +60,11 @@ const braavosConnector = new InjectedConnector({
   options: { id: "braavos", name: "Braavos" },
 });
 
+const rpcByChainId: Record<string, string> = {
+  [String(chains[0].id)]: mainnetConfig.rpcUrl,
+  [String(chains[1].id)]: sepoliaConfig.rpcUrl,
+};
+
 export function StarknetProvider({ children }: { children: ReactNode }) {
   const connectors = useMemo(() => {
     const base: any[] = [];
@@ -55,13 +76,15 @@ export function StarknetProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const rpc = useMemo(
-    () => () => ({ nodeUrl: config.rpcUrl }),
+    () => (chain: { id: bigint }) => ({
+      nodeUrl: rpcByChainId[String(chain.id)] || mainnetConfig.rpcUrl,
+    }),
     [],
   );
 
   return (
     <StarknetConfig
-      chains={[chain]}
+      chains={[...orderedChains]}
       provider={jsonRpcProvider({ rpc })}
       connectors={connectors}
       explorer={voyager}

@@ -610,12 +610,17 @@ pub mod NumberGuess {
             // Extract settings_id from packed token_id (immutable, set at mint time)
             let settings_id = unpack_settings_id(token_id);
 
-            // Verify settings exist
-            let (_, _, min, max, max_attempts, exists) = self
-                .settings_data
-                .entry(settings_id)
-                .read();
-            assert!(exists, "Settings do not exist");
+            // Look up settings; settings_id 0 means "no settings" — use defaults
+            let (min, max, max_attempts) = if settings_id == 0 {
+                (1_u32, 10_u32, 0_u32) // Default: range 1-10, unlimited attempts
+            } else {
+                let (_, _, min, max, max_attempts, exists) = self
+                    .settings_data
+                    .entry(settings_id)
+                    .read();
+                assert!(exists, "Settings do not exist");
+                (min, max, max_attempts)
+            };
 
             // Generate random secret number
             let games_played = self.games_played.entry(token_id).read();

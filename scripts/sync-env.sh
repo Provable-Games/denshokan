@@ -1,12 +1,14 @@
 #!/bin/bash
 
-# Sync contract addresses across all .env files
+# Sync contract addresses from contracts/.env to other packages
 # Source of truth: contracts/.env (updated by deployment scripts)
 #
 # Updates:
-#   - client/.env      (VITE_DENSHOKAN_ADDRESS, VITE_REGISTRY_ADDRESS, VITE_VIEWER_ADDRESS)
-#   - indexer/.env      (DENSHOKAN_ADDRESS, REGISTRY_ADDRESS)
-#   - contracts/.env    (already the source, no changes)
+#   - indexer/.env               (DENSHOKAN_ADDRESS, REGISTRY_ADDRESS)
+#   - client/src/networks.ts     (address fields in SN_MAIN or SN_SEPOLIA section)
+#
+# Game addresses (numberGuess, ticTacToe) are loaded from deployment JSON files
+# in contracts/deployments/ when available.
 #
 # Usage:
 #   ./scripts/sync-env.sh
@@ -55,18 +57,45 @@ if [ -z "$DENSHOKAN" ] || [ -z "$REGISTRY" ] || [ -z "$VIEWER" ]; then
     exit 1
 fi
 
-echo -e "${GREEN}[INFO]${NC} Source addresses (from contracts/.env):"
-echo "  Denshokan: $DENSHOKAN"
-echo "  Registry:  $REGISTRY"
-echo "  Viewer:    $VIEWER"
+# Determine target network from PROFILE
+PROFILE="${PROFILE:-sepolia}"
+if [ "$PROFILE" = "mainnet" ]; then
+    NETWORK_SECTION="SN_MAIN"
+else
+    NETWORK_SECTION="SN_SEPOLIA"
+fi
+
+# ============================
+# LOAD GAME ADDRESSES FROM DEPLOYMENT JSON
+# ============================
+
+NUMBER_GUESS_ADDRESS=""
+TIC_TAC_TOE_ADDRESS=""
+
+NUMBER_GUESS_JSON="$ROOT_DIR/contracts/deployments/${PROFILE}_number_guess.json"
+if [ -f "$NUMBER_GUESS_JSON" ] && command -v jq &>/dev/null; then
+    NUMBER_GUESS_ADDRESS=$(jq -r '.number_guess.address // empty' "$NUMBER_GUESS_JSON" 2>/dev/null || true)
+fi
+
+TIC_TAC_TOE_JSON="$ROOT_DIR/contracts/deployments/${PROFILE}_tic_tac_toe.json"
+if [ -f "$TIC_TAC_TOE_JSON" ] && command -v jq &>/dev/null; then
+    TIC_TAC_TOE_ADDRESS=$(jq -r '.tic_tac_toe.address // empty' "$TIC_TAC_TOE_JSON" 2>/dev/null || true)
+fi
+
+echo -e "${GREEN}[INFO]${NC} Source addresses (from contracts/.env, profile=$PROFILE):"
+echo "  Denshokan:    $DENSHOKAN"
+echo "  Registry:     $REGISTRY"
+echo "  Viewer:       $VIEWER"
+echo "  NumberGuess:  ${NUMBER_GUESS_ADDRESS:-(not found)}"
+echo "  TicTacToe:    ${TIC_TAC_TOE_ADDRESS:-(not found)}"
+echo "  Targets:      indexer/.env, client/src/networks.ts ($NETWORK_SECTION)"
 echo
 
 # ============================
-# HELPER
+# HELPERS
 # ============================
 
-# Update a key=value line in a file. If the key exists, replace the value.
-# If the key doesn't exist, skip it (don't add new keys).
+# Update a key=value line in a .env file
 update_env_var() {
     local file="$1"
     local key="$2"
@@ -93,21 +122,52 @@ update_env_var() {
     fi
 }
 
-# ============================
-# UPDATE CLIENT
-# ============================
+# Update an address field in the correct network section of networks.ts
+# Uses awk to find the section (e.g. SN_SEPOLIA: {) and then replace the
+# matching property line within that section's block.
+update_network_address() {
+    local file="$1"
+    local section="$2"   # e.g. SN_MAIN or SN_SEPOLIA
+    local field="$3"     # e.g. denshokanAddress
+    local value="$4"     # e.g. 0x00c4...
 
-CLIENT_ENV="$ROOT_DIR/client/.env"
+    if [ -z "$value" ]; then
+        echo "  $field — skipped (no value)"
+        return 0
+    fi
 
-if [ -f "$CLIENT_ENV" ]; then
-    echo -e "${GREEN}[INFO]${NC} Updating client/.env"
-    update_env_var "$CLIENT_ENV" "VITE_DENSHOKAN_ADDRESS" "$DENSHOKAN"
-    update_env_var "$CLIENT_ENV" "VITE_REGISTRY_ADDRESS" "$REGISTRY"
-    update_env_var "$CLIENT_ENV" "VITE_VIEWER_ADDRESS" "$VIEWER"
-    echo
-else
-    echo -e "${YELLOW}[SKIP]${NC} client/.env not found"
-fi
+    # Extract the current value for display
+    local old_value
+    old_value=$(awk -v section="$section" -v field="$field" '
+        $0 ~ section ": \\{" { in_section = 1 }
+        in_section && $0 ~ field ": \"" {
+            match($0, /"[^"]*"/)
+            print substr($0, RSTART+1, RLENGTH-2)
+            exit
+        }
+        in_section && /^  \}/ { in_section = 0 }
+    ' "$file")
+
+    if [ "$old_value" = "$value" ]; then
+        echo "  $field — unchanged"
+        return 0
+    fi
+
+    if [ "$DRY_RUN" = true ]; then
+        echo -e "  $field — ${YELLOW}would update${NC}: ${old_value:-(empty)} → $value"
+    else
+        awk -v section="$section" -v field="$field" -v value="$value" '
+            $0 ~ section ": \\{" { in_section = 1 }
+            in_section && $0 ~ field ": \"" {
+                # Replace the quoted value on this line
+                sub(/"[^"]*"/, "\"" value "\"")
+            }
+            in_section && /^  \}/ { in_section = 0 }
+            { print }
+        ' "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
+        echo -e "  $field — ${GREEN}updated${NC}: ${old_value:-(empty)} → $value"
+    fi
+}
 
 # ============================
 # UPDATE INDEXER
@@ -125,11 +185,29 @@ else
 fi
 
 # ============================
+# UPDATE CLIENT NETWORKS.TS
+# ============================
+
+NETWORKS_TS="$ROOT_DIR/client/src/networks.ts"
+
+if [ -f "$NETWORKS_TS" ]; then
+    echo -e "${GREEN}[INFO]${NC} Updating client/src/networks.ts ($NETWORK_SECTION)"
+    update_network_address "$NETWORKS_TS" "$NETWORK_SECTION" "denshokanAddress" "$DENSHOKAN"
+    update_network_address "$NETWORKS_TS" "$NETWORK_SECTION" "registryAddress" "$REGISTRY"
+    update_network_address "$NETWORKS_TS" "$NETWORK_SECTION" "viewerAddress" "$VIEWER"
+    update_network_address "$NETWORKS_TS" "$NETWORK_SECTION" "numberGuessAddress" "$NUMBER_GUESS_ADDRESS"
+    update_network_address "$NETWORKS_TS" "$NETWORK_SECTION" "ticTacToeAddress" "$TIC_TAC_TOE_ADDRESS"
+    echo
+else
+    echo -e "${YELLOW}[SKIP]${NC} client/src/networks.ts not found"
+fi
+
+# ============================
 # SUMMARY
 # ============================
 
 if [ "$DRY_RUN" = true ]; then
     echo -e "${YELLOW}[DRY RUN]${NC} No files were modified. Run without --dry-run to apply."
 else
-    echo -e "${GREEN}[DONE]${NC} All env files synced."
+    echo -e "${GREEN}[DONE]${NC} All files synced."
 fi

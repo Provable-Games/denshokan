@@ -187,10 +187,10 @@ export default function MintForm({ onMint, minting, error }: Props) {
       />
 
       <FormControl fullWidth sx={{ mb: 2 }}>
-        <InputLabel>Settings</InputLabel>
+        <InputLabel>Custom Settings</InputLabel>
         <Select
           value={settingsId}
-          label="Settings"
+          label="Custom Settings"
           onChange={(e) => setSettingsId(e.target.value as string)}
           disabled={!selectedGame || isLoadingSettings}
           endAdornment={
@@ -200,7 +200,7 @@ export default function MintForm({ onMint, minting, error }: Props) {
           }
         >
           <MenuItem value="">
-            <em>None</em>
+            <em>Default</em>
           </MenuItem>
           {settings.map((s) => (
             <MenuItem key={s.settingsId} value={String(s.settingsId)}>

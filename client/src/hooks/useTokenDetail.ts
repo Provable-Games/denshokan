@@ -89,12 +89,17 @@ export function useTokenDetail(tokenId: string) {
       }
     : null;
 
+  const GAME_IMAGE_OVERRIDES: Record<string, string> = {
+    "Number Guess": "/number-guess.png",
+    "Tic Tac Toe": "/tic-tac-toe.png",
+  };
+
   const game: ClientGame | null = sdkGame
     ? {
         gameId: sdkGame.gameId,
         name: sdkGame.name || null,
         description: sdkGame.description || null,
-        imageUrl: sdkGame.imageUrl ?? null,
+        imageUrl: (sdkGame.name && GAME_IMAGE_OVERRIDES[sdkGame.name]) || (sdkGame.imageUrl ?? null),
         contractAddress: sdkGame.contractAddress,
       }
     : null;
