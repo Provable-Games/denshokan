@@ -16,8 +16,7 @@ import {
   useConnectionStatus,
 } from "@provable-games/denshokan-sdk/react";
 import { useGameDetail } from "../hooks/useGameDetail";
-import LeaderboardTable from "../components/leaderboard/LeaderboardTable";
-import { GameConfigSection } from "../components/numberguess";
+import { GameConfigSection, QuickPlay } from "../components/numberguess";
 import LoadingSpinner from "../components/common/LoadingSpinner";
 
 export default function GameDetailPage() {
@@ -85,16 +84,23 @@ export default function GameDetailPage() {
       )}
 
       <Stack direction="row" spacing={1} sx={{ mb: 4 }}>
-        <Button variant="contained" onClick={() => navigate("/mint")}>
-          Mint Token
-        </Button>
         <Button
           variant="outlined"
           onClick={() => navigate(`/games/${id}/leaderboard`)}
         >
           Full Leaderboard
         </Button>
+        <Button variant="outlined" onClick={() => navigate("/mint")}>
+          Advanced Mint
+        </Button>
       </Stack>
+
+      {/* Quick Play */}
+      {game.contractAddress && (
+        <Box sx={{ mb: 4 }}>
+          <QuickPlay gameAddress={game.contractAddress} />
+        </Box>
+      )}
 
       {stats && (
         <>

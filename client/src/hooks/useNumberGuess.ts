@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import {
   useAccount,
   useContract,
@@ -19,6 +19,12 @@ export type GameStatusType = (typeof GameStatus)[keyof typeof GameStatus];
 
 // Guess feedback values
 export type GuessFeedback = -1 | 0 | 1 | null; // too low, correct, too high, no guess yet
+
+export interface GuessHistoryEntry {
+  value: number;
+  feedback: GuessFeedback;
+  timestamp: number;
+}
 
 export interface GameSettings {
   id: number;
@@ -46,8 +52,10 @@ export interface UseNumberGuessReturn {
   gameStatus: GameStatusType;
   guessCount: number;
   range: { min: number; max: number };
+  fullRange: { min: number; max: number };
   maxAttempts: number;
   lastFeedback: GuessFeedback;
+  guessHistory: GuessHistoryEntry[];
 
   // Stats
   stats: GameStats;
@@ -62,6 +70,25 @@ export interface UseNumberGuessReturn {
   refetch: () => void;
 }
 
+/** Poll contract.call until predicate returns true, or max retries. */
+async function pollUntil<T>(
+  fn: () => Promise<T>,
+  predicate: (result: T) => boolean,
+  maxRetries = 20,
+  delayMs = 500
+): Promise<T | null> {
+  for (let i = 0; i < maxRetries; i++) {
+    await new Promise((r) => setTimeout(r, delayMs));
+    try {
+      const result = await fn();
+      if (predicate(result)) return result;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
 export function useNumberGuess(
   gameAddress: string,
   tokenId: string
@@ -71,6 +98,12 @@ export function useNumberGuess(
   const [isStarting, setIsStarting] = useState(false);
   const [lastFeedback, setLastFeedback] = useState<GuessFeedback>(null);
   const [error, setError] = useState<string | null>(null);
+  const [guessHistory, setGuessHistory] = useState<GuessHistoryEntry[]>([]);
+  const [fullRange, setFullRange] = useState<{ min: number; max: number }>({
+    min: 1,
+    max: 10,
+  });
+  const fullRangeCaptured = useRef(false);
 
   const { contract } = useContract({
     abi: numberGuessAbi as any,
@@ -89,12 +122,13 @@ export function useNumberGuess(
   });
 
   // Read guess count
-  const { data: guessCountData, refetch: refetchGuessCount } = useReadContract({
-    abi: numberGuessAbi as any,
-    address: gameAddress as `0x${string}`,
-    functionName: "guess_count",
-    args: [tokenId],
-  });
+  const { data: guessCountData, refetch: refetchGuessCount } =
+    useReadContract({
+      abi: numberGuessAbi as any,
+      address: gameAddress as `0x${string}`,
+      functionName: "guess_count",
+      args: [tokenId],
+    });
 
   // Read range
   const { data: rangeData, refetch: refetchRange } = useReadContract({
@@ -105,24 +139,22 @@ export function useNumberGuess(
   });
 
   // Read max attempts
-  const { data: maxAttemptsData, refetch: refetchMaxAttempts } = useReadContract(
-    {
+  const { data: maxAttemptsData, refetch: refetchMaxAttempts } =
+    useReadContract({
       abi: numberGuessAbi as any,
       address: gameAddress as `0x${string}`,
       functionName: "get_max_attempts",
       args: [tokenId],
-    }
-  );
+    });
 
   // Read stats
-  const { data: gamesPlayedData, refetch: refetchGamesPlayed } = useReadContract(
-    {
+  const { data: gamesPlayedData, refetch: refetchGamesPlayed } =
+    useReadContract({
       abi: numberGuessAbi as any,
       address: gameAddress as `0x${string}`,
       functionName: "games_played",
       args: [tokenId],
-    }
-  );
+    });
 
   const { data: gamesWonData, refetch: refetchGamesWon } = useReadContract({
     abi: numberGuessAbi as any,
@@ -184,15 +216,20 @@ export function useNumberGuess(
     setIsStarting(true);
     setError(null);
     setLastFeedback(null);
+    setGuessHistory([]);
+    fullRangeCaptured.current = false;
 
     try {
       const call = contract.populate("new_game", [tokenId]);
       await sendAsync([call]);
 
-      // Refetch state after transaction
-      setTimeout(() => {
-        refetch();
-      }, 1000);
+      // Poll until game status changes to PLAYING
+      await pollUntil(
+        () => contract.call("game_status", [tokenId]),
+        (result) => Number(result) === GameStatus.PLAYING
+      );
+
+      refetch();
     } catch (e: any) {
       setError(e.message || "Failed to start game");
     } finally {
@@ -210,37 +247,71 @@ export function useNumberGuess(
       setIsGuessing(true);
       setError(null);
 
+      // Save pre-guess state for inference
+      const preRange = rangeData
+        ? {
+            min: Number((rangeData as any)[0] || 1),
+            max: Number((rangeData as any)[1] || 10),
+          }
+        : { min: 1, max: 10 };
+
       try {
         const call = contract.populate("guess", [tokenId, number]);
-        const result = await sendAsync([call]);
+        await sendAsync([call]);
 
-        // The contract returns i8: -1 (too low), 0 (correct), 1 (too high)
-        // We can't easily get the return value from sendAsync, so we'll
-        // infer it from the new state after a short delay
-        setTimeout(async () => {
-          refetch();
+        // Poll until state changes (range narrows or game ends)
+        let feedback: GuessFeedback = null;
 
-          // Check if game is now over (won or lost)
-          const newStatusData = await contract.call("game_status", [tokenId]);
+        const result = await pollUntil(
+          () =>
+            Promise.all([
+              contract.call("game_status", [tokenId]),
+              contract.call("get_range", [tokenId]),
+            ]),
+          ([newStatusData, newRangeData]) => {
+            const newStatus = Number(newStatusData);
+            const newMin = Number((newRangeData as any)[0] || preRange.min);
+            const newMax = Number((newRangeData as any)[1] || preRange.max);
+            return (
+              newStatus !== GameStatus.PLAYING ||
+              newMin !== preRange.min ||
+              newMax !== preRange.max
+            );
+          }
+        );
+
+        if (result) {
+          const [newStatusData, newRangeData] = result;
           const newStatus = Number(newStatusData);
+          const newRange = {
+            min: Number((newRangeData as any)[0] || preRange.min),
+            max: Number((newRangeData as any)[1] || preRange.max),
+          };
 
           if (newStatus === GameStatus.WON) {
-            setLastFeedback(0);
-          } else if (newStatus === GameStatus.LOST) {
-            // Game lost - keep last feedback
+            feedback = 0;
+          } else if (newRange.min > preRange.min) {
+            feedback = -1; // too low
+          } else if (newRange.max < preRange.max) {
+            feedback = 1; // too high
           }
-        }, 1000);
+        }
 
-        // For now, return null and let the UI handle state updates via refetch
+        setLastFeedback(feedback);
+        setGuessHistory((prev) => [
+          ...prev,
+          { value: number, feedback, timestamp: Date.now() },
+        ]);
+        refetch();
         setIsGuessing(false);
-        return null;
+        return feedback;
       } catch (e: any) {
         setError(e.message || "Failed to make guess");
         setIsGuessing(false);
         return null;
       }
     },
-    [address, contract, sendAsync, tokenId, refetch]
+    [address, contract, sendAsync, tokenId, refetch, rangeData]
   );
 
   // Parse data
@@ -255,6 +326,20 @@ export function useNumberGuess(
         max: Number((rangeData as any)[1] || 10),
       }
     : { min: 1, max: 10 };
+
+  // Capture full range when game starts or when initial range loads
+  useEffect(() => {
+    if (
+      gameStatus === GameStatus.PLAYING &&
+      !fullRangeCaptured.current &&
+      guessCount === 0
+    ) {
+      fullRangeCaptured.current = true;
+      setFullRange(range);
+    } else if (!fullRangeCaptured.current && rangeData) {
+      setFullRange(range);
+    }
+  }, [gameStatus, guessCount, range.min, range.max, rangeData]);
 
   const maxAttempts =
     maxAttemptsData !== undefined ? Number(maxAttemptsData) : 0;
@@ -277,8 +362,10 @@ export function useNumberGuess(
     gameStatus,
     guessCount,
     range,
+    fullRange,
     maxAttempts,
     lastFeedback,
+    guessHistory,
     stats,
     isLoading,
     isGuessing,

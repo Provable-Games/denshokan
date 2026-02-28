@@ -1,13 +1,6 @@
 import { useParams, useNavigate } from "react-router-dom";
-import {
-  Box,
-  Typography,
-  Button,
-  Alert,
-  Breadcrumbs,
-  Link,
-} from "@mui/material";
-import { ArrowBack, Home } from "@mui/icons-material";
+import { Box, Typography, Button, Alert, IconButton } from "@mui/material";
+import { ArrowBack } from "@mui/icons-material";
 import { useTokenDetail } from "../hooks/useTokenDetail";
 import { GameBoard } from "../components/numberguess";
 import LoadingSpinner from "../components/common/LoadingSpinner";
@@ -40,8 +33,6 @@ export default function NumberGuessPlayPage() {
     );
   }
 
-  // Get the game address from the token data
-  // This assumes the token has the game's contract address
   const gameAddress = token.gameAddress || chainConfig.numberGuessAddress;
 
   if (!gameAddress || gameAddress === "0x0") {
@@ -63,57 +54,43 @@ export default function NumberGuessPlayPage() {
 
   return (
     <Box>
-      {/* Breadcrumbs */}
-      <Breadcrumbs sx={{ mb: 3 }}>
-        <Link
-          component="button"
-          underline="hover"
-          color="inherit"
-          onClick={() => navigate("/")}
-          sx={{ display: "flex", alignItems: "center" }}
-        >
-          <Home sx={{ mr: 0.5, fontSize: 20 }} />
-          Home
-        </Link>
-        <Link
-          component="button"
-          underline="hover"
-          color="inherit"
-          onClick={() => navigate(`/tokens/${tokenId}`)}
-        >
-          Token #{tokenId?.slice(0, 8)}...
-        </Link>
-        <Typography color="text.primary">Play</Typography>
-      </Breadcrumbs>
-
       {/* Header */}
       <Box
         sx={{
           display: "flex",
-          justifyContent: "space-between",
           alignItems: "center",
+          gap: 1,
           mb: 3,
         }}
       >
+        <IconButton
+          onClick={() => navigate(`/tokens/${tokenId}`)}
+          size="small"
+          sx={{ color: "text.secondary" }}
+        >
+          <ArrowBack />
+        </IconButton>
         <Box>
-          <Typography variant="h4" gutterBottom>
+          <Typography variant="h5" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
             Number Guess
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Token: {token.playerName || `#${tokenId?.slice(0, 12)}...`}
+            {token.playerName || `Token #${tokenId?.slice(0, 12)}...`}
           </Typography>
         </Box>
-        <Button
-          variant="outlined"
-          startIcon={<ArrowBack />}
-          onClick={() => navigate(`/tokens/${tokenId}`)}
-        >
-          Back to Token
-        </Button>
       </Box>
 
       {/* Game Board */}
-      <GameBoard gameAddress={gameAddress} tokenId={tokenId || ""} />
+      <GameBoard
+        gameAddress={gameAddress}
+        tokenId={tokenId || ""}
+        tokenConfig={{
+          settingsId: token.settingsId || undefined,
+          objectiveId: token.objectiveId || undefined,
+          playerName: token.playerName || undefined,
+          soulbound: token.soulbound,
+        }}
+      />
     </Box>
   );
 }
