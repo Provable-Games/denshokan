@@ -1,153 +1,115 @@
-import { Box, Paper, Typography, Grid, Chip } from "@mui/material";
-import { motion } from "framer-motion";
-import {
-  EmojiEvents,
-  Speed,
-  Stars,
-  Score,
-  SportsScore,
-} from "@mui/icons-material";
+import { useState } from "react";
+import { Box, Typography, Button, Collapse } from "@mui/material";
+import { motion, AnimatePresence } from "framer-motion";
+import { ExpandMore, ExpandLess } from "@mui/icons-material";
 import { GameStats as GameStatsType } from "../../hooks/useNumberGuess";
+import { gameColors } from "./gameColors";
 
 interface Props {
   stats: GameStatsType;
-  currentGuesses?: number;
-  currentRange?: { min: number; max: number };
-  attemptsRemaining?: number | null;
 }
 
-interface StatCardProps {
-  icon: React.ReactNode;
-  label: string;
-  value: string | number;
-  color?: string;
-}
+export default function GameStats({ stats }: Props) {
+  const [open, setOpen] = useState(false);
 
-function StatCard({ icon, label, value, color = "primary.main" }: StatCardProps) {
-  return (
-    <Paper
-      elevation={1}
-      sx={{
-        p: 2,
-        textAlign: "center",
-        height: "100%",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 0.5,
-      }}
-    >
-      <Box sx={{ color }}>{icon}</Box>
-      <Typography variant="body2" color="text.secondary">
-        {label}
-      </Typography>
-      <Typography variant="h6" sx={{ fontWeight: "bold" }}>
-        {value}
-      </Typography>
-    </Paper>
-  );
-}
-
-export default function GameStats({
-  stats,
-  currentGuesses,
-  currentRange,
-  attemptsRemaining,
-}: Props) {
   const winRate =
     stats.gamesPlayed > 0
       ? Math.round((stats.gamesWon / stats.gamesPlayed) * 100)
       : 0;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-    >
-      <Box>
-        {/* Current Game Stats */}
-        {currentGuesses !== undefined && currentRange && (
-          <Box sx={{ mb: 3 }}>
-            <Typography
-              variant="subtitle2"
-              color="text.secondary"
-              sx={{ mb: 1 }}
-            >
-              Current Game
-            </Typography>
-            <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-              <Chip
-                label={`Guesses: ${currentGuesses}`}
-                color="primary"
-                variant="outlined"
-              />
-              <Chip
-                label={`Range: ${currentRange.min}-${currentRange.max}`}
-                variant="outlined"
-              />
-              {attemptsRemaining !== null && attemptsRemaining !== undefined && (
-                <Chip
-                  label={
-                    attemptsRemaining === 0
-                      ? "No attempts left"
-                      : `${attemptsRemaining} left`
-                  }
-                  color={attemptsRemaining <= 3 ? "error" : "default"}
-                  variant="outlined"
-                />
-              )}
-            </Box>
-          </Box>
-        )}
+    <Box>
+      <Button
+        size="small"
+        onClick={() => setOpen(!open)}
+        endIcon={open ? <ExpandLess /> : <ExpandMore />}
+        sx={{
+          color: "text.secondary",
+          textTransform: "none",
+          fontSize: "0.8rem",
+        }}
+      >
+        Lifetime Stats
+      </Button>
 
-        {/* Lifetime Stats */}
-        <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
-          Lifetime Stats
-        </Typography>
-        <Grid container spacing={1.5}>
-          <Grid size={{ xs: 6, sm: 4 }}>
-            <StatCard
-              icon={<EmojiEvents />}
-              label="Games Won"
-              value={`${stats.gamesWon}/${stats.gamesPlayed}`}
-              color="#FFD700"
-            />
-          </Grid>
-          <Grid size={{ xs: 6, sm: 4 }}>
-            <StatCard
-              icon={<SportsScore />}
-              label="Win Rate"
-              value={`${winRate}%`}
-              color="#4CAF50"
-            />
-          </Grid>
-          <Grid size={{ xs: 6, sm: 4 }}>
-            <StatCard
-              icon={<Speed />}
-              label="Best Score"
-              value={stats.bestScore > 0 ? `${stats.bestScore} guesses` : "-"}
-              color="#2196F3"
-            />
-          </Grid>
-          <Grid size={{ xs: 6, sm: 4 }}>
-            <StatCard
-              icon={<Stars />}
-              label="Perfect Games"
-              value={stats.perfectGames}
-              color="#9C27B0"
-            />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 8 }}>
-            <StatCard
-              icon={<Score />}
-              label="Total Score"
-              value={stats.totalScore.toString()}
-              color="#FF5722"
-            />
-          </Grid>
-        </Grid>
-      </Box>
-    </motion.div>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
+            style={{ overflow: "hidden" }}
+          >
+            <Collapse in={open}>
+              <Box
+                sx={{
+                  display: "flex",
+                  gap: 3,
+                  flexWrap: "wrap",
+                  justifyContent: "center",
+                  py: 1.5,
+                }}
+              >
+                <StatItem
+                  label="Games Won"
+                  value={`${stats.gamesWon}/${stats.gamesPlayed}`}
+                  color={gameColors.gold}
+                />
+                <StatItem
+                  label="Win Rate"
+                  value={`${winRate}%`}
+                  color={gameColors.correct}
+                />
+                <StatItem
+                  label="Best Score"
+                  value={stats.bestScore > 0 ? `${stats.bestScore}` : "-"}
+                  color={gameColors.tooLow}
+                />
+                <StatItem
+                  label="Perfect"
+                  value={String(stats.perfectGames)}
+                  color={gameColors.perfect}
+                />
+                <StatItem
+                  label="Total Score"
+                  value={stats.totalScore.toString()}
+                  color={gameColors.score}
+                />
+              </Box>
+            </Collapse>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </Box>
+  );
+}
+
+function StatItem({
+  label,
+  value,
+  color,
+}: {
+  label: string;
+  value: string;
+  color: string;
+}) {
+  return (
+    <Box sx={{ textAlign: "center", minWidth: 50 }}>
+      <Typography variant="body1" sx={{ fontWeight: 700, color }}>
+        {value}
+      </Typography>
+      <Typography
+        variant="caption"
+        sx={{
+          color: "text.secondary",
+          fontSize: "0.6rem",
+          textTransform: "uppercase",
+          letterSpacing: 0.5,
+        }}
+      >
+        {label}
+      </Typography>
+    </Box>
   );
 }

@@ -1,25 +1,57 @@
-import { useState, useCallback } from "react";
-import { Box, Paper, Typography, Button, Alert, Grid } from "@mui/material";
+import { useState, useCallback, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { Box, Paper, Alert } from "@mui/material";
 import { motion } from "framer-motion";
-import { PlayArrow, Refresh, Replay } from "@mui/icons-material";
+import {
+  useAccount,
+  useContract,
+  useSendTransaction,
+} from "@starknet-react/core";
+import { RpcProvider, CairoOption, CairoOptionVariant } from "starknet";
 import {
   useNumberGuess,
   GameStatus,
 } from "../../hooks/useNumberGuess";
-import GuessInput from "./GuessInput";
+import { useChainConfig } from "../../contexts/NetworkContext";
+import numberGuessAbi from "../../abi/numberGuess.json";
+import StartScreen from "./StartScreen";
+import GameStateBar from "./GameStateBar";
+import NumberLineVisualizer from "./NumberLineVisualizer";
 import FeedbackDisplay from "./FeedbackDisplay";
+import GuessInput from "./GuessInput";
+import GuessHistoryBar from "./GuessHistoryBar";
 import GameStats from "./GameStats";
 import ResultModal from "./ResultModal";
 import LoadingSpinner from "../common/LoadingSpinner";
 
+interface TokenConfig {
+  settingsId?: number;
+  objectiveId?: number;
+  playerName?: string;
+  soulbound?: boolean;
+}
+
 interface Props {
   gameAddress: string;
   tokenId: string;
+  tokenConfig?: TokenConfig;
 }
 
-export default function GameBoard({ gameAddress, tokenId }: Props) {
+export default function GameBoard({ gameAddress, tokenId, tokenConfig }: Props) {
+  const navigate = useNavigate();
+  const { address } = useAccount();
+  const { chainConfig } = useChainConfig();
   const [showResultModal, setShowResultModal] = useState(false);
   const [lastGameStatus, setLastGameStatus] = useState<number | null>(null);
+  const [isMinting, setIsMinting] = useState(false);
+  const [mintError, setMintError] = useState<string | null>(null);
+
+  const { contract: gameContract } = useContract({
+    abi: numberGuessAbi as any,
+    address: gameAddress as `0x${string}`,
+  });
+
+  const { sendAsync: sendMintTx } = useSendTransaction({});
 
   const {
     startGame,
@@ -27,18 +59,16 @@ export default function GameBoard({ gameAddress, tokenId }: Props) {
     gameStatus,
     guessCount,
     range,
+    fullRange,
     maxAttempts,
+    lastFeedback,
+    guessHistory,
     stats,
     isLoading,
     isGuessing,
     isStarting,
     error,
-    refetch,
   } = useNumberGuess(gameAddress, tokenId);
-
-  // Calculate attempts remaining
-  const attemptsRemaining =
-    maxAttempts > 0 ? maxAttempts - guessCount : null;
 
   // Handle guess submission
   const handleGuess = useCallback(
@@ -50,27 +80,92 @@ export default function GameBoard({ gameAddress, tokenId }: Props) {
   );
 
   // Show result modal when game ends
-  const handleGameEnd = useCallback(() => {
+  useEffect(() => {
     if (
       (gameStatus === GameStatus.WON || gameStatus === GameStatus.LOST) &&
-      lastGameStatus === GameStatus.PLAYING
+      lastGameStatus === GameStatus.PLAYING &&
+      !showResultModal
     ) {
       setShowResultModal(true);
     }
     setLastGameStatus(gameStatus);
-  }, [gameStatus, lastGameStatus]);
+  }, [gameStatus]);
 
-  // Monitor for game end
-  if (
-    (gameStatus === GameStatus.WON || gameStatus === GameStatus.LOST) &&
-    lastGameStatus === GameStatus.PLAYING &&
-    !showResultModal
-  ) {
-    handleGameEnd();
-  }
+  // Mint a new token and start a new game, then navigate
+  const handleMintAndPlay = useCallback(async () => {
+    if (!address || !gameContract) return;
 
-  // Handle play again
-  const handlePlayAgain = useCallback(() => {
+    setIsMinting(true);
+    setMintError(null);
+
+    try {
+      const none = <T,>() => new CairoOption<T>(CairoOptionVariant.None);
+      const some = <T,>(val: T) => new CairoOption<T>(CairoOptionVariant.Some, val);
+
+      // Step 1: Mint a new token with the same configuration as the current token
+      const cfg = tokenConfig || {};
+      const mintCall = gameContract.populate("mint_game", [
+        cfg.playerName ? some(cfg.playerName) : none(),          // player_name
+        cfg.settingsId ? some(cfg.settingsId) : none(),          // settings_id
+        none(),                                                  // start
+        none(),                                                  // end
+        cfg.objectiveId ? some(cfg.objectiveId) : none(),        // objective_id
+        none(),                                                  // context
+        none(),                                                  // client_url
+        none(),                                                  // renderer_address
+        address,                                                 // to
+        cfg.soulbound ?? false,                                  // soulbound
+        false,                                                   // paymaster
+        0,                                                       // salt
+        0,                                                       // metadata
+      ]);
+
+      const mintResult = await sendMintTx([mintCall]);
+
+      // Step 2: Get the new token ID from the receipt
+      const rpc = new RpcProvider({ nodeUrl: chainConfig.rpcUrl });
+      const receipt = await rpc.waitForTransaction(mintResult.transaction_hash);
+
+      const denshokanAddr = BigInt(chainConfig.denshokanAddress);
+      let newTokenId: string | null = null;
+
+      for (const event of (receipt as any).events || []) {
+        const fromAddr = BigInt(event.from_address || "0x0");
+        if (fromAddr !== denshokanAddr) continue;
+
+        // Transfer event: keys = [selector, from, to, token_id_low, token_id_high]
+        // Mint: from = 0x0
+        const keys: string[] = event.keys || [];
+        if (keys.length >= 5 && BigInt(keys[1]) === 0n) {
+          // Reconstruct felt252 token_id from u256 (low + high * 2^128)
+          const low = BigInt(keys[3]);
+          const high = BigInt(keys[4]);
+          const fullId = low + high * (2n ** 128n);
+          newTokenId = "0x" + fullId.toString(16);
+          break;
+        }
+      }
+
+      if (!newTokenId) {
+        throw new Error("Could not find minted token ID in receipt");
+      }
+
+      // Step 3: Start a new game on the minted token
+      const newGameCall = gameContract.populate("new_game", [newTokenId]);
+      await sendMintTx([newGameCall]);
+
+      // Step 4: Navigate to the new play page
+      setShowResultModal(false);
+      navigate(`/tokens/${newTokenId}/play`);
+    } catch (e: any) {
+      setMintError(e.message || "Failed to mint and play");
+    } finally {
+      setIsMinting(false);
+    }
+  }, [address, gameContract, sendMintTx, chainConfig, tokenConfig, navigate]);
+
+  // Handle closing the modal without minting
+  const handleCloseModal = useCallback(() => {
     setShowResultModal(false);
   }, []);
 
@@ -82,131 +177,87 @@ export default function GameBoard({ gameAddress, tokenId }: Props) {
     );
   }
 
+  const showStartScreen =
+    gameStatus === GameStatus.NO_GAME ||
+    gameStatus === GameStatus.WON ||
+    gameStatus === GameStatus.LOST;
+
+  const gameIsOver =
+    gameStatus === GameStatus.WON || gameStatus === GameStatus.LOST;
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
     >
-      <Grid container spacing={3}>
-        {/* Main Game Area */}
-        <Grid size={{ xs: 12, md: 8 }}>
-          <Paper sx={{ p: 3 }}>
-            {error && (
-              <Alert severity="error" sx={{ mb: 2 }}>
-                {error}
-              </Alert>
-            )}
+      <Paper sx={{ p: 3, maxWidth: 600, mx: "auto" }}>
+        {(error || mintError) && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error || mintError}
+          </Alert>
+        )}
 
-            {/* No active game - show start/play again button */}
-            {(gameStatus === GameStatus.NO_GAME ||
-              gameStatus === GameStatus.WON ||
-              gameStatus === GameStatus.LOST) &&
-              !isStarting && (
-                <Box sx={{ textAlign: "center", py: 4 }}>
-                  <Button
-                    variant="contained"
-                    size="large"
-                    startIcon={
-                      gameStatus === GameStatus.NO_GAME ? (
-                        <PlayArrow />
-                      ) : (
-                        <Replay />
-                      )
-                    }
-                    onClick={startGame}
-                    disabled={isStarting}
-                  >
-                    {gameStatus === GameStatus.NO_GAME
-                      ? "Start Game"
-                      : "Play Again"}
-                  </Button>
-                </Box>
-              )}
+        {/* Start / Play Again screen */}
+        {showStartScreen && !isStarting && !isMinting && (
+          <StartScreen
+            isFirstGame={gameStatus === GameStatus.NO_GAME}
+            gameIsOver={gameIsOver}
+            stats={stats}
+            range={range}
+            maxAttempts={maxAttempts}
+            isStarting={isStarting}
+            isMinting={isMinting}
+            onStart={startGame}
+            onMintAndPlay={handleMintAndPlay}
+          />
+        )}
 
-            {/* Starting game */}
-            {isStarting && (
-              <Box sx={{ textAlign: "center", py: 4 }}>
-                <LoadingSpinner />
-                <Typography variant="body1" sx={{ mt: 2 }}>
-                  Starting game...
-                </Typography>
-              </Box>
-            )}
+        {/* Starting / Minting spinner */}
+        {(isStarting || isMinting) && (
+          <Box sx={{ textAlign: "center", py: 6 }}>
+            <LoadingSpinner />
+          </Box>
+        )}
 
-            {/* Active game */}
-            {gameStatus === GameStatus.PLAYING && !isStarting && (
-              <Box>
-                <Box
-                  sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    mb: 3,
-                  }}
-                >
-                  <Typography variant="h5">
-                    Guess the Number!
-                  </Typography>
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    startIcon={<Refresh />}
-                    onClick={refetch}
-                  >
-                    Refresh
-                  </Button>
-                </Box>
-
-                <FeedbackDisplay
-                  gameStatus={gameStatus}
-                  guessCount={guessCount}
-                />
-
-                <Box sx={{ mt: 3 }}>
-                  <GuessInput
-                    min={range.min}
-                    max={range.max}
-                    onGuess={handleGuess}
-                    isLoading={isGuessing}
-                    attemptsRemaining={attemptsRemaining}
-                  />
-                </Box>
-              </Box>
-            )}
-
-            {/* Game Over Display (inline) */}
-            {(gameStatus === GameStatus.WON ||
-              gameStatus === GameStatus.LOST) &&
-              !isStarting && (
-                <Box sx={{ mt: 4 }}>
-                  <FeedbackDisplay
-                    gameStatus={gameStatus}
-                    guessCount={guessCount}
-                  />
-                </Box>
-              )}
-          </Paper>
-        </Grid>
-
-        {/* Stats Sidebar */}
-        <Grid size={{ xs: 12, md: 4 }}>
-          <Paper sx={{ p: 2 }}>
-            <GameStats
-              stats={stats}
-              currentGuesses={
-                gameStatus === GameStatus.PLAYING ? guessCount : undefined
-              }
-              currentRange={
-                gameStatus === GameStatus.PLAYING ? range : undefined
-              }
-              attemptsRemaining={
-                gameStatus === GameStatus.PLAYING ? attemptsRemaining : undefined
-              }
+        {/* Active game */}
+        {gameStatus === GameStatus.PLAYING && !isStarting && (
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <GameStateBar
+              guessCount={guessCount}
+              range={range}
+              maxAttempts={maxAttempts}
             />
-          </Paper>
-        </Grid>
-      </Grid>
+
+            <NumberLineVisualizer
+              fullRange={fullRange}
+              currentRange={range}
+              guessHistory={guessHistory}
+            />
+
+            <FeedbackDisplay
+              gameStatus={gameStatus}
+              guessCount={guessCount}
+              lastFeedback={lastFeedback}
+              isGuessing={isGuessing}
+              range={range}
+            />
+
+            <GuessInput
+              min={range.min}
+              max={range.max}
+              onGuess={handleGuess}
+              isLoading={isGuessing}
+            />
+
+            <GuessHistoryBar guessHistory={guessHistory} />
+
+            <Box sx={{ display: "flex", justifyContent: "center", mt: 1 }}>
+              <GameStats stats={stats} />
+            </Box>
+          </Box>
+        )}
+      </Paper>
 
       {/* Result Modal */}
       <ResultModal
@@ -214,8 +265,10 @@ export default function GameBoard({ gameAddress, tokenId }: Props) {
         gameStatus={gameStatus}
         guessCount={guessCount}
         stats={stats}
-        onPlayAgain={handlePlayAgain}
-        onClose={() => setShowResultModal(false)}
+        fullRange={fullRange}
+        isMinting={isMinting}
+        onMintAndPlay={handleMintAndPlay}
+        onClose={handleCloseModal}
       />
     </motion.div>
   );

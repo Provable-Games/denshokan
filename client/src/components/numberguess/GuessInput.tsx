@@ -1,12 +1,7 @@
 import { useState, useCallback } from "react";
-import {
-  Box,
-  TextField,
-  Button,
-  Typography,
-  CircularProgress,
-} from "@mui/material";
+import { Box, TextField, Button, CircularProgress } from "@mui/material";
 import { motion } from "framer-motion";
+import { gameColors } from "./gameColors";
 
 interface Props {
   min: number;
@@ -14,7 +9,6 @@ interface Props {
   onGuess: (number: number) => Promise<void>;
   isLoading?: boolean;
   disabled?: boolean;
-  attemptsRemaining?: number | null; // null = unlimited
 }
 
 export default function GuessInput({
@@ -23,7 +17,6 @@ export default function GuessInput({
   onGuess,
   isLoading,
   disabled,
-  attemptsRemaining,
 }: Props) {
   const [value, setValue] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
@@ -69,52 +62,67 @@ export default function GuessInput({
           gap: 2,
         }}
       >
-        <Typography variant="body1" color="text.secondary">
-          Enter a number between {min} and {max}
-        </Typography>
+        <TextField
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value);
+            setError(null);
+          }}
+          onKeyDown={handleKeyDown}
+          type="number"
+          inputProps={{ min, max, style: { textAlign: "center", fontSize: "2rem", fontWeight: 700 } }}
+          placeholder="?"
+          disabled={isLoading || disabled}
+          error={!!error}
+          helperText={error}
+          autoFocus
+          sx={{
+            width: 180,
+            "& .MuiOutlinedInput-root": {
+              "& fieldset": {
+                borderColor: `${gameColors.activeRange}4D`,
+              },
+              "&:hover fieldset": {
+                borderColor: `${gameColors.activeRange}80`,
+              },
+              "&.Mui-focused fieldset": {
+                borderColor: gameColors.activeRange,
+              },
+              "&.Mui-focused": {
+                boxShadow: `0 0 16px ${gameColors.activeRange}33`,
+                borderRadius: 1,
+              },
+            },
+          }}
+        />
 
-        <Box sx={{ display: "flex", gap: 2, alignItems: "flex-start" }}>
-          <TextField
-            value={value}
-            onChange={(e) => {
-              setValue(e.target.value);
-              setError(null);
-            }}
-            onKeyDown={handleKeyDown}
-            type="number"
-            inputProps={{ min, max }}
-            placeholder={`${min} - ${max}`}
-            disabled={isLoading || disabled}
-            error={!!error}
-            helperText={error}
-            autoFocus
-            sx={{ width: 150 }}
-          />
-
-          <Button
-            variant="contained"
-            onClick={handleSubmit}
-            disabled={isLoading || disabled || !value}
-            sx={{ height: 56 }}
-          >
-            {isLoading ? (
-              <CircularProgress size={24} color="inherit" />
-            ) : (
-              "Guess"
-            )}
-          </Button>
-        </Box>
-
-        {attemptsRemaining !== null && attemptsRemaining !== undefined && (
-          <Typography
-            variant="body2"
-            color={attemptsRemaining <= 3 ? "error" : "text.secondary"}
-          >
-            {attemptsRemaining === 0
-              ? "No attempts remaining"
-              : `${attemptsRemaining} attempt${attemptsRemaining !== 1 ? "s" : ""} remaining`}
-          </Typography>
-        )}
+        <Button
+          variant="contained"
+          onClick={handleSubmit}
+          disabled={isLoading || disabled || !value}
+          sx={{
+            width: "100%",
+            maxWidth: 300,
+            py: 1.5,
+            fontWeight: 700,
+            fontSize: "1rem",
+            background: `linear-gradient(135deg, ${gameColors.activeRange} 0%, #3F1DCB 100%)`,
+            boxShadow: `0 4px 20px ${gameColors.activeRange}44`,
+            "&:hover": {
+              background: `linear-gradient(135deg, ${gameColors.rangeLight} 0%, ${gameColors.activeRange} 100%)`,
+              boxShadow: `0 6px 28px ${gameColors.activeRange}66`,
+            },
+            "&.Mui-disabled": {
+              background: "rgba(255,255,255,0.08)",
+            },
+          }}
+        >
+          {isLoading ? (
+            <CircularProgress size={24} color="inherit" />
+          ) : (
+            "Submit Guess"
+          )}
+        </Button>
       </Box>
     </motion.div>
   );

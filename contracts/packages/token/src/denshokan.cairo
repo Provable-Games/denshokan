@@ -286,7 +286,7 @@ pub mod Denshokan {
             >(game_address, selector!("settings_address"), array![].span(), Zero::zero());
 
             let mut token_calldata = array![];
-            token_calldata.append(token_id.low.into());
+            token_calldata.append(token_id_felt);
 
             let score = try_call_and_deserialize::<
                 u64,
