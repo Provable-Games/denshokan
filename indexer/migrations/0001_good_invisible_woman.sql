@@ -1,0 +1,1 @@
+ALTER TABLE "games" ADD COLUMN "agent_skills" text;
