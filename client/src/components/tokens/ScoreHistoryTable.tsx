@@ -15,7 +15,7 @@ import EmptyState from "../common/EmptyState";
 
 interface ScoreEntry {
   score: number;
-  timestamp: string;
+  blockTimestamp: string;
 }
 
 interface Props {
@@ -60,7 +60,7 @@ export default function ScoreHistoryTable({ scores }: Props) {
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2" color="text.secondary">
-                        {new Date(s.timestamp).toLocaleString()}
+                        {new Date(s.blockTimestamp).toLocaleString()}
                       </Typography>
                     </TableCell>
                     <TableCell align="right">
