@@ -375,7 +375,7 @@ pub mod Denshokan {
                         settings_details.clone(),
                         objective_details,
                         context_details.clone(),
-                        token_name.clone(),
+                        self.erc721.ERC721_name.read(),
                         self.erc721.ERC721_symbol.read(),
                     )
             };
