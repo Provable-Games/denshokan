@@ -70,6 +70,37 @@ export interface UseNumberGuessReturn {
   refetch: () => void;
 }
 
+// localStorage helpers for guess history persistence
+const GUESS_HISTORY_PREFIX = "denshokan:guessHistory:";
+
+function loadGuessHistory(tokenId: string): GuessHistoryEntry[] {
+  try {
+    const raw = localStorage.getItem(GUESS_HISTORY_PREFIX + tokenId);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveGuessHistory(tokenId: string, history: GuessHistoryEntry[]) {
+  try {
+    localStorage.setItem(
+      GUESS_HISTORY_PREFIX + tokenId,
+      JSON.stringify(history)
+    );
+  } catch {
+    // Silently ignore storage errors
+  }
+}
+
+function clearGuessHistory(tokenId: string) {
+  try {
+    localStorage.removeItem(GUESS_HISTORY_PREFIX + tokenId);
+  } catch {
+    // Silently ignore
+  }
+}
+
 /** Poll contract.call until predicate returns true, or max retries. */
 async function pollUntil<T>(
   fn: () => Promise<T>,
@@ -96,9 +127,16 @@ export function useNumberGuess(
   const { address } = useAccount();
   const [isGuessing, setIsGuessing] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
-  const [lastFeedback, setLastFeedback] = useState<GuessFeedback>(null);
   const [error, setError] = useState<string | null>(null);
-  const [guessHistory, setGuessHistory] = useState<GuessHistoryEntry[]>([]);
+
+  // Load persisted guess history from localStorage
+  const [guessHistory, setGuessHistory] = useState<GuessHistoryEntry[]>(() =>
+    loadGuessHistory(tokenId)
+  );
+  const [lastFeedback, setLastFeedback] = useState<GuessFeedback>(() => {
+    const saved = loadGuessHistory(tokenId);
+    return saved.length > 0 ? saved[saved.length - 1].feedback : null;
+  });
   const [fullRange, setFullRange] = useState<{ min: number; max: number }>({
     min: 1,
     max: 10,
@@ -217,6 +255,7 @@ export function useNumberGuess(
     setError(null);
     setLastFeedback(null);
     setGuessHistory([]);
+    clearGuessHistory(tokenId);
     fullRangeCaptured.current = false;
 
     try {
@@ -298,10 +337,16 @@ export function useNumberGuess(
         }
 
         setLastFeedback(feedback);
-        setGuessHistory((prev) => [
-          ...prev,
-          { value: number, feedback, timestamp: Date.now() },
-        ]);
+        const entry: GuessHistoryEntry = {
+          value: number,
+          feedback,
+          timestamp: Date.now(),
+        };
+        setGuessHistory((prev) => {
+          const updated = [...prev, entry];
+          saveGuessHistory(tokenId, updated);
+          return updated;
+        });
         refetch();
         setIsGuessing(false);
         return feedback;
@@ -326,6 +371,29 @@ export function useNumberGuess(
         max: Number((rangeData as any)[1] || 10),
       }
     : { min: 1, max: 10 };
+
+  // Clear stale guess history if it doesn't match contract state
+  useEffect(() => {
+    if (statusData === undefined || guessCountData === undefined) return;
+    const status = Number(statusData);
+    const contractGuessCount = Number(guessCountData);
+
+    if (status !== GameStatus.PLAYING && guessHistory.length > 0) {
+      // Game is not active — clear persisted history
+      setGuessHistory([]);
+      setLastFeedback(null);
+      clearGuessHistory(tokenId);
+    } else if (
+      status === GameStatus.PLAYING &&
+      contractGuessCount === 0 &&
+      guessHistory.length > 0
+    ) {
+      // New game started but stale history remains
+      setGuessHistory([]);
+      setLastFeedback(null);
+      clearGuessHistory(tokenId);
+    }
+  }, [statusData, guessCountData, tokenId]);
 
   // Capture full range when game starts or when initial range loads
   useEffect(() => {

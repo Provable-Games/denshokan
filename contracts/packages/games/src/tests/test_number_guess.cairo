@@ -12,12 +12,22 @@ use game_components_embeddable_game_standard::minigame::interface::{
     IMinigameDetailsDispatcher, IMinigameDetailsDispatcherTrait, IMinigameDispatcher,
     IMinigameDispatcherTrait, IMinigameTokenDataDispatcher, IMinigameTokenDataDispatcherTrait,
 };
-use snforge_std::{ContractClassTrait, DeclareResultTrait, declare};
+use snforge_std::{
+    ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait, declare, spy_events,
+};
 use starknet::ContractAddress;
 use crate::number_guess::{
-    INumberGuessConfigDispatcher, INumberGuessConfigDispatcherTrait, INumberGuessDispatcher,
-    INumberGuessDispatcherTrait, INumberGuessInitDispatcher, INumberGuessInitDispatcherTrait,
+    GuessMade, INumberGuessConfigDispatcher, INumberGuessConfigDispatcherTrait,
+    INumberGuessDispatcher, INumberGuessDispatcherTrait, INumberGuessInitDispatcher,
+    INumberGuessInitDispatcherTrait, NewGameStarted,
 };
+
+/// Wrapper enum matching the contract's Event variants for spy_events assertions.
+#[derive(Drop, starknet::Event)]
+enum NumberGuessEvent {
+    NewGameStarted: NewGameStarted,
+    GuessMade: GuessMade,
+}
 
 // ==========================================================================
 // HELPERS
@@ -319,11 +329,12 @@ fn test_max_attempts_reached_loses_game() {
             break;
         }
 
-        // Guess alternating values to try to avoid the secret
+        // Guess alternating min/max to try to avoid the secret (respects narrowed range)
+        let (current_min, current_max) = ng.get_range(token_id);
         let guess = if attempts % 2 == 0 {
-            1
+            current_min
         } else {
-            100
+            current_max
         };
         ng.guess(token_id, guess);
         attempts += 1;
@@ -1279,11 +1290,12 @@ fn test_token_description_after_gameplay() {
         if attempts >= 10 || token_data.game_over(token_id_loss) {
             break;
         }
-        // Deliberately guess wrong: alternate between 1 and 100
+        // Deliberately guess wrong: alternate between min and max (respects narrowed range)
+        let (current_min, current_max) = ng.get_range(token_id_loss);
         let guess = if attempts % 2 == 0 {
-            1
+            current_min
         } else {
-            100
+            current_max
         };
         ng.guess(token_id_loss, guess);
         attempts += 1;
@@ -1368,10 +1380,11 @@ fn test_game_details_status_lost() {
         if attempts >= 10 || token_data.game_over(token_id) {
             break;
         }
+        let (current_min, current_max) = ng.get_range(token_id);
         let guess = if attempts % 2 == 0 {
-            1
+            current_min
         } else {
-            100
+            current_max
         };
         ng.guess(token_id, guess);
         attempts += 1;
@@ -1586,10 +1599,11 @@ fn test_game_status_returns_lost() {
         if attempts >= 10 || token_data.game_over(token_id) {
             break;
         }
+        let (current_min, current_max) = ng.get_range(token_id);
         let guess = if attempts % 2 == 0 {
-            1
+            current_min
         } else {
-            100
+            current_max
         };
         ng.guess(token_id, guess);
         attempts += 1;
@@ -1806,4 +1820,287 @@ fn test_objective_settings_id_batch_returns_zeros() {
     assert!(*results.at(0) == 0, "Objective 1 settings_id should be 0");
     assert!(*results.at(1) == 0, "Objective 2 settings_id should be 0");
     assert!(*results.at(2) == 0, "Objective 3 settings_id should be 0");
+}
+
+// ==========================================================================
+// EVENT TESTS
+// ==========================================================================
+
+#[test]
+fn test_new_game_started_event_easy() {
+    let (ng, address) = setup_number_guess();
+    let token_id = mint_token(address, ALICE(), 0, 1);
+
+    let mut spy = spy_events();
+    ng.new_game(token_id); // Easy: 1-10, unlimited
+
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    address,
+                    NumberGuessEvent::NewGameStarted(
+                        NewGameStarted {
+                            token_id, settings_id: 1, range_min: 1, range_max: 10, max_attempts: 0,
+                        },
+                    ),
+                ),
+            ],
+        );
+}
+
+#[test]
+fn test_new_game_started_event_medium() {
+    let (ng, address) = setup_number_guess();
+    let token_id = mint_token(address, ALICE(), 0, 2);
+
+    let mut spy = spy_events();
+    ng.new_game(token_id); // Medium: 1-100, 10 attempts
+
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    address,
+                    NumberGuessEvent::NewGameStarted(
+                        NewGameStarted {
+                            token_id,
+                            settings_id: 2,
+                            range_min: 1,
+                            range_max: 100,
+                            max_attempts: 10,
+                        },
+                    ),
+                ),
+            ],
+        );
+}
+
+#[test]
+fn test_guess_made_event_emitted() {
+    let (ng, address) = setup_number_guess();
+    let token_id = mint_token(address, ALICE(), 0, 1);
+    ng.new_game(token_id); // Easy: 1-10
+
+    let mut spy = spy_events();
+    let result = ng.guess(token_id, 1);
+
+    // Compute expected event fields based on actual result
+    let expected_result_u8: u8 = if result == 0_i8 {
+        0
+    } else if result == -1_i8 {
+        1
+    } else {
+        2
+    };
+    let expected_min: u32 = if result == -1_i8 {
+        2 // range narrowed from 1 to 2
+    } else {
+        1 // correct guess, no narrowing
+    };
+
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    address,
+                    NumberGuessEvent::GuessMade(
+                        GuessMade {
+                            token_id,
+                            guess_value: 1,
+                            result: expected_result_u8,
+                            guess_count: 1,
+                            range_min: expected_min,
+                            range_max: 10,
+                        },
+                    ),
+                ),
+            ],
+        );
+}
+
+#[test]
+fn test_guess_made_event_on_correct_guess() {
+    let (ng, address) = setup_number_guess();
+    let token_id = mint_token(address, ALICE(), 0, 1);
+    let token_data = IMinigameTokenDataDispatcher { contract_address: address };
+    ng.new_game(token_id); // Easy: 1-10
+
+    // Binary search to find the secret, then verify the winning GuessMade event
+    let mut low: u32 = 1;
+    let mut high: u32 = 10;
+    let mut winning_guess: u32 = 0;
+    let mut spy = spy_events();
+
+    loop {
+        if token_data.game_over(token_id) || low > high {
+            break;
+        }
+        let mid = (low + high) / 2;
+        let result = ng.guess(token_id, mid);
+        if result == 0 {
+            winning_guess = mid;
+            break;
+        } else if result == -1 {
+            low = mid + 1;
+        } else {
+            high = mid - 1;
+        }
+    }
+
+    let guess_count = ng.guess_count(token_id);
+
+    // The winning GuessMade event should have result=0 (correct)
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    address,
+                    NumberGuessEvent::GuessMade(
+                        GuessMade {
+                            token_id,
+                            guess_value: winning_guess,
+                            result: 0, // correct
+                            guess_count,
+                            range_min: low,
+                            range_max: high,
+                        },
+                    ),
+                ),
+            ],
+        );
+}
+
+// ==========================================================================
+// RANGE NARROWING TESTS
+// ==========================================================================
+
+#[test]
+fn test_range_narrows_during_binary_search() {
+    let (ng, address) = setup_number_guess();
+    let token_id = mint_token(address, ALICE(), 0, 1);
+    let token_data = IMinigameTokenDataDispatcher { contract_address: address };
+
+    ng.new_game(token_id); // Easy: 1-10
+    let (initial_min, initial_max) = ng.get_range(token_id);
+    assert!(initial_min == 1 && initial_max == 10, "Initial range should be 1-10");
+
+    let mut low: u32 = 1;
+    let mut high: u32 = 10;
+    let mut narrowed = false;
+
+    loop {
+        if token_data.game_over(token_id) || low > high {
+            break;
+        }
+        let mid = (low + high) / 2;
+        let result = ng.guess(token_id, mid);
+        if result == -1 {
+            low = mid + 1;
+            let (new_min, _) = ng.get_range(token_id);
+            assert!(new_min == mid + 1, "range_min should narrow after too-low guess");
+            narrowed = true;
+        } else if result == 1 {
+            high = mid - 1;
+            let (_, new_max) = ng.get_range(token_id);
+            assert!(new_max == mid - 1, "range_max should narrow after too-high guess");
+            narrowed = true;
+        }
+    }
+
+    // If the game took more than 1 guess, the range must have narrowed
+    if ng.guess_count(token_id) > 1 {
+        assert!(narrowed, "Range should have narrowed during multi-guess game");
+    }
+}
+
+#[test]
+fn test_range_unchanged_on_correct_guess() {
+    let (ng, address) = setup_number_guess();
+    let token_id = mint_token(address, ALICE(), 0, 1);
+    let token_data = IMinigameTokenDataDispatcher { contract_address: address };
+
+    ng.new_game(token_id); // Easy: 1-10
+
+    // Binary search to win, tracking range before each guess
+    let mut low: u32 = 1;
+    let mut high: u32 = 10;
+    loop {
+        if token_data.game_over(token_id) || low > high {
+            break;
+        }
+        let mid = (low + high) / 2;
+        let (range_before_min, range_before_max) = ng.get_range(token_id);
+        let result = ng.guess(token_id, mid);
+        if result == 0 {
+            // Correct guess - range should NOT narrow
+            let (range_after_min, range_after_max) = ng.get_range(token_id);
+            assert!(range_after_min == range_before_min, "range_min should not change on correct");
+            assert!(range_after_max == range_before_max, "range_max should not change on correct");
+            break;
+        } else if result == -1 {
+            low = mid + 1;
+        } else {
+            high = mid - 1;
+        }
+    };
+}
+
+#[test]
+fn test_guess_made_event_reflects_narrowed_range() {
+    let (ng, address) = setup_number_guess();
+    let token_id = mint_token(address, ALICE(), 0, 1);
+    ng.new_game(token_id); // Easy: 1-10
+
+    // Guess 1 (the minimum)
+    let mut spy = spy_events();
+    let result = ng.guess(token_id, 1);
+
+    if result == -1 {
+        // Too low - event should show narrowed range_min=2
+        spy
+            .assert_emitted(
+                @array![
+                    (
+                        address,
+                        NumberGuessEvent::GuessMade(
+                            GuessMade {
+                                token_id,
+                                guess_value: 1,
+                                result: 1, // too_low
+                                guess_count: 1,
+                                range_min: 2, // narrowed
+                                range_max: 10,
+                            },
+                        ),
+                    ),
+                ],
+            );
+
+        // Guess 10 (the max)
+        let mut spy2 = spy_events();
+        let result2 = ng.guess(token_id, 10);
+
+        if result2 == 1 {
+            // Too high - event should show narrowed range_max=9
+            spy2
+                .assert_emitted(
+                    @array![
+                        (
+                            address,
+                            NumberGuessEvent::GuessMade(
+                                GuessMade {
+                                    token_id,
+                                    guess_value: 10,
+                                    result: 2, // too_high
+                                    guess_count: 2,
+                                    range_min: 2, // still narrowed from first guess
+                                    range_max: 9 // narrowed from 10
+                                },
+                            ),
+                        ),
+                    ],
+                );
+        }
+    }
 }

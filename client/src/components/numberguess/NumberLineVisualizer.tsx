@@ -15,7 +15,7 @@ function toPercent(
   max: number
 ): number {
   if (max === min) return 50;
-  return ((value - min) / (max - min)) * 100;
+  return Math.min(100, Math.max(0, ((value - min) / (max - min)) * 100));
 }
 
 function feedbackColor(feedback: -1 | 0 | 1 | null): string {
@@ -23,6 +23,13 @@ function feedbackColor(feedback: -1 | 0 | 1 | null): string {
   if (feedback === 1) return gameColors.tooHigh;
   if (feedback === 0) return gameColors.correct;
   return "rgba(255,255,255,0.4)";
+}
+
+function feedbackArrow(feedback: -1 | 0 | 1 | null): string {
+  if (feedback === -1) return "▲";
+  if (feedback === 1) return "▼";
+  if (feedback === 0) return "✓";
+  return "?";
 }
 
 export default function NumberLineVisualizer({
@@ -37,8 +44,11 @@ export default function NumberLineVisualizer({
   const activeRight = toPercent(currentRange.max, fMin, fMax);
   const activeWidth = activeRight - activeLeft;
 
+  // Track vertical position (distance from bottom of container)
+  const trackBottom = 4;
+
   return (
-    <Box sx={{ px: 1, py: 2 }}>
+    <Box sx={{ px: 1, pt: 1, pb: 0 }}>
       {/* Labels row */}
       <Box
         sx={{
@@ -59,9 +69,9 @@ export default function NumberLineVisualizer({
       <Box
         sx={{
           position: "relative",
-          height: 48,
-          display: "flex",
-          alignItems: "center",
+          height: 64,
+          overflowX: "clip",
+          overflowY: "visible",
         }}
       >
         {/* Base track */}
@@ -70,16 +80,50 @@ export default function NumberLineVisualizer({
             position: "absolute",
             left: 0,
             right: 0,
+            bottom: trackBottom,
             height: 4,
             borderRadius: 2,
             bgcolor: "rgba(255,255,255,0.06)",
           }}
         />
 
+        {/* Eliminated zone: too low (left) */}
+        {activeLeft > 0 && (
+          <motion.div
+            style={{
+              position: "absolute",
+              left: 0,
+              bottom: trackBottom,
+              height: 4,
+              borderRadius: "2px 0 0 2px",
+              background: `${gameColors.tooLow}30`,
+            }}
+            animate={{ width: `${activeLeft}%` }}
+            transition={{ type: "spring", stiffness: 200, damping: 25 }}
+          />
+        )}
+
+        {/* Eliminated zone: too high (right) */}
+        {activeRight < 100 && (
+          <motion.div
+            style={{
+              position: "absolute",
+              right: 0,
+              bottom: trackBottom,
+              height: 4,
+              borderRadius: "0 2px 2px 0",
+              background: `${gameColors.tooHigh}30`,
+            }}
+            animate={{ width: `${100 - activeRight}%` }}
+            transition={{ type: "spring", stiffness: 200, damping: 25 }}
+          />
+        )}
+
         {/* Active range segment */}
         <motion.div
           style={{
             position: "absolute",
+            bottom: trackBottom,
             height: 6,
             borderRadius: 3,
             background: `linear-gradient(90deg, ${gameColors.activeRange}, ${gameColors.rangeLight})`,
@@ -95,8 +139,11 @@ export default function NumberLineVisualizer({
         {activeWidth < 95 && (
           <>
             <motion.div
-              style={{ position: "absolute", top: -2 }}
-              animate={{ left: `${activeLeft}%` }}
+              style={{
+                position: "absolute",
+                bottom: trackBottom + 8,
+              }}
+              animate={{ left: `${Math.max(activeLeft, 2)}%` }}
               transition={{ type: "spring", stiffness: 200, damping: 25 }}
             >
               <Typography
@@ -104,17 +151,22 @@ export default function NumberLineVisualizer({
                 sx={{
                   color: gameColors.rangeLight,
                   fontWeight: 600,
-                  fontSize: "0.65rem",
-                  transform: "translateX(-50%)",
+                  fontSize: "0.6rem",
+                  transform:
+                    activeLeft < 5 ? "none" : "translateX(-50%)",
                   display: "block",
+                  whiteSpace: "nowrap",
                 }}
               >
                 {currentRange.min}
               </Typography>
             </motion.div>
             <motion.div
-              style={{ position: "absolute", top: -2 }}
-              animate={{ left: `${activeRight}%` }}
+              style={{
+                position: "absolute",
+                bottom: trackBottom + 8,
+              }}
+              animate={{ left: `${Math.min(activeRight, 98)}%` }}
               transition={{ type: "spring", stiffness: 200, damping: 25 }}
             >
               <Typography
@@ -122,9 +174,13 @@ export default function NumberLineVisualizer({
                 sx={{
                   color: gameColors.rangeLight,
                   fontWeight: 600,
-                  fontSize: "0.65rem",
-                  transform: "translateX(-50%)",
+                  fontSize: "0.6rem",
+                  transform:
+                    activeRight > 95
+                      ? "translateX(-100%)"
+                      : "translateX(-50%)",
                   display: "block",
+                  whiteSpace: "nowrap",
                 }}
               >
                 {currentRange.max}
@@ -134,14 +190,17 @@ export default function NumberLineVisualizer({
         )}
 
         {/* Guess markers */}
-        {guessHistory.map((entry, i) => {
+        {guessHistory.map((entry) => {
           const pct = toPercent(entry.value, fMin, fMax);
-          const above = i % 2 === 0;
+          const color = feedbackColor(entry.feedback);
+          const arrow = feedbackArrow(entry.feedback);
+
           return (
             <motion.div
               key={`${entry.value}-${entry.timestamp}`}
               style={{
                 position: "absolute",
+                bottom: trackBottom,
                 left: `${pct}%`,
                 transform: "translateX(-50%)",
                 display: "flex",
@@ -152,30 +211,59 @@ export default function NumberLineVisualizer({
               animate={{ scale: 1, opacity: 1 }}
               transition={{ type: "spring", stiffness: 300, damping: 20 }}
             >
-              {/* Label */}
-              <Typography
-                variant="caption"
-                sx={{
-                  fontWeight: 700,
-                  fontSize: "0.65rem",
-                  color: feedbackColor(entry.feedback),
-                  lineHeight: 1,
-                  order: above ? 0 : 2,
-                  mb: above ? 0.25 : 0,
-                  mt: above ? 0 : 0.25,
-                }}
-              >
-                {entry.value}
-              </Typography>
-              {/* Dot */}
+              {/* Badge */}
               <Box
                 sx={{
-                  width: 8,
-                  height: 8,
+                  px: 0.75,
+                  py: "2px",
+                  borderRadius: 1,
+                  bgcolor: `${color}18`,
+                  border: `1px solid ${color}55`,
+                  whiteSpace: "nowrap",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "3px",
+                }}
+              >
+                <Box
+                  component="span"
+                  sx={{
+                    fontSize: "0.6rem",
+                    fontWeight: 700,
+                    lineHeight: 1,
+                    color,
+                  }}
+                >
+                  {arrow}
+                </Box>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    fontWeight: 700,
+                    fontSize: "0.7rem",
+                    color,
+                    lineHeight: 1,
+                  }}
+                >
+                  {entry.value}
+                </Typography>
+              </Box>
+              {/* Tick line */}
+              <Box
+                sx={{
+                  width: "1px",
+                  height: 10,
+                  bgcolor: `${color}66`,
+                }}
+              />
+              {/* Dot on track */}
+              <Box
+                sx={{
+                  width: 6,
+                  height: 6,
                   borderRadius: "50%",
-                  bgcolor: feedbackColor(entry.feedback),
-                  order: 1,
-                  boxShadow: `0 0 6px ${feedbackColor(entry.feedback)}88`,
+                  bgcolor: color,
+                  boxShadow: `0 0 4px ${color}88`,
                 }}
               />
             </motion.div>

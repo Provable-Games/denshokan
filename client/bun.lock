@@ -12,7 +12,7 @@
         "@mui/icons-material": "^7.0.2",
         "@mui/material": "^7.0.2",
         "@mui/x-date-pickers": "^8.27.2",
-        "@provable-games/denshokan-sdk": "^0.1.10",
+        "@provable-games/denshokan-sdk": "^0.1.11",
         "@starknet-react/chains": "^5.0.3",
         "@starknet-react/core": "^5.0.3",
         "dayjs": "^1.11.19",
@@ -234,7 +234,7 @@
 
     "@popperjs/core": ["@popperjs/core@2.11.8", "", {}, "sha512-P1st0aksCrn9sGZhp8GMYwBnQsbvAWsZAX44oXNNvLHGqAOcoVxmjZiohstwQ7SqKnbR47akdNi+uleWD8+g6A=="],
 
-    "@provable-games/denshokan-sdk": ["@provable-games/denshokan-sdk@0.1.10", "", { "peerDependencies": { "react": ">=18.0.0", "starknet": ">=9.0.0" }, "optionalPeers": ["react", "starknet"] }, "sha512-5YHsrRqOv2wcyEv4sSN2idt5wDFzzob4I9vu5ztBKz2pWHwV/OuoQNNipBow6onfxGFkTXqgYObeij1shka4VQ=="],
+    "@provable-games/denshokan-sdk": ["@provable-games/denshokan-sdk@0.1.11", "", { "peerDependencies": { "react": ">=18.0.0", "starknet": ">=9.0.0" }, "optionalPeers": ["react", "starknet"] }, "sha512-yLgm7xkitg/imHyU/LUxw1HcerGkdQhCgkbmJL4bA0xTLXdJw7rus3MrKA+FmCZCo4t3+LlKMN2tA2cqmZMa3g=="],
 
     "@remix-run/router": ["@remix-run/router@1.15.1", "", {}, "sha512-zcU0gM3z+3iqj8UX45AmWY810l3oUmXM7uH4dt5xtzvMhRtYVhKGOmgOd1877dOPPepfCjUv57w+syamWIYe7w=="],
 
