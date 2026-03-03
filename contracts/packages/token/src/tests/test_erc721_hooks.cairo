@@ -31,6 +31,7 @@ fn test_soulbound_token_prevents_transfer() {
             Option::None,
             Option::None,
             Option::None,
+            Option::None, // skills_address
             Option::None,
             Option::None,
             ALICE(),
@@ -78,6 +79,7 @@ fn test_soulbound_token_transfer_panics() {
             Option::None,
             Option::None,
             Option::None,
+            Option::None, // skills_address
             Option::None,
             Option::None,
             ALICE(),
@@ -115,6 +117,7 @@ fn test_non_soulbound_token_can_transfer() {
             Option::None,
             Option::None,
             Option::None,
+            Option::None, // skills_address
             Option::None,
             Option::None,
             ALICE(),
@@ -167,6 +170,7 @@ fn test_soulbound_check_only_on_transfer() {
             Option::None,
             Option::None,
             Option::None,
+            Option::None, // skills_address
             Option::None,
             Option::None,
             ALICE(),

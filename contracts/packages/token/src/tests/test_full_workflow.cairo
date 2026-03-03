@@ -50,6 +50,7 @@ fn test_complete_game_registration_and_token_lifecycle() {
             Option::None,
             Option::None,
             Option::None,
+            Option::None, // skills_address
             Option::None,
             Option::None,
             ALICE(),
@@ -148,6 +149,7 @@ fn test_multiple_players_single_game() {
                 Option::None,
                 Option::None,
                 Option::None,
+                Option::None, // skills_address
                 Option::None,
                 Option::None,
                 player,
@@ -201,6 +203,7 @@ fn test_game_creator_updates_royalty_fraction() {
             Option::None,
             Option::None,
             Option::None,
+            Option::None, // skills_address
             Option::None,
             Option::None,
             ALICE(),

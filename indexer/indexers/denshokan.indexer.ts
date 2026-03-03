@@ -515,13 +515,13 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
             case EVENT_SELECTORS.ObjectiveCreated: {
               const decoded = decodeObjectiveCreated(keys, data);
               logger.info(
-                `ObjectiveCreated: game=${decoded.gameAddress}, objective_id=${decoded.objectiveId}, settings_id=${decoded.settingsId}, name=${decoded.name}`
+                `ObjectiveCreated: game=${decoded.gameAddress}, objective_id=${decoded.objectiveId}, name=${decoded.name}`
               );
 
               await db.insert(schema.objectives).values({
                 gameAddress: decoded.gameAddress,
                 objectiveId: decoded.objectiveId,
-                settingsId: decoded.settingsId,
+                settingsId: 0,
                 creatorAddress: decoded.creatorAddress,
                 objectiveData: decoded.objectiveData,
                 name: decoded.name,
@@ -531,7 +531,6 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
               }).onConflictDoUpdate({
                 target: [schema.objectives.gameAddress, schema.objectives.objectiveId],
                 set: {
-                  settingsId: decoded.settingsId,
                   creatorAddress: decoded.creatorAddress,
                   objectiveData: decoded.objectiveData,
                   name: decoded.name,
@@ -645,7 +644,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                 clientUrl: decoded.clientUrl,
                 rendererAddress: decoded.rendererAddress,
                 royaltyFraction: decoded.royaltyFraction,
-                agentSkills: decoded.agentSkills,
+                skillsAddress: decoded.skillsAddress,
                 lastUpdatedBlock: blockNumber,
                 lastUpdatedAt: blockTimestamp,
               }).onConflictDoUpdate({
@@ -662,7 +661,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                   clientUrl: decoded.clientUrl,
                   rendererAddress: decoded.rendererAddress,
                   royaltyFraction: decoded.royaltyFraction,
-                  agentSkills: decoded.agentSkills,
+                  skillsAddress: decoded.skillsAddress,
                   lastUpdatedBlock: blockNumber,
                   lastUpdatedAt: blockTimestamp,
                 },

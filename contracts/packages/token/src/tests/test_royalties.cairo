@@ -46,6 +46,7 @@ fn test_royalty_info_with_dynamic_receiver() {
             Option::None, // end_time
             Option::None, // objective_id
             Option::None, // renderer_address
+            Option::None, // skills_address
             Option::None, // extra_data
             Option::None, // extra_data_uri
             ALICE(),
@@ -96,6 +97,7 @@ fn test_royalty_receiver_follows_game_creator_token_transfer() {
             Option::None,
             Option::None,
             Option::None,
+            Option::None, // skills_address
             Option::None,
             Option::None,
             ALICE(),
@@ -152,6 +154,7 @@ fn test_royalty_amount_calculation() {
             Option::None,
             Option::None,
             Option::None,
+            Option::None, // skills_address
             Option::None,
             Option::None,
             ALICE(),
@@ -209,6 +212,7 @@ fn test_royalty_with_multiple_games() {
             Option::None,
             Option::None,
             Option::None,
+            Option::None, // skills_address
             Option::None,
             Option::None,
             ALICE(),
@@ -230,6 +234,7 @@ fn test_royalty_with_multiple_games() {
             Option::None,
             Option::None,
             Option::None,
+            Option::None, // skills_address
             Option::None,
             Option::None,
             ALICE(),
@@ -251,6 +256,7 @@ fn test_royalty_with_multiple_games() {
             Option::None,
             Option::None,
             Option::None,
+            Option::None, // skills_address
             Option::None,
             Option::None,
             ALICE(),
@@ -305,6 +311,7 @@ fn test_royalty_info_with_zero_sale_price() {
             Option::None,
             Option::None,
             Option::None,
+            Option::None, // skills_address
             Option::None,
             Option::None,
             ALICE(),

@@ -322,7 +322,6 @@ pub struct SettingsEntry {
 pub struct ObjectiveEntry {
     pub game_address: ContractAddress,
     pub objective_id: u32,
-    pub settings_id: u32,
     pub details: GameObjectiveDetails,
 }
 
@@ -354,11 +353,9 @@ pub trait IDenshokanSettingsObjectives<TState> {
     ) -> SettingsResult;
     /// Returns objectives across all games, or filtered to a single game if game_address is
     /// non-zero.
-    /// When settings_id != 0, only objectives matching that settings_id (or global objectives with
-    /// settings_id == 0) are included.
     /// Pass limit=0 to return all results (no cap).
     fn all_objectives(
-        self: @TState, game_address: ContractAddress, settings_id: u32, offset: u32, limit: u32,
+        self: @TState, game_address: ContractAddress, offset: u32, limit: u32,
     ) -> ObjectivesResult;
     fn count_settings(self: @TState, game_address: ContractAddress) -> u32;
     fn count_objectives(self: @TState, game_address: ContractAddress) -> u32;

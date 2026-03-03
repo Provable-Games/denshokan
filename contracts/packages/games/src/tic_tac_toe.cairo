@@ -38,6 +38,7 @@ pub trait ITicTacToeInit<TContractState> {
         objectives_address: Option<ContractAddress>,
         minigame_token_address: ContractAddress,
         royalty_fraction: Option<u128>,
+        skills_address: Option<ContractAddress>,
     );
 }
 
@@ -505,7 +506,7 @@ pub mod TicTacToe {
             GameSettingDetails {
                 name,
                 description,
-                settings: array![GameSetting { name: "AI", value: "Standard" }].span(),
+                settings: array![GameSetting { name: 'AI', value: 'Standard' }].span(),
             }
         }
 
@@ -576,14 +577,9 @@ pub mod TicTacToe {
 
             // Build objectives array with target info
             let mut objectives = array![];
-            objectives
-                .append(GameObjective { name: "target_wins", value: format!("{}", target_wins) });
+            objectives.append(GameObjective { name: 'target_wins', value: target_wins.into() });
 
             GameObjectiveDetails { name, description, objectives: objectives.span() }
-        }
-
-        fn objective_settings_id(self: @ContractState, objective_id: u32) -> u32 {
-            0
         }
 
         fn objectives_details_batch(
@@ -596,21 +592,6 @@ pub mod TicTacToe {
                     break;
                 }
                 results.append(self.objectives_details(*objective_ids.at(i)));
-                i += 1;
-            }
-            results
-        }
-
-        fn objective_settings_id_batch(
-            self: @ContractState, objective_ids: Span<u32>,
-        ) -> Array<u32> {
-            let mut results = array![];
-            let mut i = 0;
-            loop {
-                if i >= objective_ids.len() {
-                    break;
-                }
-                results.append(0);
                 i += 1;
             }
             results
@@ -729,6 +710,7 @@ pub mod TicTacToe {
             objectives_address: Option<ContractAddress>,
             minigame_token_address: ContractAddress,
             royalty_fraction: Option<u128>,
+            skills_address: Option<ContractAddress>,
         ) {
             let settings_address = match settings_address {
                 Option::Some(address) => {
@@ -768,6 +750,7 @@ pub mod TicTacToe {
                     objectives_address,
                     minigame_token_address,
                     royalty_fraction,
+                    skills_address,
                 );
 
             // Create a default settings entry
@@ -781,12 +764,10 @@ pub mod TicTacToe {
                 .objectives
                 .create_objective(
                     1,
-                    0,
                     GameObjectiveDetails {
                         name: "Win 3 Games",
                         description: "Win 3 games against the AI",
-                        objectives: array![GameObjective { name: "target_wins", value: "3" }]
-                            .span(),
+                        objectives: array![GameObjective { name: 'target_wins', value: 3 }].span(),
                     },
                     minigame_token_address,
                 );
@@ -800,7 +781,7 @@ pub mod TicTacToe {
                     GameSettingDetails {
                         name: "Standard",
                         description: "Standard AI opponent",
-                        settings: array![GameSetting { name: "AI", value: "Standard" }].span(),
+                        settings: array![GameSetting { name: 'AI', value: 'Standard' }].span(),
                     },
                     minigame_token_address,
                 );

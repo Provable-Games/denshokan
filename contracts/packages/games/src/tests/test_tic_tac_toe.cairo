@@ -53,6 +53,7 @@ fn setup_tic_tac_toe() -> (ITicTacToeDispatcher, ContractAddress) {
             Option::None,
             denshokan_address,
             Option::Some(500),
+            Option::None,
         );
 
     (ttt, ttt_address)
@@ -90,6 +91,7 @@ fn mint_token(game_address: ContractAddress, player: ContractAddress, salt: u16)
     let minigame = IMinigameDispatcher { contract_address: game_address };
     minigame
         .mint_game(
+            Option::None,
             Option::None,
             Option::None,
             Option::None,
@@ -186,7 +188,7 @@ fn test_occupied_cell_panics() {
 }
 
 #[test]
-#[should_panic(expected: "Game is not playable")]
+#[should_panic(expected: "MinigameToken: Token is not playable - game is over")]
 fn test_move_after_game_over_panics() {
     let (ttt, address) = setup_tic_tac_toe();
     let token_id = mint_token(address, ALICE(), 0);
@@ -863,10 +865,10 @@ fn test_objectives_details() {
     );
     assert!(details.objectives.len() == 1, "Should have 1 objective entry");
     assert!(
-        details.objectives.at(0).name == @"target_wins",
+        *details.objectives.at(0).name == 'target_wins',
         "Objective entry name should be 'target_wins'",
     );
-    assert!(details.objectives.at(0).value == @"3", "Objective entry value should be '3'");
+    assert!(*details.objectives.at(0).value == 3, "Objective entry value should be 3");
 }
 
 /// Verify objectives_details panics for non-existent objective.
@@ -917,8 +919,8 @@ fn test_settings_details_batch() {
     assert!(batch.len() == 1, "Should return 1 settings detail");
     assert!(batch.at(0).name == @"Standard", "Batch settings name should be 'Standard'");
     assert!(batch.at(0).settings.len() == 1, "Should have 1 setting entry");
-    assert!(batch.at(0).settings.at(0).name == @"AI", "Setting name should be 'AI'");
-    assert!(batch.at(0).settings.at(0).value == @"Standard", "Setting value should be 'Standard'");
+    assert!(*batch.at(0).settings.at(0).name == 'AI', "Setting name should be 'AI'");
+    assert!(*batch.at(0).settings.at(0).value == 'Standard', "Setting value should be 'Standard'");
 }
 
 // ==========================================================================
@@ -1083,7 +1085,7 @@ fn test_batch_queries_mixed_states() {
 
 /// Verify new_game panics after AI wins because post_action marks token as game_over.
 #[test]
-#[should_panic(expected: "Game is not playable")]
+#[should_panic(expected: "MinigameToken: Token is not playable - game is over")]
 fn test_new_game_after_ai_win_panics() {
     let (ttt, address) = setup_tic_tac_toe();
     let token_id = mint_token(address, ALICE(), 0);
@@ -1102,7 +1104,7 @@ fn test_new_game_after_ai_win_panics() {
 
 /// Verify new_game panics after player win because post_action marks token as game_over.
 #[test]
-#[should_panic(expected: "Game is not playable")]
+#[should_panic(expected: "MinigameToken: Token is not playable - game is over")]
 fn test_new_game_after_player_win_panics() {
     let (ttt, address) = setup_tic_tac_toe();
     let token_id = mint_token(address, ALICE(), 0);
@@ -1380,27 +1382,3 @@ fn test_mixed_wins_losses_separate_tokens() {
     assert!(ttt.games_drawn(token3) == 0, "No draws on token 3");
 }
 
-// ==========================================================================
-// OBJECTIVE_SETTINGS_ID TESTS
-// ==========================================================================
-
-#[test]
-fn test_objective_settings_id_returns_zero() {
-    let (_, address) = setup_tic_tac_toe();
-    let objectives_details = IMinigameObjectivesDetailsDispatcher { contract_address: address };
-
-    // Default objective should return settings_id = 0
-    assert!(
-        objectives_details.objective_settings_id(1) == 0, "Objective 1 settings_id should be 0",
-    );
-}
-
-#[test]
-fn test_objective_settings_id_batch_returns_zeros() {
-    let (_, address) = setup_tic_tac_toe();
-    let objectives_details = IMinigameObjectivesDetailsDispatcher { contract_address: address };
-
-    let results = objectives_details.objective_settings_id_batch(array![1].span());
-    assert!(results.len() == 1, "Should return 1 result");
-    assert!(*results.at(0) == 0, "Objective 1 settings_id should be 0");
-}
