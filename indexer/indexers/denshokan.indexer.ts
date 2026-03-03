@@ -39,6 +39,8 @@ import {
 import { eq, sql, and, ne } from "drizzle-orm";
 import type { ApibaraRuntimeConfig } from "apibara/types";
 import { RpcProvider, Contract } from "starknet";
+import { readFileSync } from "fs";
+import { resolve } from "path";
 
 import * as schema from "../src/lib/schema.js";
 import {
@@ -67,18 +69,10 @@ import {
 /** Convert bigint token ID to string for numeric column storage */
 const toId = (id: bigint) => id.toString();
 
-/** Minimal ABI for token_uri RPC calls */
-const TOKEN_URI_ABI = [{
-  type: "interface" as const,
-  name: "denshokan",
-  items: [{
-    type: "function" as const,
-    name: "token_uri",
-    inputs: [{ name: "token_id", type: "core::integer::u256" }],
-    outputs: [{ type: "core::byte_array::ByteArray" }],
-    state_mutability: "view" as const,
-  }],
-}];
+/** Full ABI needed for starknet.js to properly decode ByteArray return types */
+const DENSHOKAN_ABI = JSON.parse(
+  readFileSync(resolve(process.cwd(), "src/lib/abi/denshokan.json"), "utf-8")
+);
 
 interface DenshokanConfig {
   contractAddress: string;
@@ -102,11 +96,9 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
   } = config;
   const startingBlock = BigInt(startBlockStr);
 
-  // Normalize contract addresses to ensure proper format
+  // Normalize contract addresses: lowercase hex with no leading-zero padding
   const normalizeAddress = (addr: string) =>
-    addr.toLowerCase().startsWith("0x")
-      ? addr.toLowerCase()
-      : `0x${addr.toLowerCase()}`;
+    `0x${BigInt(addr).toString(16)}`;
 
   const normalizedAddress = normalizeAddress(contractAddress);
   const normalizedRegistryAddress = normalizeAddress(registryAddress);
@@ -123,7 +115,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
 
   // Create Starknet RPC provider and contract for token_uri fetches
   const starknetProvider = new RpcProvider({ nodeUrl: rpcUrl });
-  const denshokanContract = new Contract({ abi: TOKEN_URI_ABI, address: normalizedAddress, providerOrAccount: starknetProvider });
+  const denshokanContract = new Contract({ abi: DENSHOKAN_ABI, address: normalizedAddress, providerOrAccount: starknetProvider });
 
   // ============ Async URI Fetch Queue ============
   const URI_FETCH_CONCURRENCY = 5;
@@ -220,8 +212,25 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
         // Keep connection alive with periodic heartbeats (30 seconds)
         request.heartbeatInterval = { seconds: 30n, nanos: 0 };
       },
-      "connect:after": () => {
+      "connect:after": async () => {
         console.log("[Denshokan Indexer] Connected to DNA stream.");
+
+        // Retry URI fetches for tokens that failed or were never fetched
+        try {
+          const unfetched = await database
+            .select({ tokenId: schema.tokens.tokenId })
+            .from(schema.tokens)
+            .where(eq(schema.tokens.tokenUriFetched, false));
+
+          if (unfetched.length > 0) {
+            console.log(`[URI Retry] Queuing ${unfetched.length} tokens with missing token_uri`);
+            for (const row of unfetched) {
+              queueUriFetch(BigInt(row.tokenId));
+            }
+          }
+        } catch (err) {
+          console.warn(`[URI Retry] Failed to query unfetched tokens: ${err}`);
+        }
       },
     },
     async transform({ block, production }) {
