@@ -74,6 +74,7 @@ pub trait INumberGuessInit<TContractState> {
         objectives_address: Option<ContractAddress>,
         minigame_token_address: ContractAddress,
         royalty_fraction: Option<u128>,
+        skills_address: Option<ContractAddress>,
     );
 }
 
@@ -462,19 +463,13 @@ pub mod NumberGuess {
                 .entry(settings_id)
                 .read();
 
-            let attempts_str: ByteArray = if max_attempts == 0 {
-                "Unlimited"
-            } else {
-                format!("{}", max_attempts)
-            };
-
             GameSettingDetails {
                 name,
                 description,
                 settings: array![
-                    GameSetting { name: "Range Min", value: format!("{}", min) },
-                    GameSetting { name: "Range Max", value: format!("{}", max) },
-                    GameSetting { name: "Max Attempts", value: attempts_str },
+                    GameSetting { name: 'Range Min', value: min.into() },
+                    GameSetting { name: 'Range Max', value: max.into() },
+                    GameSetting { name: 'Max Attempts', value: max_attempts.into() },
                 ]
                     .span(),
             }
@@ -553,14 +548,10 @@ pub mod NumberGuess {
 
             // Build objectives array with type and threshold info
             let mut objectives = array![];
-            objectives.append(GameObjective { name: "type", value: format!("{}", objective_type) });
-            objectives.append(GameObjective { name: "threshold", value: format!("{}", threshold) });
+            objectives.append(GameObjective { name: 'type', value: objective_type.into() });
+            objectives.append(GameObjective { name: 'threshold', value: threshold.into() });
 
             GameObjectiveDetails { name, description, objectives: objectives.span() }
-        }
-
-        fn objective_settings_id(self: @ContractState, objective_id: u32) -> u32 {
-            0
         }
 
         fn objectives_details_batch(
@@ -573,21 +564,6 @@ pub mod NumberGuess {
                     break;
                 }
                 results.append(self.objectives_details(*objective_ids.at(i)));
-                i += 1;
-            }
-            results
-        }
-
-        fn objective_settings_id_batch(
-            self: @ContractState, objective_ids: Span<u32>,
-        ) -> Array<u32> {
-            let mut results = array![];
-            let mut i = 0;
-            loop {
-                if i >= objective_ids.len() {
-                    break;
-                }
-                results.append(0);
                 i += 1;
             }
             results
@@ -867,6 +843,7 @@ pub mod NumberGuess {
             objectives_address: Option<ContractAddress>,
             minigame_token_address: ContractAddress,
             royalty_fraction: Option<u128>,
+            skills_address: Option<ContractAddress>,
         ) {
             let settings_address = match settings_address {
                 Option::Some(address) => {
@@ -906,6 +883,7 @@ pub mod NumberGuess {
                     objectives_address,
                     minigame_token_address,
                     royalty_fraction,
+                    skills_address,
                 );
 
             // Create default settings (3 difficulty levels)
@@ -951,7 +929,6 @@ pub mod NumberGuess {
                 .objectives
                 .create_objective(
                     1,
-                    0,
                     GameObjectiveDetails {
                         name: "First Win",
                         description: "Win your first game",
@@ -963,7 +940,6 @@ pub mod NumberGuess {
                 .objectives
                 .create_objective(
                     2,
-                    0,
                     GameObjectiveDetails {
                         name: "Quick Thinker",
                         description: "Win a game in 5 or fewer guesses",
@@ -975,7 +951,6 @@ pub mod NumberGuess {
                 .objectives
                 .create_objective(
                     3,
-                    0,
                     GameObjectiveDetails {
                         name: "Lucky Guess",
                         description: "Win a game on your first guess",
@@ -994,9 +969,9 @@ pub mod NumberGuess {
                         name: "Easy",
                         description: "Guess a number between 1 and 10",
                         settings: array![
-                            GameSetting { name: "Range Min", value: "1" },
-                            GameSetting { name: "Range Max", value: "10" },
-                            GameSetting { name: "Max Attempts", value: "Unlimited" },
+                            GameSetting { name: 'Range Min', value: 1 },
+                            GameSetting { name: 'Range Max', value: 10 },
+                            GameSetting { name: 'Max Attempts', value: 0 },
                         ]
                             .span(),
                     },
@@ -1011,9 +986,9 @@ pub mod NumberGuess {
                         name: "Medium",
                         description: "Guess a number between 1 and 100",
                         settings: array![
-                            GameSetting { name: "Range Min", value: "1" },
-                            GameSetting { name: "Range Max", value: "100" },
-                            GameSetting { name: "Max Attempts", value: "10" },
+                            GameSetting { name: 'Range Min', value: 1 },
+                            GameSetting { name: 'Range Max', value: 100 },
+                            GameSetting { name: 'Max Attempts', value: 10 },
                         ]
                             .span(),
                     },
@@ -1028,9 +1003,9 @@ pub mod NumberGuess {
                         name: "Hard",
                         description: "Guess a number between 1 and 1000",
                         settings: array![
-                            GameSetting { name: "Range Min", value: "1" },
-                            GameSetting { name: "Range Max", value: "1000" },
-                            GameSetting { name: "Max Attempts", value: "10" },
+                            GameSetting { name: 'Range Min', value: 1 },
+                            GameSetting { name: 'Range Max', value: 1000 },
+                            GameSetting { name: 'Max Attempts', value: 10 },
                         ]
                             .span(),
                     },

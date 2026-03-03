@@ -53,6 +53,7 @@ fn setup_number_guess() -> (INumberGuessDispatcher, ContractAddress) {
             Option::None,
             denshokan_address,
             Option::Some(500),
+            Option::None,
         );
 
     (ng, ng_address)
@@ -66,6 +67,7 @@ fn mint_token(
         .mint_game(
             Option::None,
             Option::Some(settings_id),
+            Option::None,
             Option::None,
             Option::None,
             Option::None,
@@ -131,6 +133,7 @@ fn test_new_game_no_settings_uses_defaults() {
     let minigame = IMinigameDispatcher { contract_address: address };
     let token_id = minigame
         .mint_game(
+            Option::None,
             Option::None,
             Option::None,
             Option::None,
@@ -1399,8 +1402,8 @@ fn test_settings_details_unlimited_attempts() {
     let settings_span = easy.settings;
     // settings[2] is "Max Attempts"
     let max_attempts_setting = settings_span.at(2);
-    assert!(*max_attempts_setting.name == "Max Attempts", "Third setting should be Max Attempts");
-    assert!(*max_attempts_setting.value == "Unlimited", "Easy mode should show 'Unlimited'");
+    assert!(*max_attempts_setting.name == 'Max Attempts', "Third setting should be Max Attempts");
+    assert!(*max_attempts_setting.value == 0, "Easy mode should show 0 (unlimited)");
 }
 
 // --------------------------------------------------------------------------
@@ -1418,8 +1421,8 @@ fn test_settings_details_limited_attempts() {
 
     let settings_span = medium.settings;
     let max_attempts_setting = settings_span.at(2);
-    assert!(*max_attempts_setting.name == "Max Attempts", "Third setting should be Max Attempts");
-    assert!(*max_attempts_setting.value == "10", "Medium mode should show '10'");
+    assert!(*max_attempts_setting.name == 'Max Attempts', "Third setting should be Max Attempts");
+    assert!(*max_attempts_setting.value == 10, "Medium mode should show 10");
 }
 
 // --------------------------------------------------------------------------
@@ -1775,35 +1778,3 @@ fn test_objectives_count() {
     assert!(objectives_details.objectives_count() == 4, "Objectives count should be 4");
 }
 
-// ==========================================================================
-// OBJECTIVE_SETTINGS_ID TESTS
-// ==========================================================================
-
-#[test]
-fn test_objective_settings_id_returns_zero() {
-    let (_, address) = setup_number_guess();
-    let objectives_details = IMinigameObjectivesDetailsDispatcher { contract_address: address };
-
-    // All default objectives should return settings_id = 0
-    assert!(
-        objectives_details.objective_settings_id(1) == 0, "Objective 1 settings_id should be 0",
-    );
-    assert!(
-        objectives_details.objective_settings_id(2) == 0, "Objective 2 settings_id should be 0",
-    );
-    assert!(
-        objectives_details.objective_settings_id(3) == 0, "Objective 3 settings_id should be 0",
-    );
-}
-
-#[test]
-fn test_objective_settings_id_batch_returns_zeros() {
-    let (_, address) = setup_number_guess();
-    let objectives_details = IMinigameObjectivesDetailsDispatcher { contract_address: address };
-
-    let results = objectives_details.objective_settings_id_batch(array![1, 2, 3].span());
-    assert!(results.len() == 3, "Should return 3 results");
-    assert!(*results.at(0) == 0, "Objective 1 settings_id should be 0");
-    assert!(*results.at(1) == 0, "Objective 2 settings_id should be 0");
-    assert!(*results.at(2) == 0, "Objective 3 settings_id should be 0");
-}

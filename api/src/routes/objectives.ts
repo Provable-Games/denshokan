@@ -11,14 +11,10 @@ app.get("/", async (c) => {
   const limit = parsePositiveInt(c.req.query("limit"), 50);
   const offset = parsePositiveInt(c.req.query("offset"), 0);
   const gameAddress = parseAddress(c.req.query("game_address"));
-  const settingsId = parsePositiveInt(c.req.query("settings_id"), -1);
 
   const conditions = [];
   if (gameAddress) {
     conditions.push(eq(objectives.gameAddress, gameAddress));
-  }
-  if (settingsId >= 0) {
-    conditions.push(eq(objectives.settingsId, settingsId));
   }
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;

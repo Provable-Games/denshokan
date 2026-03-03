@@ -82,6 +82,60 @@
   },
   {
     "type": "impl",
+    "name": "ERC721MetadataCamelOnlyImpl",
+    "interface_name": "openzeppelin_interfaces::token::erc721::IERC721MetadataCamelOnly"
+  },
+  {
+    "type": "interface",
+    "name": "openzeppelin_interfaces::token::erc721::IERC721MetadataCamelOnly",
+    "items": [
+      {
+        "type": "function",
+        "name": "tokenURI",
+        "inputs": [
+          {
+            "name": "tokenId",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::byte_array::ByteArray"
+          }
+        ],
+        "state_mutability": "view"
+      }
+    ]
+  },
+  {
+    "type": "impl",
+    "name": "TokenUriBatchImpl",
+    "interface_name": "denshokan_interfaces::filter::IDenshokanTokenUriBatch"
+  },
+  {
+    "type": "interface",
+    "name": "denshokan_interfaces::filter::IDenshokanTokenUriBatch",
+    "items": [
+      {
+        "type": "function",
+        "name": "token_uri_batch",
+        "inputs": [
+          {
+            "name": "token_ids",
+            "type": "core::array::Array::<core::felt252>"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::array::Array::<core::byte_array::ByteArray>"
+          }
+        ],
+        "state_mutability": "view"
+      }
+    ]
+  },
+  {
+    "type": "impl",
     "name": "ERC2981Impl",
     "interface_name": "openzeppelin_interfaces::token::erc2981::IERC2981"
   },
@@ -292,6 +346,145 @@
   },
   {
     "type": "impl",
+    "name": "ERC721CamelOnlyImpl",
+    "interface_name": "openzeppelin_interfaces::token::erc721::IERC721CamelOnly"
+  },
+  {
+    "type": "interface",
+    "name": "openzeppelin_interfaces::token::erc721::IERC721CamelOnly",
+    "items": [
+      {
+        "type": "function",
+        "name": "balanceOf",
+        "inputs": [
+          {
+            "name": "account",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "ownerOf",
+        "inputs": [
+          {
+            "name": "tokenId",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "safeTransferFrom",
+        "inputs": [
+          {
+            "name": "from",
+            "type": "core::starknet::contract_address::ContractAddress"
+          },
+          {
+            "name": "to",
+            "type": "core::starknet::contract_address::ContractAddress"
+          },
+          {
+            "name": "tokenId",
+            "type": "core::integer::u256"
+          },
+          {
+            "name": "data",
+            "type": "core::array::Span::<core::felt252>"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "transferFrom",
+        "inputs": [
+          {
+            "name": "from",
+            "type": "core::starknet::contract_address::ContractAddress"
+          },
+          {
+            "name": "to",
+            "type": "core::starknet::contract_address::ContractAddress"
+          },
+          {
+            "name": "tokenId",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "setApprovalForAll",
+        "inputs": [
+          {
+            "name": "operator",
+            "type": "core::starknet::contract_address::ContractAddress"
+          },
+          {
+            "name": "approved",
+            "type": "core::bool"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "getApproved",
+        "inputs": [
+          {
+            "name": "tokenId",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "isApprovedForAll",
+        "inputs": [
+          {
+            "name": "owner",
+            "type": "core::starknet::contract_address::ContractAddress"
+          },
+          {
+            "name": "operator",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::bool"
+          }
+        ],
+        "state_mutability": "view"
+      }
+    ]
+  },
+  {
+    "type": "impl",
     "name": "SRC5Impl",
     "interface_name": "openzeppelin_interfaces::introspection::ISRC5"
   },
@@ -405,6 +598,44 @@
     ]
   },
   {
+    "type": "struct",
+    "name": "game_components_interfaces::structs::token::TokenFullState",
+    "members": [
+      {
+        "name": "token_id",
+        "type": "core::felt252"
+      },
+      {
+        "name": "owner",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "name": "player_name",
+        "type": "core::felt252"
+      },
+      {
+        "name": "is_playable",
+        "type": "core::bool"
+      },
+      {
+        "name": "game_address",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "name": "game_over",
+        "type": "core::bool"
+      },
+      {
+        "name": "completed_objective",
+        "type": "core::bool"
+      },
+      {
+        "name": "lifecycle",
+        "type": "game_components_interfaces::structs::token::Lifecycle"
+      }
+    ]
+  },
+  {
     "type": "enum",
     "name": "core::option::Option::<core::felt252>",
     "variants": [
@@ -452,11 +683,11 @@
     "members": [
       {
         "name": "name",
-        "type": "core::byte_array::ByteArray"
+        "type": "core::felt252"
       },
       {
         "name": "value",
-        "type": "core::byte_array::ByteArray"
+        "type": "core::felt252"
       }
     ]
   },
@@ -575,6 +806,10 @@
         "type": "core::option::Option::<core::starknet::contract_address::ContractAddress>"
       },
       {
+        "name": "skills_address",
+        "type": "core::option::Option::<core::starknet::contract_address::ContractAddress>"
+      },
+      {
         "name": "to",
         "type": "core::starknet::contract_address::ContractAddress"
       },
@@ -654,6 +889,18 @@
             "type": "core::bool"
           }
         ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "assert_is_playable",
+        "inputs": [
+          {
+            "name": "token_id",
+            "type": "core::felt252"
+          }
+        ],
+        "outputs": [],
         "state_mutability": "view"
       },
       {
@@ -802,6 +1049,38 @@
         "outputs": [
           {
             "type": "game_components_interfaces::structs::token::TokenMutableState"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "client_url",
+        "inputs": [
+          {
+            "name": "token_id",
+            "type": "core::felt252"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::byte_array::ByteArray"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "skills_address",
+        "inputs": [
+          {
+            "name": "token_id",
+            "type": "core::felt252"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
           }
         ],
         "state_mutability": "view"
@@ -968,6 +1247,22 @@
       },
       {
         "type": "function",
+        "name": "token_full_state_batch",
+        "inputs": [
+          {
+            "name": "token_ids",
+            "type": "core::array::Span::<core::felt252>"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::array::Array::<game_components_interfaces::structs::token::TokenFullState>"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
         "name": "mint",
         "inputs": [
           {
@@ -1007,6 +1302,10 @@
             "type": "core::option::Option::<core::starknet::contract_address::ContractAddress>"
           },
           {
+            "name": "skills_address",
+            "type": "core::option::Option::<core::starknet::contract_address::ContractAddress>"
+          },
+          {
             "name": "to",
             "type": "core::starknet::contract_address::ContractAddress"
           },
@@ -1041,6 +1340,78 @@
           {
             "name": "mints",
             "type": "core::array::Array::<game_components_interfaces::structs::token::MintParams>"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::array::Array::<core::felt252>"
+          }
+        ],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "mint_batch_recipients",
+        "inputs": [
+          {
+            "name": "game_address",
+            "type": "core::starknet::contract_address::ContractAddress"
+          },
+          {
+            "name": "player_name",
+            "type": "core::option::Option::<core::felt252>"
+          },
+          {
+            "name": "settings_id",
+            "type": "core::option::Option::<core::integer::u32>"
+          },
+          {
+            "name": "start",
+            "type": "core::option::Option::<core::integer::u64>"
+          },
+          {
+            "name": "end",
+            "type": "core::option::Option::<core::integer::u64>"
+          },
+          {
+            "name": "objective_id",
+            "type": "core::option::Option::<core::integer::u32>"
+          },
+          {
+            "name": "context",
+            "type": "core::option::Option::<game_components_interfaces::structs::metagame::GameContextDetails>"
+          },
+          {
+            "name": "client_url",
+            "type": "core::option::Option::<core::byte_array::ByteArray>"
+          },
+          {
+            "name": "renderer_address",
+            "type": "core::option::Option::<core::starknet::contract_address::ContractAddress>"
+          },
+          {
+            "name": "skills_address",
+            "type": "core::option::Option::<core::starknet::contract_address::ContractAddress>"
+          },
+          {
+            "name": "recipients",
+            "type": "core::array::Array::<core::starknet::contract_address::ContractAddress>"
+          },
+          {
+            "name": "soulbound",
+            "type": "core::bool"
+          },
+          {
+            "name": "paymaster",
+            "type": "core::bool"
+          },
+          {
+            "name": "salt",
+            "type": "core::integer::u16"
+          },
+          {
+            "name": "metadata",
+            "type": "core::integer::u16"
           }
         ],
         "outputs": [
@@ -1243,11 +1614,11 @@
     "members": [
       {
         "name": "name",
-        "type": "core::byte_array::ByteArray"
+        "type": "core::felt252"
       },
       {
         "name": "value",
-        "type": "core::byte_array::ByteArray"
+        "type": "core::felt252"
       }
     ]
   },
@@ -1300,10 +1671,6 @@
             "type": "core::integer::u32"
           },
           {
-            "name": "settings_id",
-            "type": "core::integer::u32"
-          },
-          {
             "name": "objective_details",
             "type": "game_components_interfaces::structs::minigame::GameObjectiveDetails"
           }
@@ -1324,11 +1691,11 @@
     "members": [
       {
         "name": "name",
-        "type": "core::byte_array::ByteArray"
+        "type": "core::felt252"
       },
       {
         "name": "value",
-        "type": "core::byte_array::ByteArray"
+        "type": "core::felt252"
       }
     ]
   },
@@ -1474,6 +1841,89 @@
     ]
   },
   {
+    "type": "impl",
+    "name": "SkillsImpl",
+    "interface_name": "game_components_interfaces::token::skills::IMinigameTokenSkills"
+  },
+  {
+    "type": "interface",
+    "name": "game_components_interfaces::token::skills::IMinigameTokenSkills",
+    "items": [
+      {
+        "type": "function",
+        "name": "get_skills_address",
+        "inputs": [
+          {
+            "name": "token_id",
+            "type": "core::felt252"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "has_custom_skills",
+        "inputs": [
+          {
+            "name": "token_id",
+            "type": "core::felt252"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::bool"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "reset_token_skills",
+        "inputs": [
+          {
+            "name": "token_id",
+            "type": "core::felt252"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "reset_token_skills_batch",
+        "inputs": [
+          {
+            "name": "token_ids",
+            "type": "core::array::Span::<core::felt252>"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "get_skills_address_batch",
+        "inputs": [
+          {
+            "name": "token_ids",
+            "type": "core::array::Span::<core::felt252>"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::array::Array::<core::starknet::contract_address::ContractAddress>"
+          }
+        ],
+        "state_mutability": "view"
+      }
+    ]
+  },
+  {
     "type": "constructor",
     "name": "constructor",
     "inputs": [
@@ -1491,6 +1941,10 @@
       },
       {
         "name": "game_registry_address",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "name": "default_renderer_address",
         "type": "core::starknet::contract_address::ContractAddress"
       }
     ]
@@ -1597,7 +2051,7 @@
   },
   {
     "type": "event",
-    "name": "game_components_embeddable_game_standard::token::core::core_token::CoreTokenComponent::TokenPlayerNameUpdate",
+    "name": "game_components_embeddable_game_standard::token::token_component::CoreTokenComponent::TokenPlayerNameUpdate",
     "kind": "struct",
     "members": [
       {
@@ -1614,7 +2068,7 @@
   },
   {
     "type": "event",
-    "name": "game_components_embeddable_game_standard::token::core::core_token::CoreTokenComponent::TokenClientUrlUpdate",
+    "name": "game_components_embeddable_game_standard::token::token_component::CoreTokenComponent::TokenClientUrlUpdate",
     "kind": "struct",
     "members": [
       {
@@ -1631,7 +2085,7 @@
   },
   {
     "type": "event",
-    "name": "game_components_embeddable_game_standard::token::core::core_token::CoreTokenComponent::MetadataUpdate",
+    "name": "game_components_embeddable_game_standard::token::token_component::CoreTokenComponent::MetadataUpdate",
     "kind": "struct",
     "members": [
       {
@@ -1643,7 +2097,7 @@
   },
   {
     "type": "event",
-    "name": "game_components_embeddable_game_standard::token::core::core_token::CoreTokenComponent::ScoreUpdate",
+    "name": "game_components_embeddable_game_standard::token::token_component::CoreTokenComponent::ScoreUpdate",
     "kind": "struct",
     "members": [
       {
@@ -1660,7 +2114,7 @@
   },
   {
     "type": "event",
-    "name": "game_components_embeddable_game_standard::token::core::core_token::CoreTokenComponent::GameOver",
+    "name": "game_components_embeddable_game_standard::token::token_component::CoreTokenComponent::GameOver",
     "kind": "struct",
     "members": [
       {
@@ -1677,7 +2131,7 @@
   },
   {
     "type": "event",
-    "name": "game_components_embeddable_game_standard::token::core::core_token::CoreTokenComponent::CompletedObjective",
+    "name": "game_components_embeddable_game_standard::token::token_component::CoreTokenComponent::CompletedObjective",
     "kind": "struct",
     "members": [
       {
@@ -1689,37 +2143,37 @@
   },
   {
     "type": "event",
-    "name": "game_components_embeddable_game_standard::token::core::core_token::CoreTokenComponent::Event",
+    "name": "game_components_embeddable_game_standard::token::token_component::CoreTokenComponent::Event",
     "kind": "enum",
     "variants": [
       {
         "name": "TokenPlayerNameUpdate",
-        "type": "game_components_embeddable_game_standard::token::core::core_token::CoreTokenComponent::TokenPlayerNameUpdate",
+        "type": "game_components_embeddable_game_standard::token::token_component::CoreTokenComponent::TokenPlayerNameUpdate",
         "kind": "nested"
       },
       {
         "name": "TokenClientUrlUpdate",
-        "type": "game_components_embeddable_game_standard::token::core::core_token::CoreTokenComponent::TokenClientUrlUpdate",
+        "type": "game_components_embeddable_game_standard::token::token_component::CoreTokenComponent::TokenClientUrlUpdate",
         "kind": "nested"
       },
       {
         "name": "MetadataUpdate",
-        "type": "game_components_embeddable_game_standard::token::core::core_token::CoreTokenComponent::MetadataUpdate",
+        "type": "game_components_embeddable_game_standard::token::token_component::CoreTokenComponent::MetadataUpdate",
         "kind": "nested"
       },
       {
         "name": "ScoreUpdate",
-        "type": "game_components_embeddable_game_standard::token::core::core_token::CoreTokenComponent::ScoreUpdate",
+        "type": "game_components_embeddable_game_standard::token::token_component::CoreTokenComponent::ScoreUpdate",
         "kind": "nested"
       },
       {
         "name": "GameOver",
-        "type": "game_components_embeddable_game_standard::token::core::core_token::CoreTokenComponent::GameOver",
+        "type": "game_components_embeddable_game_standard::token::token_component::CoreTokenComponent::GameOver",
         "kind": "nested"
       },
       {
         "name": "CompletedObjective",
-        "type": "game_components_embeddable_game_standard::token::core::core_token::CoreTokenComponent::CompletedObjective",
+        "type": "game_components_embeddable_game_standard::token::token_component::CoreTokenComponent::CompletedObjective",
         "kind": "nested"
       }
     ]
@@ -1775,28 +2229,13 @@
         "kind": "key"
       },
       {
-        "name": "settings_id",
-        "type": "core::integer::u32",
-        "kind": "key"
-      },
-      {
         "name": "creator_address",
         "type": "core::starknet::contract_address::ContractAddress",
         "kind": "data"
       },
       {
-        "name": "name",
-        "type": "core::byte_array::ByteArray",
-        "kind": "data"
-      },
-      {
-        "name": "description",
-        "type": "core::byte_array::ByteArray",
-        "kind": "data"
-      },
-      {
-        "name": "objectives",
-        "type": "core::array::Span::<game_components_interfaces::structs::minigame::GameObjective>",
+        "name": "details",
+        "type": "game_components_interfaces::structs::minigame::GameObjectiveDetails",
         "kind": "data"
       }
     ]
@@ -1834,18 +2273,8 @@
         "kind": "data"
       },
       {
-        "name": "name",
-        "type": "core::byte_array::ByteArray",
-        "kind": "data"
-      },
-      {
-        "name": "description",
-        "type": "core::byte_array::ByteArray",
-        "kind": "data"
-      },
-      {
-        "name": "settings",
-        "type": "core::array::Span::<game_components_interfaces::structs::minigame::GameSetting>",
+        "name": "details",
+        "type": "game_components_interfaces::structs::minigame::GameSettingDetails",
         "kind": "data"
       }
     ]
@@ -1873,8 +2302,8 @@
         "kind": "key"
       },
       {
-        "name": "data",
-        "type": "core::byte_array::ByteArray",
+        "name": "details",
+        "type": "game_components_interfaces::structs::metagame::GameContextDetails",
         "kind": "data"
       }
     ]
@@ -1922,6 +2351,35 @@
   },
   {
     "type": "event",
+    "name": "game_components_embeddable_game_standard::token::extensions::skills::skills::SkillsComponent::TokenSkillsUpdate",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "token_id",
+        "type": "core::felt252",
+        "kind": "key"
+      },
+      {
+        "name": "skills_address",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "game_components_embeddable_game_standard::token::extensions::skills::skills::SkillsComponent::Event",
+    "kind": "enum",
+    "variants": [
+      {
+        "name": "TokenSkillsUpdate",
+        "type": "game_components_embeddable_game_standard::token::extensions::skills::skills::SkillsComponent::TokenSkillsUpdate",
+        "kind": "nested"
+      }
+    ]
+  },
+  {
+    "type": "event",
     "name": "denshokan_token::denshokan::Denshokan::Event",
     "kind": "enum",
     "variants": [
@@ -1942,7 +2400,7 @@
       },
       {
         "name": "CoreTokenEvent",
-        "type": "game_components_embeddable_game_standard::token::core::core_token::CoreTokenComponent::Event",
+        "type": "game_components_embeddable_game_standard::token::token_component::CoreTokenComponent::Event",
         "kind": "flat"
       },
       {
@@ -1973,6 +2431,11 @@
       {
         "name": "RendererEvent",
         "type": "game_components_embeddable_game_standard::token::extensions::renderer::renderer::RendererComponent::Event",
+        "kind": "flat"
+      },
+      {
+        "name": "SkillsEvent",
+        "type": "game_components_embeddable_game_standard::token::extensions::skills::skills::SkillsComponent::Event",
         "kind": "flat"
       }
     ]

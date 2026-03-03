@@ -311,11 +311,11 @@
     "members": [
       {
         "name": "name",
-        "type": "core::byte_array::ByteArray"
+        "type": "core::felt252"
       },
       {
         "name": "value",
-        "type": "core::byte_array::ByteArray"
+        "type": "core::felt252"
       }
     ]
   },
@@ -470,11 +470,11 @@
     "members": [
       {
         "name": "name",
-        "type": "core::byte_array::ByteArray"
+        "type": "core::felt252"
       },
       {
         "name": "value",
-        "type": "core::byte_array::ByteArray"
+        "type": "core::felt252"
       }
     ]
   },
@@ -539,22 +539,6 @@
       },
       {
         "type": "function",
-        "name": "objective_settings_id",
-        "inputs": [
-          {
-            "name": "objective_id",
-            "type": "core::integer::u32"
-          }
-        ],
-        "outputs": [
-          {
-            "type": "core::integer::u32"
-          }
-        ],
-        "state_mutability": "view"
-      },
-      {
-        "type": "function",
         "name": "objectives_details_batch",
         "inputs": [
           {
@@ -565,22 +549,6 @@
         "outputs": [
           {
             "type": "core::array::Array::<game_components_interfaces::structs::minigame::GameObjectiveDetails>"
-          }
-        ],
-        "state_mutability": "view"
-      },
-      {
-        "type": "function",
-        "name": "objective_settings_id_batch",
-        "inputs": [
-          {
-            "name": "objective_ids",
-            "type": "core::array::Span::<core::integer::u32>"
-          }
-        ],
-        "outputs": [
-          {
-            "type": "core::array::Array::<core::integer::u32>"
           }
         ],
         "state_mutability": "view"
@@ -939,6 +907,10 @@
           {
             "name": "royalty_fraction",
             "type": "core::option::Option::<core::integer::u128>"
+          },
+          {
+            "name": "skills_address",
+            "type": "core::option::Option::<core::starknet::contract_address::ContractAddress>"
           }
         ],
         "outputs": [],
@@ -999,11 +971,11 @@
     "members": [
       {
         "name": "name",
-        "type": "core::byte_array::ByteArray"
+        "type": "core::felt252"
       },
       {
         "name": "value",
-        "type": "core::byte_array::ByteArray"
+        "type": "core::felt252"
       }
     ]
   },
@@ -1087,6 +1059,10 @@
       },
       {
         "name": "renderer_address",
+        "type": "core::option::Option::<core::starknet::contract_address::ContractAddress>"
+      },
+      {
+        "name": "skills_address",
         "type": "core::option::Option::<core::starknet::contract_address::ContractAddress>"
       },
       {
@@ -1185,6 +1161,10 @@
             "type": "core::option::Option::<core::starknet::contract_address::ContractAddress>"
           },
           {
+            "name": "skills_address",
+            "type": "core::option::Option::<core::starknet::contract_address::ContractAddress>"
+          },
+          {
             "name": "to",
             "type": "core::starknet::contract_address::ContractAddress"
           },
@@ -1259,7 +1239,7 @@
   },
   {
     "type": "event",
-    "name": "game_components_embeddable_game_standard::minigame::minigame::MinigameComponent::Event",
+    "name": "game_components_embeddable_game_standard::minigame::minigame_component::MinigameComponent::Event",
     "kind": "enum",
     "variants": []
   },
@@ -1288,7 +1268,7 @@
     "variants": [
       {
         "name": "MinigameEvent",
-        "type": "game_components_embeddable_game_standard::minigame::minigame::MinigameComponent::Event",
+        "type": "game_components_embeddable_game_standard::minigame::minigame_component::MinigameComponent::Event",
         "kind": "flat"
       },
       {

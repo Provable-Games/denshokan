@@ -336,15 +336,14 @@ export interface TokenContextUpdateEvent {
 
 /**
  * ObjectiveCreated event
- * Keys: [selector, game_address, objective_id(u32), settings_id(u32)]
+ * Keys: [selector, game_address, objective_id(u32)]
  * Data: [creator_address, name(ByteArray), description(ByteArray), objectives(Span<GameObjective>)]
  *
- * GameObjective = { name: ByteArray, value: ByteArray }
+ * GameObjective = { name: felt252, value: felt252 }
  */
 export interface ObjectiveCreatedEvent {
   gameAddress: string;
   objectiveId: number;
-  settingsId: number;
   creatorAddress: string;
   name: string;
   description: string;
@@ -358,7 +357,7 @@ export interface ObjectiveCreatedEvent {
  * Keys: [selector, game_address, settings_id(u32)]
  * Data: [creator_address, name(ByteArray), description(ByteArray), settings(Span<GameSetting>)]
  *
- * GameSetting = { name: ByteArray, value: ByteArray }
+ * GameSetting = { name: felt252, value: felt252 }
  */
 export interface SettingsCreatedEvent {
   gameAddress: string;
@@ -522,8 +521,38 @@ export function decodeTokenContextUpdate(keys: readonly string[], data: readonly
 }
 
 /**
- * Decode a Span of {name: ByteArray, value: ByteArray} pairs from felt252 array.
- * Format: [span_length, ...for each element: name(ByteArray), value(ByteArray)]
+ * Decode a felt252 as a short string (up to 31 ASCII chars) or numeric string.
+ * If all bytes are printable ASCII, returns the string; otherwise returns the numeric value.
+ */
+export function decodeFelt252AsString(felt: string | undefined | null): string {
+  if (!felt) return "0";
+  const val = hexToBigInt(felt);
+  if (val === 0n) return "0";
+
+  // Try to decode as short string
+  const hex = val.toString(16);
+  let str = "";
+  let allPrintable = true;
+  for (let i = 0; i < hex.length; i += 2) {
+    const charCode = parseInt(hex.substr(i, 2), 16);
+    if (charCode >= 32 && charCode <= 126) {
+      str += String.fromCharCode(charCode);
+    } else {
+      allPrintable = false;
+      break;
+    }
+  }
+
+  // If all chars are printable ASCII and we got at least one char, return as string
+  if (allPrintable && str.length > 0) return str;
+
+  // Otherwise return numeric string
+  return val.toString();
+}
+
+/**
+ * Decode a Span of {name: felt252, value: felt252} pairs from felt252 array.
+ * Format: [span_length, ...for each element: name(felt252), value(felt252)]
  */
 export function decodeKeyValueSpan(data: readonly string[], startIndex: number): { value: Record<string, string>; consumed: number } {
   const spanLen = Number(hexToBigInt(data[startIndex]));
@@ -531,11 +560,11 @@ export function decodeKeyValueSpan(data: readonly string[], startIndex: number):
   const result: Record<string, string> = {};
 
   for (let i = 0; i < spanLen; i++) {
-    const nameResult = decodeByteArray(data, idx);
-    idx += nameResult.consumed;
-    const valueResult = decodeByteArray(data, idx);
-    idx += valueResult.consumed;
-    result[nameResult.value] = valueResult.value;
+    const name = decodeFelt252AsString(data[idx]);
+    idx += 1;
+    const value = decodeFelt252AsString(data[idx]);
+    idx += 1;
+    result[name] = value;
   }
 
   return { value: result, consumed: idx - startIndex };
@@ -543,7 +572,7 @@ export function decodeKeyValueSpan(data: readonly string[], startIndex: number):
 
 /**
  * Decode ObjectiveCreated event
- * Keys: [selector, game_address, objective_id(u32), settings_id(u32)]
+ * Keys: [selector, game_address, objective_id(u32)]
  * Data: [creator_address, name(ByteArray), description(ByteArray), objectives(Span<GameObjective>)]
  */
 export function decodeObjectiveCreated(keys: readonly string[], data: readonly string[]): ObjectiveCreatedEvent {
@@ -560,7 +589,6 @@ export function decodeObjectiveCreated(keys: readonly string[], data: readonly s
   return {
     gameAddress: feltToHex(keys[1]),
     objectiveId: Number(hexToBigInt(keys[2])),
-    settingsId: Number(hexToBigInt(keys[3])),
     creatorAddress: feltToHex(data[0]),
     name: nameResult.value,
     description: descriptionResult.value,
@@ -625,7 +653,7 @@ export interface GameRegistryUpdateEvent {
  * Keys: [selector, id(u32)]
  * Data: [contract_address, name(ByteArray), description(ByteArray), developer(ByteArray),
  *        publisher(ByteArray), genre(ByteArray), image(ByteArray), color(ByteArray),
- *        client_url(ByteArray), renderer_address, royalty_fraction(u128), agent_skills(ByteArray)]
+ *        client_url(ByteArray), renderer_address, royalty_fraction(u128), skills_address(ContractAddress)]
  */
 export interface GameMetadataUpdateEvent {
   gameId: number;
@@ -640,7 +668,7 @@ export interface GameMetadataUpdateEvent {
   clientUrl: string;
   rendererAddress: string;
   royaltyFraction: string;
-  agentSkills: string;
+  skillsAddress: string;
 }
 
 /**
@@ -694,7 +722,7 @@ export function decodeGameMetadataUpdate(keys: readonly string[], data: readonly
   const royaltyFraction = hexToBigInt(data[idx]).toString();
   idx += 1;
 
-  const agentSkills = decodeByteArray(data, idx);
+  const skillsAddress = feltToHex(data[idx]);
 
   return {
     gameId: Number(hexToBigInt(keys[1])),
@@ -709,7 +737,7 @@ export function decodeGameMetadataUpdate(keys: readonly string[], data: readonly
     clientUrl: clientUrl.value,
     rendererAddress,
     royaltyFraction,
-    agentSkills: agentSkills.value,
+    skillsAddress,
   };
 }
 
