@@ -248,6 +248,9 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
         const data = event.data;
         const transactionHash = event.transactionHash ?? "0x0";
         const eventIndex = event.eventIndex ?? 0;
+        const eventAddress = event.address
+          ? normalizeAddress(feltToHex(event.address))
+          : "";
 
         if (keys.length === 0) continue;
 
@@ -256,6 +259,9 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
         try {
           switch (selector) {
             case EVENT_SELECTORS.Transfer: {
+              // Only process Transfer events from the Denshokan token contract
+              if (eventAddress && eventAddress !== normalizedAddress) break;
+
               const decoded = decodeTransfer(keys, data);
               const isMint = decoded.from === "0x0";
 
@@ -803,6 +809,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
             }
 
             case EVENT_SELECTORS.MetadataUpdate: {
+              if (eventAddress && eventAddress !== normalizedAddress) break;
               if (production !== "live") break; // Only process at head
 
               const decoded = decodeMetadataUpdate(keys);
