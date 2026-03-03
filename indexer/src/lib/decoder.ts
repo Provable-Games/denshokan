@@ -82,6 +82,7 @@ export const EVENT_SELECTORS = {
   GameRegistryUpdate: hash.getSelectorFromName("GameRegistryUpdate"),
   GameMetadataUpdate: hash.getSelectorFromName("GameMetadataUpdate"),
   GameRoyaltyUpdate: hash.getSelectorFromName("GameRoyaltyUpdate"),
+  MetadataUpdate: hash.getSelectorFromName("MetadataUpdate"),
 } as const;
 
 /**
@@ -656,6 +657,26 @@ export function decodeTokenSkillsUpdate(keys: readonly string[], data: readonly 
   return {
     tokenId: hexToBigInt(keys[1]),
     skillsAddress: feltToHex(data[0]),
+  };
+}
+
+/**
+ * MetadataUpdate event (ERC-4906)
+ * Keys: [selector, token_id_low, token_id_high]
+ * Data: []
+ */
+export interface MetadataUpdateEvent {
+  tokenId: bigint;
+}
+
+/**
+ * Decode MetadataUpdate event (ERC-4906)
+ * Keys: [selector, token_id_low, token_id_high]
+ * Data: []
+ */
+export function decodeMetadataUpdate(keys: readonly string[]): MetadataUpdateEvent {
+  return {
+    tokenId: decodeU256(keys[1], keys[2]),
   };
 }
 

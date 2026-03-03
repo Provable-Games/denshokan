@@ -38,6 +38,7 @@ import {
 } from "@apibara/plugin-drizzle";
 import { eq, sql, and, ne } from "drizzle-orm";
 import type { ApibaraRuntimeConfig } from "apibara/types";
+import { RpcProvider, Contract } from "starknet";
 
 import * as schema from "../src/lib/schema.js";
 import {
@@ -54,6 +55,7 @@ import {
   decodeSettingsCreated,
   decodeTokenRendererUpdate,
   decodeTokenSkillsUpdate,
+  decodeMetadataUpdate,
   decodeGameRegistryUpdate,
   decodeGameMetadataUpdate,
   decodeGameRoyaltyUpdate,
@@ -65,12 +67,22 @@ import {
 /** Convert bigint token ID to string for numeric column storage */
 const toId = (id: bigint) => id.toString();
 
+/** Minimal ABI for token_uri RPC calls */
+const TOKEN_URI_ABI = [{
+  type: "function",
+  name: "token_uri",
+  inputs: [{ name: "token_id", type: "core::integer::u256" }],
+  outputs: [{ type: "core::byte_array::ByteArray" }],
+  state_mutability: "view",
+}] as const;
+
 interface DenshokanConfig {
   contractAddress: string;
   registryAddress: string;
   streamUrl: string;
   startingBlock: string;
   databaseUrl: string;
+  rpcUrl: string;
 }
 
 export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
@@ -82,6 +94,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
     streamUrl,
     startingBlock: startBlockStr,
     databaseUrl,
+    rpcUrl,
   } = config;
   const startingBlock = BigInt(startBlockStr);
 
@@ -99,9 +112,73 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
   console.log("[Denshokan Indexer] Registry:", registryAddress);
   console.log("[Denshokan Indexer] Stream:", streamUrl);
   console.log("[Denshokan Indexer] Starting Block:", startingBlock.toString());
+  console.log("[Denshokan Indexer] RPC URL:", rpcUrl);
 
   // Create Drizzle database instance
   const database = drizzle({ schema, connectionString: databaseUrl });
+
+  // Create Starknet RPC provider and contract for token_uri fetches
+  const starknetProvider = new RpcProvider({ nodeUrl: rpcUrl });
+  const denshokanContract = new Contract(TOKEN_URI_ABI, normalizedAddress, starknetProvider);
+
+  // ============ Async URI Fetch Queue ============
+  const URI_FETCH_CONCURRENCY = 5;
+  const uriFetchQueue: Array<{ tokenId: bigint }> = [];
+  let uriFetchRunning = false;
+
+  async function processUriFetchQueue(): Promise<void> {
+    if (uriFetchRunning || uriFetchQueue.length === 0) return;
+    uriFetchRunning = true;
+
+    while (uriFetchQueue.length > 0) {
+      const batch = uriFetchQueue.splice(0, URI_FETCH_CONCURRENCY);
+      const results = await Promise.allSettled(
+        batch.map(({ tokenId }) => fetchTokenUri(tokenId))
+      );
+      results.forEach((r, i) => {
+        if (r.status === "rejected") {
+          console.warn(`[URI Queue] Failed for token ${batch[i].tokenId}: ${r.reason}`);
+        }
+      });
+    }
+
+    uriFetchRunning = false;
+  }
+
+  async function fetchTokenUri(tokenId: bigint): Promise<void> {
+    const result = await denshokanContract.call("token_uri", [tokenId]);
+    const uri = result.toString();
+    await database
+      .update(schema.tokens)
+      .set({ tokenUri: uri, tokenUriFetched: true })
+      .where(eq(schema.tokens.tokenId, toId(tokenId)));
+  }
+
+  function queueUriFetch(tokenId: bigint): void {
+    uriFetchQueue.push({ tokenId });
+    // Fire-and-forget — don't await
+    processUriFetchQueue().catch((err) =>
+      console.error(`[URI Queue] Processing error: ${err}`)
+    );
+  }
+
+  /** Fetch token_uri synchronously (for live MetadataUpdate events) */
+  async function fetchAndStoreTokenUri(
+    db: ReturnType<typeof useDrizzleStorage>["db"],
+    tokenId: bigint,
+  ): Promise<void> {
+    try {
+      const result = await denshokanContract.call("token_uri", [tokenId]);
+      const uri = result.toString();
+      await db
+        .update(schema.tokens)
+        .set({ tokenUri: uri, tokenUriFetched: true })
+        .where(eq(schema.tokens.tokenId, toId(tokenId)));
+      console.log(`[URI] Fetched token_uri for ${tokenId}: ${uri.substring(0, 80)}...`);
+    } catch (error) {
+      console.warn(`[URI] Failed to fetch token_uri for ${tokenId}: ${error}`);
+    }
+  }
 
   return defineIndexer(StarknetStream)({
     streamUrl,
@@ -143,7 +220,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
         console.log("[Denshokan Indexer] Connected to DNA stream.");
       },
     },
-    async transform({ block }) {
+    async transform({ block, production }) {
       const logger = useLogger();
       const { db } = useDrizzleStorage();
       const { events, header } = block;
@@ -212,6 +289,9 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                     lastUpdatedAt: blockTimestamp,
                   },
                 });
+
+                // Queue async token_uri fetch (non-blocking)
+                queueUriFetch(decoded.tokenId);
 
                 // Check if this is a new unique player for this game
                 const existingPlayerTokens = await db
@@ -715,6 +795,17 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                 })
                 .where(eq(schema.games.gameId, decoded.gameId));
 
+              break;
+            }
+
+            case EVENT_SELECTORS.MetadataUpdate: {
+              if (production !== "live") break; // Only process at head
+
+              const decoded = decodeMetadataUpdate(keys);
+              logger.info(`MetadataUpdate: token_id=${decoded.tokenId}`);
+
+              // Synchronous fetch — at head, we want immediate URI updates
+              await fetchAndStoreTokenUri(db, decoded.tokenId);
               break;
             }
 

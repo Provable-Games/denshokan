@@ -29,6 +29,13 @@
       "when": 1772813400000,
       "tag": "0003_token_skills_address",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1772899800000,
+      "tag": "0004_token_uri",
+      "breakpoints": true
     }
   ]
 }

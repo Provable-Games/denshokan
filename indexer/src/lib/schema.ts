@@ -83,6 +83,10 @@ export const tokens = pgTable(
     // Current game state
     currentScore: bigint("current_score", { mode: "bigint" }).notNull().$default(() => 0n),
 
+    // Token URI fetched via RPC
+    tokenUri: text("token_uri"),
+    tokenUriFetched: boolean("token_uri_fetched").notNull().default(false),
+
     // Indexer metadata
     createdAtBlock: bigint("created_at_block", { mode: "bigint" }).notNull(),
     lastUpdatedBlock: bigint("last_updated_block", { mode: "bigint" }).notNull(),
