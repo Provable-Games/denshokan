@@ -4,7 +4,6 @@ import type { GameObjectiveDetails, ObjectivesParams } from "@provable-games/den
 export interface ClientObjective {
   gameAddress: string;
   objectiveId: number;
-  settingsId: number;
   creatorAddress: string;
   name: string;
   description: string;
@@ -17,7 +16,6 @@ function adaptObjective(o: GameObjectiveDetails): ClientObjective {
   return {
     gameAddress: o.gameAddress,
     objectiveId: o.id,
-    settingsId: o.settingsId,
     creatorAddress: o.creatorAddress,
     name: o.name,
     description: o.description,

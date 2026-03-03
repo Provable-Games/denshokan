@@ -60,6 +60,7 @@ export function useMint() {
           none(), // context (Option<GameContextDetails>)
           params.clientUrl ? some(params.clientUrl) : none(), // client_url (Option<ByteArray>)
           none(), // renderer_address (Option<ContractAddress>)
+          none(), // skills_address (Option<ContractAddress>)
           params.recipientAddress || address, // to
           params.soulbound ?? false, // soulbound
           false, // paymaster
@@ -112,6 +113,7 @@ export function useMint() {
             none(), // context
             params.clientUrl ? some(params.clientUrl) : none(),
             none(), // renderer_address
+            none(), // skills_address
             params.recipientAddress || address,
             params.soulbound ?? false,
             false, // paymaster
@@ -168,6 +170,7 @@ export function useMint() {
           context: none(),
           client_url: params.clientUrl ? some(params.clientUrl) : none(),
           renderer_address: none(),
+          skills_address: none(),
           to: params.recipientAddress || address,
           soulbound: params.soulbound ?? false,
           paymaster: false,

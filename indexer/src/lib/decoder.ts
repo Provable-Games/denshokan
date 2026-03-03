@@ -78,6 +78,7 @@ export const EVENT_SELECTORS = {
   ObjectiveCreated: hash.getSelectorFromName("ObjectiveCreated"),
   SettingsCreated: hash.getSelectorFromName("SettingsCreated"),
   TokenRendererUpdate: hash.getSelectorFromName("TokenRendererUpdate"),
+  TokenSkillsUpdate: hash.getSelectorFromName("TokenSkillsUpdate"),
   GameRegistryUpdate: hash.getSelectorFromName("GameRegistryUpdate"),
   GameMetadataUpdate: hash.getSelectorFromName("GameMetadataUpdate"),
   GameRoyaltyUpdate: hash.getSelectorFromName("GameRoyaltyUpdate"),
@@ -633,6 +634,28 @@ export function decodeTokenRendererUpdate(keys: readonly string[], data: readonl
   return {
     tokenId: hexToBigInt(keys[1]),
     renderer: feltToHex(data[0]),
+  };
+}
+
+/**
+ * TokenSkillsUpdate event
+ * Keys: [selector, token_id(felt252)]
+ * Data: [skills_address(ContractAddress)]
+ */
+export interface TokenSkillsUpdateEvent {
+  tokenId: bigint;
+  skillsAddress: string;
+}
+
+/**
+ * Decode TokenSkillsUpdate event
+ * Keys: [selector, token_id(felt252)]
+ * Data: [skills_address(ContractAddress)]
+ */
+export function decodeTokenSkillsUpdate(keys: readonly string[], data: readonly string[]): TokenSkillsUpdateEvent {
+  return {
+    tokenId: hexToBigInt(keys[1]),
+    skillsAddress: feltToHex(data[0]),
   };
 }
 

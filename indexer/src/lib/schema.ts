@@ -77,6 +77,8 @@ export const tokens = pgTable(
     contextData: text("context_data"),
     // From TokenRendererUpdate
     rendererAddress: text("renderer_address"),
+    // From TokenSkillsUpdate
+    skillsAddress: text("skills_address"),
 
     // Current game state
     currentScore: bigint("current_score", { mode: "bigint" }).notNull().$default(() => 0n),

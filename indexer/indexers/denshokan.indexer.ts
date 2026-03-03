@@ -53,6 +53,7 @@ import {
   decodeObjectiveCreated,
   decodeSettingsCreated,
   decodeTokenRendererUpdate,
+  decodeTokenSkillsUpdate,
   decodeGameRegistryUpdate,
   decodeGameMetadataUpdate,
   decodeGameRoyaltyUpdate,
@@ -592,6 +593,35 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
               await db.insert(schema.tokenEvents).values({
                 tokenId: toId(decoded.tokenId),
                 eventType: "renderer_update",
+                eventData: stringifyWithBigInt(decoded),
+                blockNumber,
+                blockTimestamp,
+                transactionHash,
+                eventIndex,
+              }).onConflictDoNothing();
+
+              break;
+            }
+
+            case EVENT_SELECTORS.TokenSkillsUpdate: {
+              const decoded = decodeTokenSkillsUpdate(keys, data);
+              logger.info(
+                `TokenSkillsUpdate: token_id=${decoded.tokenId}, skills=${decoded.skillsAddress}`
+              );
+
+              await db
+                .update(schema.tokens)
+                .set({
+                  skillsAddress: decoded.skillsAddress,
+                  lastUpdatedBlock: blockNumber,
+                  lastUpdatedAt: blockTimestamp,
+                })
+                .where(eq(schema.tokens.tokenId, toId(decoded.tokenId)));
+
+              // Log event for audit trail
+              await db.insert(schema.tokenEvents).values({
+                tokenId: toId(decoded.tokenId),
+                eventType: "skills_update",
                 eventData: stringifyWithBigInt(decoded),
                 blockNumber,
                 blockTimestamp,
