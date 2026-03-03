@@ -69,12 +69,16 @@ const toId = (id: bigint) => id.toString();
 
 /** Minimal ABI for token_uri RPC calls */
 const TOKEN_URI_ABI = [{
-  type: "function",
-  name: "token_uri",
-  inputs: [{ name: "token_id", type: "core::integer::u256" }],
-  outputs: [{ type: "core::byte_array::ByteArray" }],
-  state_mutability: "view",
-}] as const;
+  type: "interface" as const,
+  name: "denshokan",
+  items: [{
+    type: "function" as const,
+    name: "token_uri",
+    inputs: [{ name: "token_id", type: "core::integer::u256" }],
+    outputs: [{ type: "core::byte_array::ByteArray" }],
+    state_mutability: "view" as const,
+  }],
+}];
 
 interface DenshokanConfig {
   contractAddress: string;
@@ -119,7 +123,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
 
   // Create Starknet RPC provider and contract for token_uri fetches
   const starknetProvider = new RpcProvider({ nodeUrl: rpcUrl });
-  const denshokanContract = new Contract(TOKEN_URI_ABI, normalizedAddress, starknetProvider);
+  const denshokanContract = new Contract({ abi: TOKEN_URI_ABI, address: normalizedAddress, providerOrAccount: starknetProvider });
 
   // ============ Async URI Fetch Queue ============
   const URI_FETCH_CONCURRENCY = 5;
