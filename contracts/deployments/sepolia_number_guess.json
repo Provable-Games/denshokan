@@ -1,11 +1,11 @@
 {
   "profile": "sepolia",
-  "timestamp": "2026-02-28T10:47:07Z",
-  "registry_address": "0x00901bfe1da0d447c4f3b81dfc19505f4796bc1968794de1ce8e0e6ee9fb086b",
-  "denshokan_address": "0x04c5c1c662dabf2698052b8a1413420d4dd7b74ef373c33015feb50cffa46fdb",
+  "timestamp": "2026-03-03T17:11:31Z",
+  "registry_address": "0x01c3c36502431b78680d6297b207e9eb84c7b051e22e92f0e58bc65262a5c3f1",
+  "denshokan_address": "0x06e1ba3fcb31a59847ea16af9f5955729bd28a527ff0c003edfc848781b0c4f0",
   "number_guess": {
-    "class_hash": "0x49135b42ec9be6aaf71a0ffabdba5ddaaa8000bea63444f25ece7069376f5b",
-    "address": "0x03bd957e4f01d940d571701394b1d92995fb9c4c852712edeb1608f0d91951b1",
+    "class_hash": "0x47b5d3826902e62bacf15ee43cfcc5d20899e3066ac2acfa0ce00c3705c0522",
+    "address": "0x0272317faf8f8cbc01df43bd3ec7a86ddf36ed3d6c40698e2c87e19aea0b948c",
     "name": "Number Guess",
     "genre": "Puzzle",
     "royalty_bps": 500

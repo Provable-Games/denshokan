@@ -147,7 +147,8 @@ print_info "Initializing TicTacToe..."
 # initializer(
 #   game_creator, game_name, game_description, game_developer, game_publisher,
 #   game_genre, game_image, game_color, client_url, renderer_address,
-#   settings_address, objectives_address, minigame_token_address, royalty_fraction
+#   settings_address, objectives_address, minigame_token_address, royalty_fraction,
+#   skills_address
 # )
 
 # Encode a string to ByteArray calldata (31-byte chunks)
@@ -207,7 +208,8 @@ sncast --profile "$PROFILE" --wait \
         1 \
         1 \
         $DENSHOKAN_ADDRESS \
-        0 500 || {
+        0 500 \
+        1 || {
     print_error "Failed to initialize TicTacToe"
     exit 1
 }
