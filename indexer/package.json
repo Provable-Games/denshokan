@@ -30,7 +30,7 @@
     "@apibara/plugin-drizzle": "next",
     "drizzle-orm": "^0.38.0",
     "pg": "^8.13.0",
-    "starknet": "^7.1.0"
+    "starknet": "^9.2.1"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

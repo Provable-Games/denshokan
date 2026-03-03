@@ -53,11 +53,11 @@ const NETWORKS: Record<ChainId, DenshokanChainConfig> = {
       "https://denshokan-api-production.up.railway.app",
     wsUrl: import.meta.env.VITE_SEPOLIA_WS_URL || "",
     explorerUrl: "https://sepolia.voyager.online",
-    denshokanAddress: "0x04c5c1c662dabf2698052b8a1413420d4dd7b74ef373c33015feb50cffa46fdb",
-    registryAddress: "0x00901bfe1da0d447c4f3b81dfc19505f4796bc1968794de1ce8e0e6ee9fb086b",
-    viewerAddress: "0x030ee3ee602255c135ec92e21d1b9eac279b850063e06e4a6a8df1d13495e53d",
-    numberGuessAddress: "0x03bd957e4f01d940d571701394b1d92995fb9c4c852712edeb1608f0d91951b1",
-    ticTacToeAddress: "0x03e2b0ec812689075808fa18a76d5d193f5fa13b223fbcc9005c889d7dd190f7",
+    denshokanAddress: "0x06e1ba3fcb31a59847ea16af9f5955729bd28a527ff0c003edfc848781b0c4f0",
+    registryAddress: "0x01c3c36502431b78680d6297b207e9eb84c7b051e22e92f0e58bc65262a5c3f1",
+    viewerAddress: "0x03c55470cfa363f4bd0b103331a76f05816a5f1e6be4aa315f973926049e9494",
+    numberGuessAddress: "0x0272317faf8f8cbc01df43bd3ec7a86ddf36ed3d6c40698e2c87e19aea0b948c",
+    ticTacToeAddress: "0x0361ac1f3a47f0ea56c427eca00a7c67222c324918f4f131918fa65716e0370b",
   },
 };
 

@@ -30,6 +30,7 @@ fn mint_token(tc: @TestContracts, game_id: u64, player: ContractAddress) -> felt
             Option::None, // end_time
             Option::None, // objective_id
             Option::None, // renderer_address
+            Option::None, // skills_address
             Option::None, // extra_data
             Option::None, // extra_data_uri
             player,
@@ -302,6 +303,7 @@ fn test_royalty_info_with_zero_royalty_fraction_game() {
             Option::None,
             Option::None,
             Option::None,
+            Option::None, // skills_address
             Option::None,
             Option::None,
             ALICE(),

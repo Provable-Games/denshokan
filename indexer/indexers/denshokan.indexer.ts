@@ -38,6 +38,9 @@ import {
 } from "@apibara/plugin-drizzle";
 import { eq, sql, and, ne } from "drizzle-orm";
 import type { ApibaraRuntimeConfig } from "apibara/types";
+import { RpcProvider, Contract } from "starknet";
+import { readFileSync } from "fs";
+import { resolve } from "path";
 
 import * as schema from "../src/lib/schema.js";
 import {
@@ -53,6 +56,8 @@ import {
   decodeObjectiveCreated,
   decodeSettingsCreated,
   decodeTokenRendererUpdate,
+  decodeTokenSkillsUpdate,
+  decodeMetadataUpdate,
   decodeGameRegistryUpdate,
   decodeGameMetadataUpdate,
   decodeGameRoyaltyUpdate,
@@ -64,12 +69,18 @@ import {
 /** Convert bigint token ID to string for numeric column storage */
 const toId = (id: bigint) => id.toString();
 
+/** Full ABI needed for starknet.js to properly decode ByteArray return types */
+const DENSHOKAN_ABI = JSON.parse(
+  readFileSync(resolve(process.cwd(), "src/lib/abi/denshokan.json"), "utf-8")
+);
+
 interface DenshokanConfig {
   contractAddress: string;
   registryAddress: string;
   streamUrl: string;
   startingBlock: string;
   databaseUrl: string;
+  rpcUrl: string;
 }
 
 export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
@@ -81,14 +92,13 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
     streamUrl,
     startingBlock: startBlockStr,
     databaseUrl,
+    rpcUrl,
   } = config;
   const startingBlock = BigInt(startBlockStr);
 
-  // Normalize contract addresses to ensure proper format
+  // Normalize contract addresses: lowercase hex with no leading-zero padding
   const normalizeAddress = (addr: string) =>
-    addr.toLowerCase().startsWith("0x")
-      ? addr.toLowerCase()
-      : `0x${addr.toLowerCase()}`;
+    `0x${BigInt(addr).toString(16)}`;
 
   const normalizedAddress = normalizeAddress(contractAddress);
   const normalizedRegistryAddress = normalizeAddress(registryAddress);
@@ -98,9 +108,73 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
   console.log("[Denshokan Indexer] Registry:", registryAddress);
   console.log("[Denshokan Indexer] Stream:", streamUrl);
   console.log("[Denshokan Indexer] Starting Block:", startingBlock.toString());
+  console.log("[Denshokan Indexer] RPC URL:", rpcUrl);
 
   // Create Drizzle database instance
   const database = drizzle({ schema, connectionString: databaseUrl });
+
+  // Create Starknet RPC provider and contract for token_uri fetches
+  const starknetProvider = new RpcProvider({ nodeUrl: rpcUrl });
+  const denshokanContract = new Contract({ abi: DENSHOKAN_ABI, address: normalizedAddress, providerOrAccount: starknetProvider });
+
+  // ============ Async URI Fetch Queue ============
+  const URI_FETCH_CONCURRENCY = 5;
+  const uriFetchQueue: Array<{ tokenId: bigint }> = [];
+  let uriFetchRunning = false;
+
+  async function processUriFetchQueue(): Promise<void> {
+    if (uriFetchRunning || uriFetchQueue.length === 0) return;
+    uriFetchRunning = true;
+
+    while (uriFetchQueue.length > 0) {
+      const batch = uriFetchQueue.splice(0, URI_FETCH_CONCURRENCY);
+      const results = await Promise.allSettled(
+        batch.map(({ tokenId }) => fetchTokenUri(tokenId))
+      );
+      results.forEach((r, i) => {
+        if (r.status === "rejected") {
+          console.warn(`[URI Queue] Failed for token ${batch[i].tokenId}: ${r.reason}`);
+        }
+      });
+    }
+
+    uriFetchRunning = false;
+  }
+
+  async function fetchTokenUri(tokenId: bigint): Promise<void> {
+    const result = await denshokanContract.call("token_uri", [tokenId]);
+    const uri = result.toString();
+    await database
+      .update(schema.tokens)
+      .set({ tokenUri: uri, tokenUriFetched: true })
+      .where(eq(schema.tokens.tokenId, toId(tokenId)));
+  }
+
+  function queueUriFetch(tokenId: bigint): void {
+    uriFetchQueue.push({ tokenId });
+    // Fire-and-forget — don't await
+    processUriFetchQueue().catch((err) =>
+      console.error(`[URI Queue] Processing error: ${err}`)
+    );
+  }
+
+  /** Fetch token_uri synchronously (for live MetadataUpdate events) */
+  async function fetchAndStoreTokenUri(
+    db: ReturnType<typeof useDrizzleStorage>["db"],
+    tokenId: bigint,
+  ): Promise<void> {
+    try {
+      const result = await denshokanContract.call("token_uri", [tokenId]);
+      const uri = result.toString();
+      await db
+        .update(schema.tokens)
+        .set({ tokenUri: uri, tokenUriFetched: true })
+        .where(eq(schema.tokens.tokenId, toId(tokenId)));
+      console.log(`[URI] Fetched token_uri for ${tokenId}: ${uri.substring(0, 80)}...`);
+    } catch (error) {
+      console.warn(`[URI] Failed to fetch token_uri for ${tokenId}: ${error}`);
+    }
+  }
 
   return defineIndexer(StarknetStream)({
     streamUrl,
@@ -138,11 +212,28 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
         // Keep connection alive with periodic heartbeats (30 seconds)
         request.heartbeatInterval = { seconds: 30n, nanos: 0 };
       },
-      "connect:after": () => {
+      "connect:after": async () => {
         console.log("[Denshokan Indexer] Connected to DNA stream.");
+
+        // Retry URI fetches for tokens that failed or were never fetched
+        try {
+          const unfetched = await database
+            .select({ tokenId: schema.tokens.tokenId })
+            .from(schema.tokens)
+            .where(eq(schema.tokens.tokenUriFetched, false));
+
+          if (unfetched.length > 0) {
+            console.log(`[URI Retry] Queuing ${unfetched.length} tokens with missing token_uri`);
+            for (const row of unfetched) {
+              queueUriFetch(BigInt(row.tokenId));
+            }
+          }
+        } catch (err) {
+          console.warn(`[URI Retry] Failed to query unfetched tokens: ${err}`);
+        }
       },
     },
-    async transform({ block }) {
+    async transform({ block, production }) {
       const logger = useLogger();
       const { db } = useDrizzleStorage();
       const { events, header } = block;
@@ -166,6 +257,9 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
         const data = event.data;
         const transactionHash = event.transactionHash ?? "0x0";
         const eventIndex = event.eventIndex ?? 0;
+        const eventAddress = event.address
+          ? normalizeAddress(feltToHex(event.address))
+          : "";
 
         if (keys.length === 0) continue;
 
@@ -174,6 +268,9 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
         try {
           switch (selector) {
             case EVENT_SELECTORS.Transfer: {
+              // Only process Transfer events from the Denshokan token contract
+              if (eventAddress && eventAddress !== normalizedAddress) break;
+
               const decoded = decodeTransfer(keys, data);
               const isMint = decoded.from === "0x0";
 
@@ -211,6 +308,9 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                     lastUpdatedAt: blockTimestamp,
                   },
                 });
+
+                // Queue async token_uri fetch (non-blocking)
+                queueUriFetch(decoded.tokenId);
 
                 // Check if this is a new unique player for this game
                 const existingPlayerTokens = await db
@@ -515,13 +615,13 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
             case EVENT_SELECTORS.ObjectiveCreated: {
               const decoded = decodeObjectiveCreated(keys, data);
               logger.info(
-                `ObjectiveCreated: game=${decoded.gameAddress}, objective_id=${decoded.objectiveId}, settings_id=${decoded.settingsId}, name=${decoded.name}`
+                `ObjectiveCreated: game=${decoded.gameAddress}, objective_id=${decoded.objectiveId}, name=${decoded.name}`
               );
 
               await db.insert(schema.objectives).values({
                 gameAddress: decoded.gameAddress,
                 objectiveId: decoded.objectiveId,
-                settingsId: decoded.settingsId,
+                settingsId: 0,
                 creatorAddress: decoded.creatorAddress,
                 objectiveData: decoded.objectiveData,
                 name: decoded.name,
@@ -531,7 +631,6 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
               }).onConflictDoUpdate({
                 target: [schema.objectives.gameAddress, schema.objectives.objectiveId],
                 set: {
-                  settingsId: decoded.settingsId,
                   creatorAddress: decoded.creatorAddress,
                   objectiveData: decoded.objectiveData,
                   name: decoded.name,
@@ -603,6 +702,35 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
               break;
             }
 
+            case EVENT_SELECTORS.TokenSkillsUpdate: {
+              const decoded = decodeTokenSkillsUpdate(keys, data);
+              logger.info(
+                `TokenSkillsUpdate: token_id=${decoded.tokenId}, skills=${decoded.skillsAddress}`
+              );
+
+              await db
+                .update(schema.tokens)
+                .set({
+                  skillsAddress: decoded.skillsAddress,
+                  lastUpdatedBlock: blockNumber,
+                  lastUpdatedAt: blockTimestamp,
+                })
+                .where(eq(schema.tokens.tokenId, toId(decoded.tokenId)));
+
+              // Log event for audit trail
+              await db.insert(schema.tokenEvents).values({
+                tokenId: toId(decoded.tokenId),
+                eventType: "skills_update",
+                eventData: stringifyWithBigInt(decoded),
+                blockNumber,
+                blockTimestamp,
+                transactionHash,
+                eventIndex,
+              }).onConflictDoNothing();
+
+              break;
+            }
+
             case EVENT_SELECTORS.GameRegistryUpdate: {
               const decoded = decodeGameRegistryUpdate(keys, data);
               logger.info(
@@ -645,7 +773,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                 clientUrl: decoded.clientUrl,
                 rendererAddress: decoded.rendererAddress,
                 royaltyFraction: decoded.royaltyFraction,
-                agentSkills: decoded.agentSkills,
+                skillsAddress: decoded.skillsAddress,
                 lastUpdatedBlock: blockNumber,
                 lastUpdatedAt: blockTimestamp,
               }).onConflictDoUpdate({
@@ -662,7 +790,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                   clientUrl: decoded.clientUrl,
                   rendererAddress: decoded.rendererAddress,
                   royaltyFraction: decoded.royaltyFraction,
-                  agentSkills: decoded.agentSkills,
+                  skillsAddress: decoded.skillsAddress,
                   lastUpdatedBlock: blockNumber,
                   lastUpdatedAt: blockTimestamp,
                 },
@@ -686,6 +814,18 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                 })
                 .where(eq(schema.games.gameId, decoded.gameId));
 
+              break;
+            }
+
+            case EVENT_SELECTORS.MetadataUpdate: {
+              if (eventAddress && eventAddress !== normalizedAddress) break;
+              if (production !== "live") break; // Only process at head
+
+              const decoded = decodeMetadataUpdate(keys);
+              logger.info(`MetadataUpdate: token_id=${decoded.tokenId}`);
+
+              // Synchronous fetch — at head, we want immediate URI updates
+              await fetchAndStoreTokenUri(db, decoded.tokenId);
               break;
             }
 

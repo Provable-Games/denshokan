@@ -15,8 +15,7 @@ pub trait IDefaultRenderer<TContractState> {
         settings_details: GameSettingDetails,
         objective_details: GameObjectiveDetails,
         context_details: GameContextDetails,
-        token_name: ByteArray,
-        token_symbol: ByteArray,
+        client_url: ByteArray,
     ) -> ByteArray;
 }
 
@@ -43,8 +42,7 @@ pub mod DefaultRenderer {
             settings_details: GameSettingDetails,
             objective_details: GameObjectiveDetails,
             context_details: GameContextDetails,
-            token_name: ByteArray,
-            token_symbol: ByteArray,
+            client_url: ByteArray,
         ) -> ByteArray {
             _create_default_svg(
                 game_metadata,
@@ -54,8 +52,7 @@ pub mod DefaultRenderer {
                 settings_details,
                 objective_details,
                 context_details,
-                token_name,
-                token_symbol,
+                client_url,
             )
         }
     }

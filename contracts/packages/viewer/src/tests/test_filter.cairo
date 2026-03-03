@@ -42,19 +42,20 @@ fn mint_token_with_salt(
     let token_id = (*tc.token_mixin)
         .mint(
             game_address,
-            Option::None, // renderer_address
-            Option::None, // settings_id
-            Option::None, // start_delay
-            Option::None, // end_delay
-            Option::None, // objective_id
-            Option::None, // context_id
-            Option::None, // paymaster
             Option::None, // player_name
+            Option::None, // settings_id
+            Option::None, // start
+            Option::None, // end
+            Option::None, // objective_id
+            Option::None, // context
+            Option::None, // client_url
+            Option::None, // renderer_address
+            Option::None, // skills_address
             to,
             is_soulbound,
-            false, // has_context
-            0, // tx_hash
+            false, // paymaster
             salt,
+            0 // metadata
         );
     token_id.try_into().unwrap()
 }
@@ -1643,7 +1644,7 @@ fn test_all_objectives_single_game() {
     let game_metadata = registry.game_metadata(1);
 
     // Query objectives for the game with settings_id=0 (all objectives)
-    let result = so.all_objectives(game_metadata.contract_address, 0, 0, 0);
+    let result = so.all_objectives(game_metadata.contract_address, 0, 0);
     assert!(result.total >= 0, "Should return objectives count for game");
 }
 
@@ -1661,7 +1662,7 @@ fn test_all_objectives_cross_game() {
 
     // Query objectives across all games
     let zero_address: ContractAddress = 0.try_into().unwrap();
-    let result = so.all_objectives(zero_address, 0, 0, 0);
+    let result = so.all_objectives(zero_address, 0, 0);
     assert!(result.total >= 0, "Should return cross-game objectives count");
 }
 

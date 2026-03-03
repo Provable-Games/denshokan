@@ -21,6 +21,7 @@ use game_components_embeddable_game_standard::token::extensions::minter::minter:
 use game_components_embeddable_game_standard::token::extensions::objectives::objectives::ObjectivesComponent;
 use game_components_embeddable_game_standard::token::extensions::renderer::renderer::RendererComponent;
 use game_components_embeddable_game_standard::token::extensions::settings::settings::SettingsComponent;
+use game_components_embeddable_game_standard::token::extensions::skills::skills::SkillsComponent;
 use game_components_embeddable_game_standard::token::structs::TokenMetadata;
 use game_components_embeddable_game_standard::token::token_component::CoreTokenComponent;
 use game_components_utilities::renderer::svg::create_custom_metadata;
@@ -138,6 +139,7 @@ pub mod Denshokan {
     component!(path: SettingsComponent, storage: settings, event: SettingsEvent);
     component!(path: ContextComponent, storage: context, event: ContextEvent);
     component!(path: RendererComponent, storage: renderer, event: RendererEvent);
+    component!(path: SkillsComponent, storage: skills, event: SkillsEvent);
 
     // ================================================================================================
     // STORAGE
@@ -169,6 +171,8 @@ pub mod Denshokan {
         context: ContextComponent::Storage,
         #[substorage(v0)]
         renderer: RendererComponent::Storage,
+        #[substorage(v0)]
+        skills: SkillsComponent::Storage,
     }
 
     // ================================================================================================
@@ -198,6 +202,8 @@ pub mod Denshokan {
         ContextEvent: ContextComponent::Event,
         #[flat]
         RendererEvent: RendererComponent::Event,
+        #[flat]
+        SkillsEvent: SkillsComponent::Event,
     }
 
     // ================================================================================================
@@ -226,6 +232,8 @@ pub mod Denshokan {
     impl SettingsImpl = SettingsComponent::SettingsImpl<ContractState>;
     #[abi(embed_v0)]
     impl RendererImpl = RendererComponent::RendererImpl<ContractState>;
+    #[abi(embed_v0)]
+    impl SkillsImpl = SkillsComponent::SkillsImpl<ContractState>;
 
     // Internal implementations
     impl ERC721InternalImpl = ERC721Component::InternalImpl<ContractState>;
@@ -237,6 +245,7 @@ pub mod Denshokan {
     impl SettingsInternalImpl = SettingsComponent::InternalImpl<ContractState>;
     impl ContextInternalImpl = ContextComponent::InternalImpl<ContractState>;
     impl RendererInternalImpl = RendererComponent::InternalImpl<ContractState>;
+    impl SkillsInternalImpl = SkillsComponent::InternalImpl<ContractState>;
     impl ERC721EnumerableInternalImpl = ERC721EnumerableComponent::InternalImpl<ContractState>;
 
     // ================================================================================================
@@ -251,6 +260,7 @@ pub mod Denshokan {
     impl SettingsOptionalImpl = SettingsComponent::SettingsOptionalImpl<ContractState>;
     impl ContextOptionalImpl = ContextComponent::ContextOptionalImpl<ContractState>;
     impl RendererOptionalImpl = RendererComponent::RendererOptionalImpl<ContractState>;
+    impl SkillsOptionalImpl = SkillsComponent::SkillsOptionalImpl<ContractState>;
 
     #[abi(embed_v0)]
     impl ERC721Metadata of IERC721Metadata<ContractState> {
@@ -360,6 +370,8 @@ pub mod Denshokan {
                 ByteArray,
             >(renderer_address, selector!("game_details_svg"), token_calldata.span(), "");
 
+            let client_url = self.core_token.client_url(token_id_felt);
+
             let game_details_svg = if game_details_svg.len() > 0 {
                 game_details_svg
             } else {
@@ -375,8 +387,7 @@ pub mod Denshokan {
                         settings_details.clone(),
                         objective_details,
                         context_details.clone(),
-                        self.erc721.ERC721_name.read(),
-                        self.erc721.ERC721_symbol.read(),
+                        client_url,
                     )
             };
 
@@ -543,6 +554,8 @@ pub mod Denshokan {
                     ByteArray,
                 >(renderer_address, selector!("game_details_svg"), token_calldata.span(), "");
 
+                let client_url = self.core_token.client_url(token_id);
+
                 let game_details_svg = if game_details_svg.len() > 0 {
                     game_details_svg
                 } else {
@@ -558,8 +571,7 @@ pub mod Denshokan {
                             settings_details.clone(),
                             objective_details,
                             context_details.clone(),
-                            token_name.clone(),
-                            self.erc721.ERC721_symbol.read(),
+                            client_url,
                         )
                 };
 
@@ -709,5 +721,6 @@ pub mod Denshokan {
         self.settings.initializer();
         self.context.initializer();
         self.renderer.initializer();
+        self.skills.initializer();
     }
 }

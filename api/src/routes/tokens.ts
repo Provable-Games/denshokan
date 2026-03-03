@@ -91,13 +91,14 @@ app.get("/:id/scores", async (c) => {
 });
 
 function serializeToken(t: typeof tokens.$inferSelect) {
+  const { tokenUriFetched, ...rest } = t;
   return {
-    ...t,
-    tokenId: t.tokenId.toString(),
-    mintedBy: t.mintedBy.toString(),
-    currentScore: t.currentScore.toString(),
-    createdAtBlock: t.createdAtBlock.toString(),
-    lastUpdatedBlock: t.lastUpdatedBlock.toString(),
+    ...rest,
+    tokenId: rest.tokenId.toString(),
+    mintedBy: rest.mintedBy.toString(),
+    currentScore: rest.currentScore.toString(),
+    createdAtBlock: rest.createdAtBlock.toString(),
+    lastUpdatedBlock: rest.lastUpdatedBlock.toString(),
   };
 }
 

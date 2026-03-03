@@ -14,6 +14,8 @@ export default defineConfig({
       startingBlock: (process.env.STARTING_BLOCK ?? "0").trim(),
       // PostgreSQL connection string
       databaseUrl: (process.env.DATABASE_URL ?? "postgres://postgres:postgres@localhost:5432/denshokan").trim(),
+      // Starknet RPC URL for token_uri fetches
+      rpcUrl: (process.env.RPC_URL ?? "https://api.cartridge.gg/x/starknet/mainnet").trim(),
     },
   },
 });

@@ -15,6 +15,27 @@
       "when": 1772294986086,
       "tag": "0001_good_invisible_woman",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1772726400000,
+      "tag": "0002_skills_address_rename",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1772813400000,
+      "tag": "0003_token_skills_address",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1772899800000,
+      "tag": "0004_token_uri",
+      "breakpoints": true
     }
   ]
 }

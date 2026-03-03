@@ -77,9 +77,15 @@ export const tokens = pgTable(
     contextData: text("context_data"),
     // From TokenRendererUpdate
     rendererAddress: text("renderer_address"),
+    // From TokenSkillsUpdate
+    skillsAddress: text("skills_address"),
 
     // Current game state
     currentScore: bigint("current_score", { mode: "bigint" }).notNull().$default(() => 0n),
+
+    // Token URI fetched via RPC
+    tokenUri: text("token_uri"),
+    tokenUriFetched: boolean("token_uri_fetched").notNull().default(false),
 
     // Indexer metadata
     createdAtBlock: bigint("created_at_block", { mode: "bigint" }).notNull(),
@@ -156,7 +162,7 @@ export const games = pgTable(
     clientUrl: text("client_url"),
     rendererAddress: text("renderer_address"),
     royaltyFraction: numeric("royalty_fraction"),
-    agentSkills: text("agent_skills"),
+    skillsAddress: text("skills_address"),
     createdAt: timestamp("created_at").defaultNow(),
     lastUpdatedBlock: bigint("last_updated_block", { mode: "bigint" }),
     lastUpdatedAt: timestamp("last_updated_at").defaultNow(),
@@ -289,7 +295,6 @@ export const objectives = pgTable(
   },
   (table) => [
     uniqueIndex("objectives_game_objective_idx").on(table.gameAddress, table.objectiveId),
-    index("objectives_settings_idx").on(table.gameAddress, table.settingsId),
   ]
 );
 

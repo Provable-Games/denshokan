@@ -129,16 +129,10 @@ app.get("/:id/objectives", async (c) => {
     return c.json({ error: "Game not found" }, 404);
   }
 
-  const settingsId = parsePositiveInt(c.req.query("settings_id"), -1);
-  const conditions = [eq(objectives.gameAddress, resolved.gameAddress)];
-  if (settingsId >= 0) {
-    conditions.push(eq(objectives.settingsId, settingsId));
-  }
-
   const results = await db
     .select()
     .from(objectives)
-    .where(and(...conditions))
+    .where(eq(objectives.gameAddress, resolved.gameAddress))
     .orderBy(objectives.objectiveId);
 
   return c.json({
