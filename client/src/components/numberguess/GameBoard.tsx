@@ -12,6 +12,7 @@ import {
   useNumberGuess,
   GameStatus,
 } from "../../hooks/useNumberGuess";
+import { useNumberGuessConfig } from "../../hooks/useNumberGuessConfig";
 import { useChainConfig } from "../../contexts/NetworkContext";
 import numberGuessAbi from "../../abi/numberGuess.json";
 import StartScreen from "./StartScreen";
@@ -69,6 +70,17 @@ export default function GameBoard({ gameAddress, tokenId, tokenConfig }: Props) 
     isStarting,
     error,
   } = useNumberGuess(gameAddress, tokenId);
+
+  // Get settings-based full range (survives page refresh)
+  const { settings } = useNumberGuessConfig(gameAddress);
+  const settingsFullRange = (() => {
+    const sid = tokenConfig?.settingsId;
+    if (sid != null) {
+      const match = settings.find((s) => s.id === sid);
+      if (match) return { min: match.min, max: match.max };
+    }
+    return fullRange;
+  })();
 
   // Handle guess submission
   const handleGuess = useCallback(
@@ -230,7 +242,7 @@ export default function GameBoard({ gameAddress, tokenId, tokenConfig }: Props) 
             />
 
             <NumberLineVisualizer
-              fullRange={fullRange}
+              fullRange={settingsFullRange}
               currentRange={range}
               guessHistory={guessHistory}
             />
@@ -248,6 +260,7 @@ export default function GameBoard({ gameAddress, tokenId, tokenConfig }: Props) 
               max={range.max}
               onGuess={handleGuess}
               isLoading={isGuessing}
+              lastFeedback={lastFeedback}
             />
 
             <GuessHistoryBar guessHistory={guessHistory} />
@@ -265,7 +278,7 @@ export default function GameBoard({ gameAddress, tokenId, tokenConfig }: Props) 
         gameStatus={gameStatus}
         guessCount={guessCount}
         stats={stats}
-        fullRange={fullRange}
+        fullRange={settingsFullRange}
         isMinting={isMinting}
         onMintAndPlay={handleMintAndPlay}
         onClose={handleCloseModal}

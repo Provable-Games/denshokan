@@ -161,6 +161,31 @@ fn calculate_score(actual_guesses: u32, range_min: u32, range_max: u32) -> u64 {
 }
 
 // ==========================================================================
+// EVENTS
+// ==========================================================================
+
+#[derive(Drop, starknet::Event)]
+pub struct NewGameStarted {
+    #[key]
+    pub token_id: felt252,
+    pub settings_id: u32,
+    pub range_min: u32,
+    pub range_max: u32,
+    pub max_attempts: u32,
+}
+
+#[derive(Drop, starknet::Event)]
+pub struct GuessMade {
+    #[key]
+    pub token_id: felt252,
+    pub guess_value: u32,
+    pub result: u8,
+    pub guess_count: u32,
+    pub range_min: u32,
+    pub range_max: u32,
+}
+
+// ==========================================================================
 // CONTRACT
 // ==========================================================================
 
@@ -192,7 +217,8 @@ pub mod NumberGuess {
     };
     use starknet::{ContractAddress, get_contract_address};
     use super::{
-        STATUS_LOST, STATUS_NO_GAME, STATUS_PLAYING, STATUS_WON, calculate_score, pedersen_random,
+        GuessMade, NewGameStarted, STATUS_LOST, STATUS_NO_GAME, STATUS_PLAYING, STATUS_WON,
+        calculate_score, pedersen_random,
     };
 
     // ======================================================================
@@ -272,6 +298,8 @@ pub mod NumberGuess {
         SettingsEvent: SettingsComponent::Event,
         #[flat]
         SRC5Event: SRC5Component::Event,
+        NewGameStarted: super::NewGameStarted,
+        GuessMade: super::GuessMade,
     }
 
     // ======================================================================
@@ -611,6 +639,13 @@ pub mod NumberGuess {
             self.range_max.entry(token_id).write(max);
             self.max_attempts.entry(token_id).write(max_attempts);
 
+            self
+                .emit(
+                    NewGameStarted {
+                        token_id, settings_id, range_min: min, range_max: max, max_attempts,
+                    },
+                );
+
             self.minigame.post_action(token_id);
         }
 
@@ -667,6 +702,13 @@ pub mod NumberGuess {
 
                 0_i8 // Correct
             } else {
+                // Narrow the range based on feedback
+                if number < secret {
+                    self.range_min.entry(token_id).write(number + 1);
+                } else {
+                    self.range_max.entry(token_id).write(number - 1);
+                }
+
                 // Check if max attempts reached
                 let max_attempts = self.max_attempts.entry(token_id).read();
                 if max_attempts > 0 && guess_count >= max_attempts {
@@ -684,6 +726,26 @@ pub mod NumberGuess {
                     1_i8 // Too high
                 }
             };
+
+            // Emit GuessMade event
+            let result_u8: u8 = if result == 0_i8 {
+                0
+            } else if result == -1_i8 {
+                1
+            } else {
+                2
+            };
+            self
+                .emit(
+                    GuessMade {
+                        token_id,
+                        guess_value: number,
+                        result: result_u8,
+                        guess_count,
+                        range_min: self.range_min.entry(token_id).read(),
+                        range_max: self.range_max.entry(token_id).read(),
+                    },
+                );
 
             self.minigame.post_action(token_id);
             result

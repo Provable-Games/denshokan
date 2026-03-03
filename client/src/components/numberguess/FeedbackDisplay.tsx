@@ -160,10 +160,10 @@ function FeedbackCard({
       <AnimatePresence mode="wait">
         <motion.div
           key={text}
-          initial={{ opacity: 0, scale: 0.5, y: 20 }}
+          initial={{ opacity: 0, scale: 0.3, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.5, y: -20 }}
-          transition={{ type: "spring", stiffness: 300, damping: 25 }}
+          transition={{ type: "spring", stiffness: 400, damping: 20 }}
         >
           <Box
             sx={{
@@ -171,21 +171,55 @@ function FeedbackCard({
               flexDirection: "column",
               alignItems: "center",
               color,
+              px: 4,
+              py: 1.5,
+              borderRadius: 2,
+              bgcolor: `${color}10`,
+              border: `1px solid ${color}22`,
+              position: "relative",
+              overflow: "hidden",
             }}
           >
+            {/* Background glow */}
+            <Box
+              sx={{
+                position: "absolute",
+                top: "50%",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+                width: 200,
+                height: 200,
+                borderRadius: "50%",
+                background: `radial-gradient(circle, ${color}15, transparent 70%)`,
+                pointerEvents: "none",
+              }}
+            />
             <motion.div
-              animate={pulse ? { scale: [1, 1.1, 1] } : {}}
-              transition={pulse ? { duration: 0.5, repeat: 2 } : {}}
+              animate={
+                pulse
+                  ? { scale: [1, 1.15, 1] }
+                  : { scale: [1, 1.08, 1] }
+              }
+              transition={
+                pulse
+                  ? { duration: 0.5, repeat: 2 }
+                  : { duration: 0.4, repeat: 1 }
+              }
+              style={{ position: "relative" }}
             >
               {icon}
             </motion.div>
             <Typography
               variant="h5"
-              sx={{ fontWeight: "bold", color, mt: 0.5 }}
+              sx={{ fontWeight: 800, color, mt: 0.5, position: "relative" }}
             >
               {text}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ position: "relative" }}
+            >
               {subtext}
             </Typography>
           </Box>
