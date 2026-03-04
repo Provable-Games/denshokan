@@ -65,29 +65,10 @@ else
     NETWORK_SECTION="SN_SEPOLIA"
 fi
 
-# ============================
-# LOAD GAME ADDRESSES FROM DEPLOYMENT JSON
-# ============================
-
-NUMBER_GUESS_ADDRESS=""
-TIC_TAC_TOE_ADDRESS=""
-
-NUMBER_GUESS_JSON="$ROOT_DIR/contracts/deployments/${PROFILE}_number_guess.json"
-if [ -f "$NUMBER_GUESS_JSON" ] && command -v jq &>/dev/null; then
-    NUMBER_GUESS_ADDRESS=$(jq -r '.number_guess.address // empty' "$NUMBER_GUESS_JSON" 2>/dev/null || true)
-fi
-
-TIC_TAC_TOE_JSON="$ROOT_DIR/contracts/deployments/${PROFILE}_tic_tac_toe.json"
-if [ -f "$TIC_TAC_TOE_JSON" ] && command -v jq &>/dev/null; then
-    TIC_TAC_TOE_ADDRESS=$(jq -r '.tic_tac_toe.address // empty' "$TIC_TAC_TOE_JSON" 2>/dev/null || true)
-fi
-
 echo -e "${GREEN}[INFO]${NC} Source addresses (from contracts/.env, profile=$PROFILE):"
 echo "  Denshokan:    $DENSHOKAN"
 echo "  Registry:     $REGISTRY"
 echo "  Viewer:       $VIEWER"
-echo "  NumberGuess:  ${NUMBER_GUESS_ADDRESS:-(not found)}"
-echo "  TicTacToe:    ${TIC_TAC_TOE_ADDRESS:-(not found)}"
 echo "  Targets:      indexer/.env, client/src/networks.ts ($NETWORK_SECTION)"
 echo
 
@@ -195,8 +176,6 @@ if [ -f "$NETWORKS_TS" ]; then
     update_network_address "$NETWORKS_TS" "$NETWORK_SECTION" "denshokanAddress" "$DENSHOKAN"
     update_network_address "$NETWORKS_TS" "$NETWORK_SECTION" "registryAddress" "$REGISTRY"
     update_network_address "$NETWORKS_TS" "$NETWORK_SECTION" "viewerAddress" "$VIEWER"
-    update_network_address "$NETWORKS_TS" "$NETWORK_SECTION" "numberGuessAddress" "$NUMBER_GUESS_ADDRESS"
-    update_network_address "$NETWORKS_TS" "$NETWORK_SECTION" "ticTacToeAddress" "$TIC_TAC_TOE_ADDRESS"
     echo
 else
     echo -e "${YELLOW}[SKIP]${NC} client/src/networks.ts not found"
