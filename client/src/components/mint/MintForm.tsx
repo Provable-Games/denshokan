@@ -120,7 +120,7 @@ export default function MintForm({ onMint, minting, error }: Props) {
         >
           {games.map((g) => (
             <MenuItem key={g.gameId} value={g.contractAddress}>
-              {g.name || `Game #${g.gameId}`}
+              {g.name || "Game"} - {g.gameId}
             </MenuItem>
           ))}
         </Select>

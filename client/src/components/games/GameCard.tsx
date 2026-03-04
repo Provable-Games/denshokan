@@ -34,7 +34,15 @@ export default function GameCard({ game }: Props) {
               {game.description}
             </Typography>
           )}
-          <Chip label={`ID: ${game.gameId}`} size="small" variant="outlined" />
+          <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
+            <Chip label={`ID: ${game.gameId}`} size="small" variant="outlined" />
+            <Chip
+              label={`${game.contractAddress.slice(0, 6)}...${game.contractAddress.slice(-4)}`}
+              size="small"
+              variant="outlined"
+              sx={{ fontFamily: "monospace", fontSize: "0.7rem" }}
+            />
+          </Box>
         </CardContent>
       </CardActionArea>
     </Card>

@@ -44,6 +44,9 @@ export default function GuessInput({
     prevFeedback.current = lastFeedback;
   }, [lastFeedback]);
 
+  const parsedValue = parseInt(value, 10);
+  const isOutOfRange = !isNaN(parsedValue) && (parsedValue < min || parsedValue > max);
+
   const handleSubmit = useCallback(async () => {
     const num = parseInt(value, 10);
 
@@ -53,7 +56,6 @@ export default function GuessInput({
     }
 
     if (num < min || num > max) {
-      setError(`Number must be between ${min} and ${max}`);
       return;
     }
 
@@ -64,7 +66,7 @@ export default function GuessInput({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === "Enter" && !isLoading && !disabled) {
+      if (e.key === "Enter" && !isLoading && !disabled && !isOutOfRange) {
         handleSubmit();
       }
     },
@@ -187,20 +189,18 @@ export default function GuessInput({
 
           <TextField
             value={value}
-            onChange={(e) => {
-              setValue(e.target.value);
-              setError(null);
-            }}
+            onChange={(e) => { setValue(e.target.value); setError(null); }}
             onKeyDown={handleKeyDown}
             type="number"
             inputProps={{
               min,
               max,
+              step: 1,
               style: { textAlign: "center", fontSize: "2rem", fontWeight: 700 },
             }}
             placeholder="?"
             disabled={isLoading || disabled}
-            error={!!error}
+            error={!!error || isOutOfRange}
             helperText={error}
             autoFocus
             sx={{
@@ -239,7 +239,7 @@ export default function GuessInput({
         <Button
           variant="contained"
           onClick={handleSubmit}
-          disabled={isLoading || disabled || !value}
+          disabled={isLoading || disabled || !value || isOutOfRange}
           sx={{
             width: "100%",
             maxWidth: 300,
@@ -259,6 +259,8 @@ export default function GuessInput({
         >
           {isLoading ? (
             <CircularProgress size={24} color="inherit" />
+          ) : isOutOfRange ? (
+            "Outside Range"
           ) : (
             "Submit Guess"
           )}

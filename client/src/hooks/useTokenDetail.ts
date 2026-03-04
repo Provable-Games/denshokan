@@ -53,9 +53,11 @@ export function useTokenDetail(tokenId: string) {
   // Fetch token URI for artwork
   const { data: tokenUri } = useTokenUri(tokenId || undefined);
 
-  // Fetch game info
+  // Fetch game info — try by contract address first, fall back to gameId
   const gameAddress = sdkToken?.gameAddress || undefined;
-  const { data: sdkGame, isLoading: gameLoading } = useGame(gameAddress);
+  const gameIdStr = sdkToken?.gameId ? String(sdkToken.gameId) : undefined;
+  const gameLookup = gameAddress || gameIdStr;
+  const { data: sdkGame, isLoading: gameLoading } = useGame(gameLookup);
 
   // Fetch settings and objectives for this game
   const { settings, loading: settingsLoading } = useSettingsList(

@@ -5,7 +5,11 @@ import {
   useSendTransaction,
   useReadContract,
 } from "@starknet-react/core";
+import { RpcProvider, TransactionFinalityStatus, hash } from "starknet";
+import { useChainConfig } from "../contexts/NetworkContext";
 import numberGuessAbi from "../abi/numberGuess.json";
+
+const GUESS_MADE_SELECTOR = hash.getSelectorFromName("GuessMade");
 
 // Game status constants matching the contract
 export const GameStatus = {
@@ -70,8 +74,17 @@ export interface UseNumberGuessReturn {
   refetch: () => void;
 
   // API integration
-  injectGuessFeedback: (feedback: GuessFeedback, range?: { min: number; max: number }) => void;
   setGuessHistoryFromAPI: (entries: GuessHistoryEntry[]) => void;
+}
+
+/** Convert contract event result (0=correct, 1=too_low, 2=too_high) to GuessFeedback */
+function contractResultToFeedback(result: number): GuessFeedback {
+  switch (result) {
+    case 0: return 0;   // correct
+    case 1: return -1;  // too_low
+    case 2: return 1;   // too_high
+    default: return null;
+  }
 }
 
 /** Poll contract.call until predicate returns true, or max retries. */
@@ -93,14 +106,12 @@ async function pollUntil<T>(
   return null;
 }
 
-/** Timeout for WebSocket feedback before falling back to contract polling */
-const WS_FEEDBACK_TIMEOUT = 10_000;
-
 export function useNumberGuess(
   gameAddress: string,
-  tokenId: string
+  tokenId: string,
 ): UseNumberGuessReturn {
   const { address } = useAccount();
+  const { chainConfig } = useChainConfig();
   const [isGuessing, setIsGuessing] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -113,9 +124,10 @@ export function useNumberGuess(
   });
   const fullRangeCaptured = useRef(false);
 
-  // Ref for resolving WebSocket-injected feedback during makeGuess
-  const feedbackResolverRef = useRef<((feedback: GuessFeedback) => void) | null>(null);
-  const injectedRangeRef = useRef<{ min: number; max: number } | null>(null);
+  // Immediate state from tx receipt (overrides contract reads until they catch up)
+  const [receiptRange, setReceiptRange] = useState<{ min: number; max: number } | null>(null);
+  const [receiptGuessCount, setReceiptGuessCount] = useState<number | null>(null);
+  const [receiptGameStatus, setReceiptGameStatus] = useState<GameStatusType | null>(null);
 
   const { contract } = useContract({
     abi: numberGuessAbi as any,
@@ -220,23 +232,6 @@ export function useNumberGuess(
   ]);
 
   /**
-   * Inject guess feedback from WebSocket, bypassing contract polling.
-   * Called from GameBoard's WebSocket onGuess handler.
-   */
-  const injectGuessFeedback = useCallback(
-    (feedback: GuessFeedback, range?: { min: number; max: number }) => {
-      if (range) {
-        injectedRangeRef.current = range;
-      }
-      if (feedbackResolverRef.current) {
-        feedbackResolverRef.current(feedback);
-        feedbackResolverRef.current = null;
-      }
-    },
-    []
-  );
-
-  /**
    * Replace guess history with API-sourced entries.
    * Called when API data loads or refreshes.
    */
@@ -260,6 +255,9 @@ export function useNumberGuess(
     setError(null);
     setLastFeedback(null);
     setGuessHistory([]);
+    setReceiptRange(null);
+    setReceiptGuessCount(null);
+    setReceiptGameStatus(null);
     fullRangeCaptured.current = false;
 
     try {
@@ -289,91 +287,100 @@ export function useNumberGuess(
 
       setIsGuessing(true);
       setError(null);
-      injectedRangeRef.current = null;
-
-      // Save pre-guess state for inference
-      const preRange = rangeData
-        ? {
-            min: Number((rangeData as any)[0] || 1),
-            max: Number((rangeData as any)[1] || 10),
-          }
-        : { min: 1, max: 10 };
 
       try {
+        const t0 = performance.now();
         const call = contract.populate("guess", [tokenId, number]);
-        await sendAsync([call]);
+        const txResult = await sendAsync([call]);
+        console.log(`[useNumberGuess] sendAsync completed in ${(performance.now() - t0).toFixed(0)}ms`);
 
-        // Race: WebSocket feedback vs contract polling timeout
-        const wsFeedbackPromise = new Promise<GuessFeedback>((resolve) => {
-          feedbackResolverRef.current = resolve;
-          setTimeout(() => {
-            // If no WS feedback arrived, resolve null to trigger polling fallback
-            if (feedbackResolverRef.current === resolve) {
-              feedbackResolverRef.current = null;
-              resolve(null);
-            }
-          }, WS_FEEDBACK_TIMEOUT);
+        // Wait for receipt and parse GuessMade event
+        const t1 = performance.now();
+        const rpc = new RpcProvider({ nodeUrl: chainConfig.rpcUrl });
+        const receipt = await rpc.waitForTransaction(txResult.transaction_hash, {
+          successStates: [TransactionFinalityStatus.ACCEPTED_ON_L2],
+          retryInterval: 300,
         });
+        console.log(`[useNumberGuess] receipt received in ${(performance.now() - t1).toFixed(0)}ms`);
 
-        let feedback = await wsFeedbackPromise;
+        let feedback: GuessFeedback = null;
+        let eventRange: { min: number; max: number } | null = null;
+        let eventGuessCount: number | null = null;
+        const gameAddr = BigInt(gameAddress);
 
-        // If WebSocket delivered feedback, use it directly
-        if (feedback !== null) {
-          setLastFeedback(feedback);
-          const entry: GuessHistoryEntry = {
-            value: number,
-            feedback,
-            timestamp: Date.now(),
-          };
-          setGuessHistory((prev) => [...prev, entry]);
-          refetch();
-          setIsGuessing(false);
-          return feedback;
+        for (const event of (receipt as any).events || []) {
+          const fromAddr = BigInt(event.from_address || "0x0");
+          if (fromAddr !== gameAddr) continue;
+
+          const keys: string[] = event.keys || [];
+          if (keys.length < 1 || BigInt(keys[0]) !== BigInt(GUESS_MADE_SELECTOR)) continue;
+
+          // Data: [guess_value, result, guess_count, range_min, range_max]
+          const data: string[] = event.data || [];
+          if (data.length >= 5) {
+            const result = Number(BigInt(data[1]));
+            feedback = contractResultToFeedback(result);
+            eventGuessCount = Number(BigInt(data[2]));
+            eventRange = {
+              min: Number(BigInt(data[3])),
+              max: Number(BigInt(data[4])),
+            };
+            console.log(`[useNumberGuess] parsed GuessMade: feedback=${feedback}, count=${eventGuessCount}, range=${eventRange.min}-${eventRange.max}`);
+          }
+          break;
         }
 
-        // Fallback: poll contract for state changes
-        const result = await pollUntil(
-          () =>
-            Promise.all([
+        // Fallback: if we couldn't parse the event, poll contract
+        if (feedback === null) {
+          console.log(`[useNumberGuess] GuessMade event not found in receipt, falling back to polling`);
+          const preRange = rangeData
+            ? { min: Number((rangeData as any)[0] || 1), max: Number((rangeData as any)[1] || 10) }
+            : { min: 1, max: 10 };
+
+          const pollResult = await pollUntil(
+            () => Promise.all([
               contract.call("game_status", [tokenId]),
               contract.call("get_range", [tokenId]),
             ]),
-          ([newStatusData, newRangeData]) => {
+            ([newStatusData, newRangeData]) => {
+              const newStatus = Number(newStatusData);
+              const newMin = Number((newRangeData as any)[0] || preRange.min);
+              const newMax = Number((newRangeData as any)[1] || preRange.max);
+              return newStatus !== GameStatus.PLAYING || newMin !== preRange.min || newMax !== preRange.max;
+            }
+          );
+
+          if (pollResult) {
+            const [newStatusData, newRangeData] = pollResult;
             const newStatus = Number(newStatusData);
-            const newMin = Number((newRangeData as any)[0] || preRange.min);
-            const newMax = Number((newRangeData as any)[1] || preRange.max);
-            return (
-              newStatus !== GameStatus.PLAYING ||
-              newMin !== preRange.min ||
-              newMax !== preRange.max
-            );
-          }
-        );
-
-        if (result) {
-          const [newStatusData, newRangeData] = result;
-          const newStatus = Number(newStatusData);
-          const newRange = {
-            min: Number((newRangeData as any)[0] || preRange.min),
-            max: Number((newRangeData as any)[1] || preRange.max),
-          };
-
-          if (newStatus === GameStatus.WON) {
-            feedback = 0;
-          } else if (newRange.min > preRange.min) {
-            feedback = -1; // too low
-          } else if (newRange.max < preRange.max) {
-            feedback = 1; // too high
+            const newRange = {
+              min: Number((newRangeData as any)[0] || preRange.min),
+              max: Number((newRangeData as any)[1] || preRange.max),
+            };
+            if (newStatus === GameStatus.WON) feedback = 0;
+            else if (newRange.min > preRange.min) feedback = -1;
+            else if (newRange.max < preRange.max) feedback = 1;
           }
         }
 
+        console.log(`[useNumberGuess] total guess time: ${(performance.now() - t0).toFixed(0)}ms, feedback=${feedback}`);
         setLastFeedback(feedback);
-        const entry: GuessHistoryEntry = {
-          value: number,
-          feedback,
-          timestamp: Date.now(),
-        };
-        setGuessHistory((prev) => [...prev, entry]);
+        setGuessHistory((prev) => [...prev, { value: number, feedback, timestamp: Date.now() }]);
+
+        // Update range, guess count, and game status immediately from receipt data
+        if (eventRange) {
+          setReceiptRange(eventRange);
+        }
+        if (eventGuessCount !== null) {
+          setReceiptGuessCount(eventGuessCount);
+        }
+        if (feedback === 0) {
+          setReceiptGameStatus(GameStatus.WON);
+        } else if (eventGuessCount !== null && maxAttemptsData !== undefined && Number(maxAttemptsData) > 0 && eventGuessCount >= Number(maxAttemptsData)) {
+          setReceiptGameStatus(GameStatus.LOST);
+        }
+
+        // Still refetch to sync all other state (stats, etc.)
         refetch();
         setIsGuessing(false);
         return feedback;
@@ -383,21 +390,48 @@ export function useNumberGuess(
         return null;
       }
     },
-    [address, contract, sendAsync, tokenId, refetch, rangeData]
+    [address, contract, sendAsync, tokenId, refetch, rangeData, chainConfig.rpcUrl, gameAddress, maxAttemptsData]
   );
 
-  // Parse data
-  const gameStatus = (
+  // Parse data — use receipt override for immediate feedback, fall back to contract reads
+  const contractGameStatus = (
     statusData !== undefined ? Number(statusData) : GameStatus.NO_GAME
   ) as GameStatusType;
-  const guessCount = guessCountData !== undefined ? Number(guessCountData) : 0;
+  const gameStatus = receiptGameStatus ?? contractGameStatus;
+  const contractGuessCount = guessCountData !== undefined ? Number(guessCountData) : 0;
+  // Use receipt data for immediate feedback, fall back to contract reads
+  const guessCount = receiptGuessCount ?? contractGuessCount;
 
-  const range = rangeData
+  const contractRange = rangeData
     ? {
         min: Number((rangeData as any)[0] || 1),
         max: Number((rangeData as any)[1] || 10),
       }
     : { min: 1, max: 10 };
+  const range = receiptRange ?? contractRange;
+
+  // Clear receipt overrides once contract reads catch up
+  useEffect(() => {
+    if (receiptGuessCount !== null && contractGuessCount >= receiptGuessCount) {
+      setReceiptGuessCount(null);
+    }
+  }, [contractGuessCount, receiptGuessCount]);
+
+  useEffect(() => {
+    if (receiptRange && rangeData) {
+      const cMin = Number((rangeData as any)[0] || 1);
+      const cMax = Number((rangeData as any)[1] || 10);
+      if (cMin === receiptRange.min && cMax === receiptRange.max) {
+        setReceiptRange(null);
+      }
+    }
+  }, [rangeData, receiptRange]);
+
+  useEffect(() => {
+    if (receiptGameStatus !== null && contractGameStatus === receiptGameStatus) {
+      setReceiptGameStatus(null);
+    }
+  }, [contractGameStatus, receiptGameStatus]);
 
   // Clear stale guess history when game state doesn't match
   useEffect(() => {
@@ -463,7 +497,6 @@ export function useNumberGuess(
     isStarting,
     error,
     refetch,
-    injectGuessFeedback,
     setGuessHistoryFromAPI,
   };
 }
