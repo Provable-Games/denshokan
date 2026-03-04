@@ -1,20 +1,27 @@
 import { useState } from "react";
-import { Box, Typography, Button, Collapse } from "@mui/material";
+import { Box, Typography, Button, Collapse, Divider } from "@mui/material";
 import { motion, AnimatePresence } from "framer-motion";
 import { ExpandMore, ExpandLess } from "@mui/icons-material";
 import { GameStats as GameStatsType } from "../../hooks/useNumberGuess";
+import type { ApiGameStats } from "../../hooks/numberGuessApi.types";
 import { gameColors } from "./gameColors";
 
 interface Props {
   stats: GameStatsType;
+  globalStats?: ApiGameStats;
 }
 
-export default function GameStats({ stats }: Props) {
+export default function GameStats({ stats, globalStats }: Props) {
   const [open, setOpen] = useState(false);
 
   const winRate =
     stats.gamesPlayed > 0
       ? Math.round((stats.gamesWon / stats.gamesPlayed) * 100)
+      : 0;
+
+  const globalWinRate =
+    globalStats && globalStats.totalSessions > 0
+      ? Math.round((globalStats.wins / globalStats.totalSessions) * 100)
       : 0;
 
   return (
@@ -77,6 +84,56 @@ export default function GameStats({ stats }: Props) {
                   color={gameColors.score}
                 />
               </Box>
+
+              {globalStats && globalStats.totalSessions > 0 && (
+                <>
+                  <Divider sx={{ my: 1 }} />
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      display: "block",
+                      textAlign: "center",
+                      color: "text.secondary",
+                      fontSize: "0.65rem",
+                      textTransform: "uppercase",
+                      letterSpacing: 0.5,
+                      mb: 0.5,
+                    }}
+                  >
+                    Global Stats
+                  </Typography>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      gap: 3,
+                      flexWrap: "wrap",
+                      justifyContent: "center",
+                      pb: 1,
+                    }}
+                  >
+                    <StatItem
+                      label="Total Games"
+                      value={String(globalStats.totalSessions)}
+                      color={gameColors.gold}
+                    />
+                    <StatItem
+                      label="Win Rate"
+                      value={`${globalWinRate}%`}
+                      color={gameColors.correct}
+                    />
+                    <StatItem
+                      label="Avg Guesses"
+                      value={globalStats.avgGuesses ?? "-"}
+                      color={gameColors.tooLow}
+                    />
+                    <StatItem
+                      label="Perfect"
+                      value={String(globalStats.perfectGames)}
+                      color={gameColors.perfect}
+                    />
+                  </Box>
+                </>
+              )}
             </Collapse>
           </motion.div>
         )}

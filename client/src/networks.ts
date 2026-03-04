@@ -13,6 +13,8 @@ export interface DenshokanChainConfig {
   denshokanAddress: string;
   registryAddress: string;
   viewerAddress: string;
+  numberGuessApiUrl: string;
+  numberGuessWsUrl: string;
 }
 
 export const CHAIN_ID_FELTS: Record<ChainId, string> = {
@@ -36,6 +38,8 @@ const NETWORKS: Record<ChainId, DenshokanChainConfig> = {
     denshokanAddress: "0x00c40d0eb2af0d67dac903dfd7c623cba47405f72261727778155a98f93cb4fa",
     registryAddress: "0x06e4116f7f71f929b51b99dc8bc26bf7cae8a139691e21bc27fb881e93d5bd29",
     viewerAddress: "0x074da3c0325537366a4458fe0aa4c283460914775725eb2c6c267ee3c425a0d8",
+    numberGuessApiUrl: import.meta.env.VITE_MAINNET_NUMBER_GUESS_API_URL || "",
+    numberGuessWsUrl: import.meta.env.VITE_MAINNET_NUMBER_GUESS_WS_URL || "",
   },
   SN_SEPOLIA: {
     chainId: "SN_SEPOLIA",
@@ -52,6 +56,8 @@ const NETWORKS: Record<ChainId, DenshokanChainConfig> = {
     denshokanAddress: "0x06e1ba3fcb31a59847ea16af9f5955729bd28a527ff0c003edfc848781b0c4f0",
     registryAddress: "0x01c3c36502431b78680d6297b207e9eb84c7b051e22e92f0e58bc65262a5c3f1",
     viewerAddress: "0x03c55470cfa363f4bd0b103331a76f05816a5f1e6be4aa315f973926049e9494",
+    numberGuessApiUrl: import.meta.env.VITE_SEPOLIA_NUMBER_GUESS_API_URL || "",
+    numberGuessWsUrl: import.meta.env.VITE_SEPOLIA_NUMBER_GUESS_WS_URL || "",
   },
 };
 

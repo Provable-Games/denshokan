@@ -68,37 +68,10 @@ export interface UseNumberGuessReturn {
 
   // Refresh
   refetch: () => void;
-}
 
-// localStorage helpers for guess history persistence
-const GUESS_HISTORY_PREFIX = "denshokan:guessHistory:";
-
-function loadGuessHistory(tokenId: string): GuessHistoryEntry[] {
-  try {
-    const raw = localStorage.getItem(GUESS_HISTORY_PREFIX + tokenId);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveGuessHistory(tokenId: string, history: GuessHistoryEntry[]) {
-  try {
-    localStorage.setItem(
-      GUESS_HISTORY_PREFIX + tokenId,
-      JSON.stringify(history)
-    );
-  } catch {
-    // Silently ignore storage errors
-  }
-}
-
-function clearGuessHistory(tokenId: string) {
-  try {
-    localStorage.removeItem(GUESS_HISTORY_PREFIX + tokenId);
-  } catch {
-    // Silently ignore
-  }
+  // API integration
+  injectGuessFeedback: (feedback: GuessFeedback, range?: { min: number; max: number }) => void;
+  setGuessHistoryFromAPI: (entries: GuessHistoryEntry[]) => void;
 }
 
 /** Poll contract.call until predicate returns true, or max retries. */
@@ -120,6 +93,9 @@ async function pollUntil<T>(
   return null;
 }
 
+/** Timeout for WebSocket feedback before falling back to contract polling */
+const WS_FEEDBACK_TIMEOUT = 10_000;
+
 export function useNumberGuess(
   gameAddress: string,
   tokenId: string
@@ -129,19 +105,17 @@ export function useNumberGuess(
   const [isStarting, setIsStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load persisted guess history from localStorage
-  const [guessHistory, setGuessHistory] = useState<GuessHistoryEntry[]>(() =>
-    loadGuessHistory(tokenId)
-  );
-  const [lastFeedback, setLastFeedback] = useState<GuessFeedback>(() => {
-    const saved = loadGuessHistory(tokenId);
-    return saved.length > 0 ? saved[saved.length - 1].feedback : null;
-  });
+  const [guessHistory, setGuessHistory] = useState<GuessHistoryEntry[]>([]);
+  const [lastFeedback, setLastFeedback] = useState<GuessFeedback>(null);
   const [fullRange, setFullRange] = useState<{ min: number; max: number }>({
     min: 1,
     max: 10,
   });
   const fullRangeCaptured = useRef(false);
+
+  // Ref for resolving WebSocket-injected feedback during makeGuess
+  const feedbackResolverRef = useRef<((feedback: GuessFeedback) => void) | null>(null);
+  const injectedRangeRef = useRef<{ min: number; max: number } | null>(null);
 
   const { contract } = useContract({
     abi: numberGuessAbi as any,
@@ -245,6 +219,37 @@ export function useNumberGuess(
     refetchScore,
   ]);
 
+  /**
+   * Inject guess feedback from WebSocket, bypassing contract polling.
+   * Called from GameBoard's WebSocket onGuess handler.
+   */
+  const injectGuessFeedback = useCallback(
+    (feedback: GuessFeedback, range?: { min: number; max: number }) => {
+      if (range) {
+        injectedRangeRef.current = range;
+      }
+      if (feedbackResolverRef.current) {
+        feedbackResolverRef.current(feedback);
+        feedbackResolverRef.current = null;
+      }
+    },
+    []
+  );
+
+  /**
+   * Replace guess history with API-sourced entries.
+   * Called when API data loads or refreshes.
+   */
+  const setGuessHistoryFromAPI = useCallback(
+    (entries: GuessHistoryEntry[]) => {
+      setGuessHistory(entries);
+      if (entries.length > 0) {
+        setLastFeedback(entries[entries.length - 1].feedback);
+      }
+    },
+    []
+  );
+
   const startGame = useCallback(async () => {
     if (!address || !contract) {
       setError("Wallet not connected");
@@ -255,7 +260,6 @@ export function useNumberGuess(
     setError(null);
     setLastFeedback(null);
     setGuessHistory([]);
-    clearGuessHistory(tokenId);
     fullRangeCaptured.current = false;
 
     try {
@@ -285,6 +289,7 @@ export function useNumberGuess(
 
       setIsGuessing(true);
       setError(null);
+      injectedRangeRef.current = null;
 
       // Save pre-guess state for inference
       const preRange = rangeData
@@ -298,9 +303,35 @@ export function useNumberGuess(
         const call = contract.populate("guess", [tokenId, number]);
         await sendAsync([call]);
 
-        // Poll until state changes (range narrows or game ends)
-        let feedback: GuessFeedback = null;
+        // Race: WebSocket feedback vs contract polling timeout
+        const wsFeedbackPromise = new Promise<GuessFeedback>((resolve) => {
+          feedbackResolverRef.current = resolve;
+          setTimeout(() => {
+            // If no WS feedback arrived, resolve null to trigger polling fallback
+            if (feedbackResolverRef.current === resolve) {
+              feedbackResolverRef.current = null;
+              resolve(null);
+            }
+          }, WS_FEEDBACK_TIMEOUT);
+        });
 
+        let feedback = await wsFeedbackPromise;
+
+        // If WebSocket delivered feedback, use it directly
+        if (feedback !== null) {
+          setLastFeedback(feedback);
+          const entry: GuessHistoryEntry = {
+            value: number,
+            feedback,
+            timestamp: Date.now(),
+          };
+          setGuessHistory((prev) => [...prev, entry]);
+          refetch();
+          setIsGuessing(false);
+          return feedback;
+        }
+
+        // Fallback: poll contract for state changes
         const result = await pollUntil(
           () =>
             Promise.all([
@@ -342,11 +373,7 @@ export function useNumberGuess(
           feedback,
           timestamp: Date.now(),
         };
-        setGuessHistory((prev) => {
-          const updated = [...prev, entry];
-          saveGuessHistory(tokenId, updated);
-          return updated;
-        });
+        setGuessHistory((prev) => [...prev, entry]);
         refetch();
         setIsGuessing(false);
         return feedback;
@@ -372,26 +399,22 @@ export function useNumberGuess(
       }
     : { min: 1, max: 10 };
 
-  // Clear stale guess history if it doesn't match contract state
+  // Clear stale guess history when game state doesn't match
   useEffect(() => {
     if (statusData === undefined || guessCountData === undefined) return;
     const status = Number(statusData);
     const contractGuessCount = Number(guessCountData);
 
     if (status !== GameStatus.PLAYING && guessHistory.length > 0) {
-      // Game is not active — clear persisted history
       setGuessHistory([]);
       setLastFeedback(null);
-      clearGuessHistory(tokenId);
     } else if (
       status === GameStatus.PLAYING &&
       contractGuessCount === 0 &&
       guessHistory.length > 0
     ) {
-      // New game started but stale history remains
       setGuessHistory([]);
       setLastFeedback(null);
-      clearGuessHistory(tokenId);
     }
   }, [statusData, guessCountData, tokenId]);
 
@@ -440,5 +463,7 @@ export function useNumberGuess(
     isStarting,
     error,
     refetch,
+    injectGuessFeedback,
+    setGuessHistoryFromAPI,
   };
 }
