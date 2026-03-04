@@ -7,7 +7,7 @@ use openzeppelin_interfaces::erc2981::IERC2981Dispatcher;
 use openzeppelin_interfaces::erc721::IERC721Dispatcher;
 use snforge_std::{ContractClassTrait, DeclareResultTrait, declare};
 use starknet::ContractAddress;
-use crate::helpers::constants::GAME_CREATOR;
+use crate::helpers::constants::{GAME_CREATOR, OWNER};
 use crate::mocks::minigame_mock::{
     IMinigameMockDispatcher, IMinigameMockInitDispatcher, IMinigameMockInitDispatcherTrait,
 };
@@ -77,6 +77,8 @@ pub fn deploy_denshokan(
     let contract = declare("Denshokan").unwrap().contract_class();
 
     let mut constructor_calldata = array![];
+    // owner (first constructor param)
+    constructor_calldata.append(OWNER().into());
     let name: ByteArray = "Denshokan";
     let symbol: ByteArray = "DNSK";
     let base_uri: ByteArray = "https://denshokan.dev/token/";

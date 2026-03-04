@@ -55,9 +55,11 @@ TOKEN_NAME="${TOKEN_NAME:-Denshokan}"
 TOKEN_SYMBOL="${TOKEN_SYMBOL:-DNSH}"
 TOKEN_BASE_URI="${TOKEN_BASE_URI:-https://api.denshokan.dev/token/}"
 
-# Viewer parameters
+# Owner parameters
+# TOKEN_OWNER: Address that owns the Denshokan token contract (can upgrade)
 # VIEWER_OWNER: Address that can upgrade the DenshokanViewer contract
 # If not set, will use the deployer account address from snfoundry.toml profile
+TOKEN_OWNER="${TOKEN_OWNER:-}"
 VIEWER_OWNER="${VIEWER_OWNER:-}"
 
 # Optional: existing registry address (skip registry deployment if set)
@@ -83,11 +85,16 @@ echo "    Name: $TOKEN_NAME"
 echo "    Symbol: $TOKEN_SYMBOL"
 echo "    Base URI: $TOKEN_BASE_URI"
 echo ""
-echo "  Viewer Parameters:"
-if [ -n "$VIEWER_OWNER" ]; then
-    echo "    Owner: $VIEWER_OWNER"
+echo "  Owner Parameters:"
+if [ -n "$TOKEN_OWNER" ]; then
+    echo "    Token Owner: $TOKEN_OWNER"
 else
-    echo "    Owner: (will use deployer account)"
+    echo "    Token Owner: (will use deployer account)"
+fi
+if [ -n "$VIEWER_OWNER" ]; then
+    echo "    Viewer Owner: $VIEWER_OWNER"
+else
+    echo "    Viewer Owner: (will use deployer account)"
 fi
 echo ""
 if [ -n "$GAME_REGISTRY_ADDRESS" ]; then
@@ -241,6 +248,17 @@ fi
 # DEPLOY DENSHOKAN TOKEN
 # ============================
 
+# Get token owner address (use deployer account if not specified)
+if [ -z "$TOKEN_OWNER" ]; then
+    print_info "Fetching deployer account address for token owner..."
+    TOKEN_OWNER=$(sncast --profile "$PROFILE" account list 2>&1 | grep "address:" | head -1 | grep -oE '0x[0-9a-fA-F]+')
+    if [ -z "$TOKEN_OWNER" ]; then
+        print_error "Failed to get deployer account address. Set TOKEN_OWNER manually."
+        exit 1
+    fi
+    print_info "Using deployer account as token owner: $TOKEN_OWNER"
+fi
+
 print_info "Declaring Denshokan contract..."
 
 DENSHOKAN_DECLARE_OUTPUT=$(sncast --profile "$PROFILE" --wait \
@@ -265,12 +283,12 @@ print_info "Denshokan class hash: $DENSHOKAN_CLASS_HASH"
 
 print_info "Deploying Denshokan contract..."
 
-# Constructor: name: ByteArray, symbol: ByteArray, base_uri: ByteArray,
+# Constructor: owner: ContractAddress, name: ByteArray, symbol: ByteArray, base_uri: ByteArray,
 #              game_registry_address: ContractAddress, default_renderer_address: ContractAddress
 DENSHOKAN_DEPLOY_OUTPUT=$(sncast --profile "$PROFILE" --wait \
     deploy \
     --class-hash "$DENSHOKAN_CLASS_HASH" \
-    --arguments "\"$TOKEN_NAME\", \"$TOKEN_SYMBOL\", \"$TOKEN_BASE_URI\", $GAME_REGISTRY_ADDRESS, $DEFAULT_RENDERER_ADDRESS" 2>&1)
+    --arguments "$TOKEN_OWNER, \"$TOKEN_NAME\", \"$TOKEN_SYMBOL\", \"$TOKEN_BASE_URI\", $GAME_REGISTRY_ADDRESS, $DEFAULT_RENDERER_ADDRESS" 2>&1)
 
 CONTRACT_ADDRESS=$(echo "$DENSHOKAN_DEPLOY_OUTPUT" | grep -oE 'contract_address: 0x[0-9a-fA-F]+' | grep -oE '0x[0-9a-fA-F]+' || echo "$DENSHOKAN_DEPLOY_OUTPUT" | grep -oE '0x[0-9a-fA-F]{64}' | head -1)
 
@@ -352,6 +370,7 @@ cat > "$DEPLOYMENT_FILE" << EOF
     "address": "$CONTRACT_ADDRESS",
     "class_hash": "$DENSHOKAN_CLASS_HASH",
     "parameters": {
+      "owner": "$TOKEN_OWNER",
       "name": "$TOKEN_NAME",
       "symbol": "$TOKEN_SYMBOL",
       "base_uri": "$TOKEN_BASE_URI",
@@ -407,6 +426,7 @@ echo
 echo "Denshokan Token Contract:"
 echo "  Address: $CONTRACT_ADDRESS"
 echo "  Class Hash: $DENSHOKAN_CLASS_HASH"
+echo "  Owner: $TOKEN_OWNER"
 echo "  Token Name: $TOKEN_NAME"
 echo "  Token Symbol: $TOKEN_SYMBOL"
 echo "  Base URI: $TOKEN_BASE_URI"

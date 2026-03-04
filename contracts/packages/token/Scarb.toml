@@ -15,6 +15,7 @@ openzeppelin_token.workspace = true
 openzeppelin_introspection.workspace = true
 openzeppelin_interfaces.workspace = true
 openzeppelin_access.workspace = true
+openzeppelin_upgrades.workspace = true
 
 [dev-dependencies]
 snforge_std.workspace = true

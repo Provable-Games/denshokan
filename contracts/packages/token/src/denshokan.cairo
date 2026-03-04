@@ -25,17 +25,20 @@ use game_components_embeddable_game_standard::token::extensions::skills::skills:
 use game_components_embeddable_game_standard::token::structs::TokenMetadata;
 use game_components_embeddable_game_standard::token::token_component::CoreTokenComponent;
 use game_components_utilities::renderer::svg::create_custom_metadata;
+use openzeppelin_access::ownable::OwnableComponent;
 use openzeppelin_interfaces::erc2981::{IERC2981, IERC2981_ID};
 use openzeppelin_interfaces::erc721::{
     IERC721Dispatcher, IERC721DispatcherTrait, IERC721Metadata, IERC721MetadataCamelOnly,
 };
+use openzeppelin_interfaces::upgrades::IUpgradeable;
 use openzeppelin_introspection::src5::SRC5Component;
 use openzeppelin_token::common::erc2981::erc2981::{DefaultConfig, ERC2981Component};
 use openzeppelin_token::erc721::ERC721Component;
 use openzeppelin_token::erc721::extensions::erc721_enumerable::ERC721EnumerableComponent;
-use starknet::ContractAddress;
+use openzeppelin_upgrades::UpgradeableComponent;
 use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
 use starknet::syscalls::call_contract_syscall;
+use starknet::{ClassHash, ContractAddress};
 
 fn try_call_and_deserialize<T, +Serde<T>, +Drop<T>>(
     address: ContractAddress, selector: felt252, calldata: Span<felt252>, default: T,
@@ -132,6 +135,8 @@ pub mod Denshokan {
     component!(
         path: ERC721EnumerableComponent, storage: erc721_enumerable, event: ERC721EnumerableEvent,
     );
+    component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
+    component!(path: UpgradeableComponent, storage: upgradeable, event: UpgradeableEvent);
 
     // Optional components (only included if enabled)
     component!(path: MinterComponent, storage: minter, event: MinterEvent);
@@ -158,6 +163,10 @@ pub mod Denshokan {
         core_token: CoreTokenComponent::Storage,
         #[substorage(v0)]
         erc721_enumerable: ERC721EnumerableComponent::Storage,
+        #[substorage(v0)]
+        ownable: OwnableComponent::Storage,
+        #[substorage(v0)]
+        upgradeable: UpgradeableComponent::Storage,
         // Default renderer contract address (for SVG generation)
         default_renderer_address: ContractAddress,
         // Optional storage (only included if features are enabled)
@@ -193,6 +202,10 @@ pub mod Denshokan {
         #[flat]
         ERC721EnumerableEvent: ERC721EnumerableComponent::Event,
         #[flat]
+        OwnableEvent: OwnableComponent::Event,
+        #[flat]
+        UpgradeableEvent: UpgradeableComponent::Event,
+        #[flat]
         MinterEvent: MinterComponent::Event,
         #[flat]
         ObjectivesEvent: ObjectivesComponent::Event,
@@ -222,6 +235,11 @@ pub mod Denshokan {
     #[abi(embed_v0)]
     impl ERC721EnumerableImpl =
         ERC721EnumerableComponent::ERC721EnumerableImpl<ContractState>;
+    #[abi(embed_v0)]
+    impl OwnableImpl = OwnableComponent::OwnableImpl<ContractState>;
+    #[abi(embed_v0)]
+    impl OwnableCamelOnlyImpl =
+        OwnableComponent::OwnableCamelOnlyImpl<ContractState>;
 
     // Optional implementations (conditional based on feature flags)
     #[abi(embed_v0)]
@@ -246,6 +264,8 @@ pub mod Denshokan {
     impl ContextInternalImpl = ContextComponent::InternalImpl<ContractState>;
     impl RendererInternalImpl = RendererComponent::InternalImpl<ContractState>;
     impl SkillsInternalImpl = SkillsComponent::InternalImpl<ContractState>;
+    impl OwnableInternalImpl = OwnableComponent::InternalImpl<ContractState>;
+    impl UpgradeableInternalImpl = UpgradeableComponent::InternalImpl<ContractState>;
     impl ERC721EnumerableInternalImpl = ERC721EnumerableComponent::InternalImpl<ContractState>;
 
     // ================================================================================================
@@ -644,6 +664,18 @@ pub mod Denshokan {
         }
     }
 
+    // ================================================================================================
+    // UPGRADEABLE IMPLEMENTATION
+    // ================================================================================================
+
+    #[abi(embed_v0)]
+    impl UpgradeableImpl of IUpgradeable<ContractState> {
+        fn upgrade(ref self: ContractState, new_class_hash: ClassHash) {
+            self.ownable.assert_only_owner();
+            self.upgradeable.upgrade(new_class_hash);
+        }
+    }
+
     // NOTE: Filter functionality has been moved to DenshokanViewer contract
     // to reduce contract size. Use the separate DenshokanViewer contract
     // for all IDenshokanFilter operations.
@@ -692,12 +724,17 @@ pub mod Denshokan {
     #[constructor]
     fn constructor(
         ref self: ContractState,
+        owner: ContractAddress,
         name: ByteArray,
         symbol: ByteArray,
         base_uri: ByteArray,
         game_registry_address: ContractAddress,
         default_renderer_address: ContractAddress,
     ) {
+        // Initialize ownership
+        assert!(!owner.is_zero(), "Denshokan: owner address cannot be zero");
+        self.ownable.initializer(owner);
+
         // Initialize core components
         self.erc721.initializer(name, symbol, base_uri);
         // Register erc2981 interface as not storing default royalties
