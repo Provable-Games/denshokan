@@ -8,6 +8,7 @@ import {
   CardContent,
   Button,
   Stack,
+  Link,
 } from "@mui/material";
 import {
   useScoreUpdates,
@@ -16,6 +17,7 @@ import {
   useConnectionStatus,
 } from "@provable-games/denshokan-sdk/react";
 import { useGameDetail } from "../hooks/useGameDetail";
+import { useChainConfig } from "../contexts/NetworkContext";
 import { GameConfigSection, QuickPlay } from "../components/numberguess";
 import LoadingSpinner from "../components/common/LoadingSpinner";
 
@@ -24,6 +26,7 @@ export default function GameDetailPage() {
   const navigate = useNavigate();
   const id = parseInt(gameId || "0");
   const { game, stats, isLoading, error, refetch } = useGameDetail(id);
+  const { chainConfig } = useChainConfig();
   const { isConnected } = useConnectionStatus();
 
   const refetchingRef = useRef(false);
@@ -78,8 +81,25 @@ export default function GameDetailPage() {
         {game.name || `Game #${id}`}
       </Typography>
       {game.description && (
-        <Typography color="text.secondary" sx={{ mb: 3 }}>
+        <Typography color="text.secondary" sx={{ mb: 1 }}>
           {game.description}
+        </Typography>
+      )}
+
+      {game.contractAddress && (
+        <Typography
+          variant="body2"
+          sx={{ mb: 3, fontFamily: "monospace", fontSize: "0.8rem" }}
+        >
+          Contract:{" "}
+          <Link
+            href={`${chainConfig.explorerUrl}/contract/${game.contractAddress}`}
+            target="_blank"
+            rel="noopener"
+            sx={{ fontFamily: "monospace" }}
+          >
+            {game.contractAddress}
+          </Link>
         </Typography>
       )}
 
@@ -95,8 +115,8 @@ export default function GameDetailPage() {
         </Button>
       </Stack>
 
-      {/* Quick Play */}
-      {game.contractAddress && (
+      {/* Quick Play (Number Guess only) */}
+      {game.contractAddress && game.name === "Number Guess" && (
         <Box sx={{ mb: 4 }}>
           <QuickPlay gameAddress={game.contractAddress} />
         </Box>

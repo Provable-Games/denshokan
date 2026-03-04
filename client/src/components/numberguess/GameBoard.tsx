@@ -7,17 +7,20 @@ import {
   useContract,
   useSendTransaction,
 } from "@starknet-react/core";
-import { RpcProvider, CairoOption, CairoOptionVariant } from "starknet";
+import { RpcProvider, CairoOption, CairoOptionVariant, TransactionFinalityStatus } from "starknet";
 import {
   useNumberGuess,
   GameStatus,
-  type GuessFeedback,
   type GuessHistoryEntry,
 } from "../../hooks/useNumberGuess";
 import { useNumberGuessConfig } from "../../hooks/useNumberGuessConfig";
-import { useSessionGuesses, useNumberGuessStats } from "../../hooks/useNumberGuessAPI";
-import { useNumberGuessWebSocket } from "../../hooks/useNumberGuessWebSocket";
-import type { WsGuessPayload, ApiGuess } from "../../hooks/numberGuessApi.types";
+import {
+  useSessionGuesses,
+  useNumberGuessStats,
+} from "../../hooks/useNumberGuessAPI";
+import type {
+  ApiGuess,
+} from "../../hooks/numberGuessApi.types";
 import { useChainConfig } from "../../contexts/NetworkContext";
 import numberGuessAbi from "../../abi/numberGuess.json";
 import StartScreen from "./StartScreen";
@@ -30,17 +33,13 @@ import GameStats from "./GameStats";
 import ResultModal from "./ResultModal";
 import LoadingSpinner from "../common/LoadingSpinner";
 
-/** Convert API result string to GuessFeedback number */
-function apiResultToFeedback(result: string): GuessFeedback {
+/** Convert API result string to GuessFeedback */
+function apiResultToFeedback(result: string): -1 | 0 | 1 | null {
   switch (result) {
-    case "correct":
-      return 0;
-    case "too_low":
-      return -1;
-    case "too_high":
-      return 1;
-    default:
-      return null;
+    case "correct": return 0;
+    case "too_low": return -1;
+    case "too_high": return 1;
+    default: return null;
   }
 }
 
@@ -55,9 +54,16 @@ interface Props {
   gameAddress: string;
   tokenId: string;
   tokenConfig?: TokenConfig;
+  /** When true, game was already started via QuickPlay — suppress start screen while loading */
+  gameAlreadyStarted?: boolean;
 }
 
-export default function GameBoard({ gameAddress, tokenId, tokenConfig }: Props) {
+export default function GameBoard({
+  gameAddress,
+  tokenId,
+  tokenConfig,
+  gameAlreadyStarted = false,
+}: Props) {
   const navigate = useNavigate();
   const { address } = useAccount();
   const { chainConfig } = useChainConfig();
@@ -88,18 +94,23 @@ export default function GameBoard({ gameAddress, tokenId, tokenConfig }: Props) 
     isGuessing,
     isStarting,
     error,
-    injectGuessFeedback,
+    refetch: refetchGame,
     setGuessHistoryFromAPI,
   } = useNumberGuess(gameAddress, tokenId);
 
   // API: fetch session + guess history
-  const {
-    data: apiSessionData,
-    refetch: refetchApiGuesses,
-  } = useSessionGuesses(tokenId);
+  const { data: apiSessionData, refetch: refetchApiGuesses } =
+    useSessionGuesses(tokenId);
 
   // API: global stats (for GameStats component)
   const { data: globalStats } = useNumberGuessStats();
+
+  // Aggressively poll when QuickPlay already started the game but contract reads haven't caught up
+  useEffect(() => {
+    if (!gameAlreadyStarted || gameStatus !== GameStatus.NO_GAME) return;
+    const interval = setInterval(() => refetchGame(), 500);
+    return () => clearInterval(interval);
+  }, [gameAlreadyStarted, gameStatus, refetchGame]);
 
   // Convert API guesses to local GuessHistoryEntry format
   const apiGuessHistory: GuessHistoryEntry[] =
@@ -109,9 +120,11 @@ export default function GameBoard({ gameAddress, tokenId, tokenConfig }: Props) 
       timestamp: new Date(g.blockTimestamp).getTime(),
     })) ?? [];
 
-  // Use API history when available, fall back to local state
+  // Use whichever history is more up-to-date (local updates instantly from receipt)
   const guessHistory =
-    apiGuessHistory.length > 0 ? apiGuessHistory : localGuessHistory;
+    localGuessHistory.length >= apiGuessHistory.length
+      ? localGuessHistory
+      : apiGuessHistory;
 
   // Sync API history into hook state when it loads
   useEffect(() => {
@@ -119,30 +132,6 @@ export default function GameBoard({ gameAddress, tokenId, tokenConfig }: Props) 
       setGuessHistoryFromAPI(apiGuessHistory);
     }
   }, [apiSessionData]);
-
-  // WebSocket: real-time guess feedback
-  useNumberGuessWebSocket({
-    channels: ["guess", "game_won", "game_lost"],
-    tokenId,
-    onGuess: useCallback(
-      (data: WsGuessPayload) => {
-        const feedback = apiResultToFeedback(data.result);
-        injectGuessFeedback(feedback, {
-          min: data.rangeMinAfter,
-          max: data.rangeMaxAfter,
-        });
-        refetchApiGuesses();
-      },
-      [injectGuessFeedback, refetchApiGuesses]
-    ),
-    onGameWon: useCallback(() => {
-      refetchApiGuesses();
-    }, [refetchApiGuesses]),
-    onGameLost: useCallback(() => {
-      refetchApiGuesses();
-    }, [refetchApiGuesses]),
-    enabled: gameStatus === GameStatus.PLAYING,
-  });
 
   // Get settings-based full range (survives page refresh)
   const { settings } = useNumberGuessConfig(gameAddress);
@@ -161,7 +150,7 @@ export default function GameBoard({ gameAddress, tokenId, tokenConfig }: Props) 
       setLastGameStatus(gameStatus);
       await makeGuess(number);
     },
-    [makeGuess, gameStatus]
+    [makeGuess, gameStatus],
   );
 
   // Show result modal when game ends
@@ -185,31 +174,36 @@ export default function GameBoard({ gameAddress, tokenId, tokenConfig }: Props) 
 
     try {
       const none = <T,>() => new CairoOption<T>(CairoOptionVariant.None);
-      const some = <T,>(val: T) => new CairoOption<T>(CairoOptionVariant.Some, val);
+      const some = <T,>(val: T) =>
+        new CairoOption<T>(CairoOptionVariant.Some, val);
 
       // Step 1: Mint a new token with the same configuration as the current token
       const cfg = tokenConfig || {};
       const mintCall = gameContract.populate("mint_game", [
-        cfg.playerName ? some(cfg.playerName) : none(),          // player_name
-        cfg.settingsId ? some(cfg.settingsId) : none(),          // settings_id
-        none(),                                                  // start
-        none(),                                                  // end
-        cfg.objectiveId ? some(cfg.objectiveId) : none(),        // objective_id
-        none(),                                                  // context
-        none(),                                                  // client_url
-        none(),                                                  // renderer_address
-        address,                                                 // to
-        cfg.soulbound ?? false,                                  // soulbound
-        false,                                                   // paymaster
-        0,                                                       // salt
-        0,                                                       // metadata
+        cfg.playerName ? some(cfg.playerName) : none(), // player_name
+        cfg.settingsId ? some(cfg.settingsId) : none(), // settings_id
+        none(), // start
+        none(), // end
+        cfg.objectiveId ? some(cfg.objectiveId) : none(), // objective_id
+        none(), // context
+        none(), // client_url
+        none(), // renderer_address
+        none(), // skills_address
+        address, // to
+        cfg.soulbound ?? false, // soulbound
+        false, // paymaster
+        0, // salt
+        0, // metadata
       ]);
 
       const mintResult = await sendMintTx([mintCall]);
 
       // Step 2: Get the new token ID from the receipt
       const rpc = new RpcProvider({ nodeUrl: chainConfig.rpcUrl });
-      const receipt = await rpc.waitForTransaction(mintResult.transaction_hash);
+      const receipt = await rpc.waitForTransaction(mintResult.transaction_hash, {
+        successStates: [TransactionFinalityStatus.ACCEPTED_ON_L2],
+        retryInterval: 300,
+      });
 
       const denshokanAddr = BigInt(chainConfig.denshokanAddress);
       let newTokenId: string | null = null;
@@ -225,7 +219,7 @@ export default function GameBoard({ gameAddress, tokenId, tokenConfig }: Props) 
           // Reconstruct felt252 token_id from u256 (low + high * 2^128)
           const low = BigInt(keys[3]);
           const high = BigInt(keys[4]);
-          const fullId = low + high * (2n ** 128n);
+          const fullId = low + high * 2n ** 128n;
           newTokenId = "0x" + fullId.toString(16);
           break;
         }
@@ -262,10 +256,13 @@ export default function GameBoard({ gameAddress, tokenId, tokenConfig }: Props) 
     );
   }
 
+  // If game was started via QuickPlay, suppress start screen while contract reads catch up
+  const waitingForGameStart = gameAlreadyStarted && gameStatus === GameStatus.NO_GAME;
   const showStartScreen =
-    gameStatus === GameStatus.NO_GAME ||
+    !waitingForGameStart &&
+    (gameStatus === GameStatus.NO_GAME ||
     gameStatus === GameStatus.WON ||
-    gameStatus === GameStatus.LOST;
+    gameStatus === GameStatus.LOST);
 
   const gameIsOver =
     gameStatus === GameStatus.WON || gameStatus === GameStatus.LOST;
@@ -296,6 +293,13 @@ export default function GameBoard({ gameAddress, tokenId, tokenConfig }: Props) 
             onStart={startGame}
             onMintAndPlay={handleMintAndPlay}
           />
+        )}
+
+        {/* Waiting for game to start (QuickPlay already sent new_game tx) */}
+        {waitingForGameStart && (
+          <Box sx={{ textAlign: "center", py: 6 }}>
+            <LoadingSpinner message="Starting game..." />
+          </Box>
         )}
 
         {/* Starting / Minting spinner */}

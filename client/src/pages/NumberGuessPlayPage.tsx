@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { Box, Typography, Button, Alert, IconButton } from "@mui/material";
 import { ArrowBack } from "@mui/icons-material";
 import { useTokenDetail } from "../hooks/useTokenDetail";
@@ -7,7 +7,9 @@ import LoadingSpinner from "../components/common/LoadingSpinner";
 export default function NumberGuessPlayPage() {
   const { tokenId } = useParams<{ tokenId: string }>();
   const navigate = useNavigate();
-  const { token, isLoading, error } = useTokenDetail(tokenId || "");
+  const location = useLocation();
+  const gameStarted = (location.state as any)?.gameStarted === true;
+  const { token, game, isLoading, error } = useTokenDetail(tokenId || "");
 
   if (isLoading) {
     return <LoadingSpinner message="Loading token..." />;
@@ -30,7 +32,16 @@ export default function NumberGuessPlayPage() {
     );
   }
 
-  const gameAddress = token.gameAddress;
+  const gameAddress = token.gameAddress || game?.contractAddress || null;
+
+  console.log("[NumberGuessPlayPage]", {
+    tokenId,
+    tokenGameAddress: token.gameAddress,
+    gameContractAddress: game?.contractAddress,
+    resolvedGameAddress: gameAddress,
+    gameId: token.gameId,
+    game,
+  });
 
   if (!gameAddress || gameAddress === "0x0") {
     return (
@@ -81,6 +92,7 @@ export default function NumberGuessPlayPage() {
       <GameBoard
         gameAddress={gameAddress}
         tokenId={tokenId || ""}
+        gameAlreadyStarted={gameStarted}
         tokenConfig={{
           settingsId: token.settingsId || undefined,
           objectiveId: token.objectiveId || undefined,

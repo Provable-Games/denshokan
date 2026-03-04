@@ -2,6 +2,11 @@ import { type Chain, mainnet, sepolia } from "@starknet-react/chains";
 
 export type ChainId = "SN_MAIN" | "SN_SEPOLIA";
 
+export interface GameContractConfig {
+  address: string;
+  methods: { name: string; entrypoint: string }[];
+}
+
 export interface DenshokanChainConfig {
   chainId: ChainId;
   chain: Chain;
@@ -15,7 +20,18 @@ export interface DenshokanChainConfig {
   viewerAddress: string;
   numberGuessApiUrl: string;
   numberGuessWsUrl: string;
+  /** Game contracts that need Controller session policies */
+  gameContracts: GameContractConfig[];
 }
+
+/** Standard methods for minigame contracts */
+const MINIGAME_METHODS = [
+  { name: "mint_game", entrypoint: "mint_game" },
+  { name: "new_game", entrypoint: "new_game" },
+  { name: "guess", entrypoint: "guess" },
+  { name: "create_settings", entrypoint: "create_settings" },
+  { name: "create_objective", entrypoint: "create_objective" },
+];
 
 export const CHAIN_ID_FELTS: Record<ChainId, string> = {
   SN_MAIN: "0x534e5f4d41494e",
@@ -40,6 +56,7 @@ const NETWORKS: Record<ChainId, DenshokanChainConfig> = {
     viewerAddress: "0x074da3c0325537366a4458fe0aa4c283460914775725eb2c6c267ee3c425a0d8",
     numberGuessApiUrl: import.meta.env.VITE_MAINNET_NUMBER_GUESS_API_URL || "",
     numberGuessWsUrl: import.meta.env.VITE_MAINNET_NUMBER_GUESS_WS_URL || "",
+    gameContracts: [],
   },
   SN_SEPOLIA: {
     chainId: "SN_SEPOLIA",
@@ -58,6 +75,12 @@ const NETWORKS: Record<ChainId, DenshokanChainConfig> = {
     viewerAddress: "0x03c55470cfa363f4bd0b103331a76f05816a5f1e6be4aa315f973926049e9494",
     numberGuessApiUrl: import.meta.env.VITE_SEPOLIA_NUMBER_GUESS_API_URL || "",
     numberGuessWsUrl: import.meta.env.VITE_SEPOLIA_NUMBER_GUESS_WS_URL || "",
+    gameContracts: [
+      {
+        address: "0x05abe035f762612a25363668bf7146c77e1ab7c08e90bd1e7a01061f7ec5a00f",
+        methods: MINIGAME_METHODS,
+      },
+    ],
   },
 };
 

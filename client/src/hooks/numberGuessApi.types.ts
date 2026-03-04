@@ -80,6 +80,7 @@ export interface WsGuessPayload {
   guessNumber: number;
   rangeMinAfter: number;
   rangeMaxAfter: number;
+  player?: string;
 }
 
 /** Payload for "game_won" / "game_lost" channel notifications */

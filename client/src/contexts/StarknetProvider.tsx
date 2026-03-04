@@ -11,6 +11,7 @@ import {
   getNetworkConfig,
   getAllChains,
   CHAIN_ID_FELTS,
+  type GameContractConfig,
 } from "../networks";
 
 const defaultChainId = getDefaultChainId();
@@ -23,6 +24,23 @@ const orderedChains =
     ? ([chains[1], chains[0]] as const)
     : ([chains[0], chains[1]] as const);
 
+/** Build Controller session policies from network configs */
+function buildGameContractPolicies(
+  configs: GameContractConfig[],
+): Record<string, { methods: { name: string; entrypoint: string }[] }> {
+  const result: Record<string, { methods: { name: string; entrypoint: string }[] }> = {};
+  for (const gc of configs) {
+    result[gc.address] = { methods: gc.methods };
+  }
+  return result;
+}
+
+const denshokanMethods = [
+  { name: "update_player_name", entrypoint: "update_player_name" },
+  { name: "update_game", entrypoint: "update_game" },
+  { name: "mint", entrypoint: "mint" },
+];
+
 const cartridgeConnector =
   typeof window !== "undefined"
     ? new ControllerConnector({
@@ -33,20 +51,10 @@ const cartridgeConnector =
         defaultChainId: CHAIN_ID_FELTS[defaultChainId],
         policies: {
           contracts: {
-            [mainnetConfig.denshokanAddress]: {
-              methods: [
-                { name: "update_player_name", entrypoint: "update_player_name" },
-                { name: "update_game", entrypoint: "update_game" },
-                { name: "mint", entrypoint: "mint" },
-              ],
-            },
-            [sepoliaConfig.denshokanAddress]: {
-              methods: [
-                { name: "update_player_name", entrypoint: "update_player_name" },
-                { name: "update_game", entrypoint: "update_game" },
-                { name: "mint", entrypoint: "mint" },
-              ],
-            },
+            [mainnetConfig.denshokanAddress]: { methods: denshokanMethods },
+            [sepoliaConfig.denshokanAddress]: { methods: denshokanMethods },
+            ...buildGameContractPolicies(mainnetConfig.gameContracts),
+            ...buildGameContractPolicies(sepoliaConfig.gameContracts),
           },
         },
       })

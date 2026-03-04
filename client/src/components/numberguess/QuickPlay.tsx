@@ -18,7 +18,7 @@ import {
   useContract,
   useSendTransaction,
 } from "@starknet-react/core";
-import { RpcProvider, CairoOption, CairoOptionVariant } from "starknet";
+import { RpcProvider, CairoOption, CairoOptionVariant, TransactionFinalityStatus } from "starknet";
 import { useNumberGuessConfig } from "../../hooks/useNumberGuessConfig";
 import { useChainConfig } from "../../contexts/NetworkContext";
 import numberGuessAbi from "../../abi/numberGuess.json";
@@ -74,6 +74,7 @@ export default function QuickPlay({ gameAddress }: Props) {
         none(),                                                      // context
         none(),                                                      // client_url
         none(),                                                      // renderer_address
+        none(),                                                      // skills_address
         address,                                                     // to
         false,                                                       // soulbound
         false,                                                       // paymaster
@@ -85,7 +86,10 @@ export default function QuickPlay({ gameAddress }: Props) {
 
       // Step 2: Get the new token ID from the receipt
       const rpc = new RpcProvider({ nodeUrl: chainConfig.rpcUrl });
-      const receipt = await rpc.waitForTransaction(mintResult.transaction_hash);
+      const receipt = await rpc.waitForTransaction(mintResult.transaction_hash, {
+        successStates: [TransactionFinalityStatus.ACCEPTED_ON_L2],
+        retryInterval: 300,
+      });
 
       const denshokanAddr = BigInt(chainConfig.denshokanAddress);
       let newTokenId: string | null = null;
@@ -114,8 +118,8 @@ export default function QuickPlay({ gameAddress }: Props) {
       const newGameCall = gameContract.populate("new_game", [newTokenId]);
       await sendAsync([newGameCall]);
 
-      // Step 4: Navigate to the play page
-      navigate(`/tokens/${newTokenId}/play`);
+      // Step 4: Navigate to the play page (pass state so GameBoard knows game is already started)
+      navigate(`/tokens/${newTokenId}/play`, { state: { gameStarted: true } });
     } catch (e: any) {
       setError(e.message || "Failed to start game");
     } finally {
