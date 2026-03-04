@@ -264,7 +264,10 @@ export function useNumberGuess(
       const call = contract.populate("new_game", [tokenId]);
       await sendAsync([call]);
 
-      // Poll until game status changes to PLAYING
+      // Set immediate override so UI shows game board right away
+      setReceiptGameStatus(GameStatus.PLAYING);
+
+      // Poll until contract reads confirm PLAYING
       await pollUntil(
         () => contract.call("game_status", [tokenId]),
         (result) => Number(result) === GameStatus.PLAYING
