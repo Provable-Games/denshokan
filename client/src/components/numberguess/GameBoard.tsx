@@ -11,8 +11,13 @@ import { RpcProvider, CairoOption, CairoOptionVariant } from "starknet";
 import {
   useNumberGuess,
   GameStatus,
+  type GuessFeedback,
+  type GuessHistoryEntry,
 } from "../../hooks/useNumberGuess";
 import { useNumberGuessConfig } from "../../hooks/useNumberGuessConfig";
+import { useSessionGuesses, useNumberGuessStats } from "../../hooks/useNumberGuessAPI";
+import { useNumberGuessWebSocket } from "../../hooks/useNumberGuessWebSocket";
+import type { WsGuessPayload, ApiGuess } from "../../hooks/numberGuessApi.types";
 import { useChainConfig } from "../../contexts/NetworkContext";
 import numberGuessAbi from "../../abi/numberGuess.json";
 import StartScreen from "./StartScreen";
@@ -24,6 +29,20 @@ import GuessHistoryBar from "./GuessHistoryBar";
 import GameStats from "./GameStats";
 import ResultModal from "./ResultModal";
 import LoadingSpinner from "../common/LoadingSpinner";
+
+/** Convert API result string to GuessFeedback number */
+function apiResultToFeedback(result: string): GuessFeedback {
+  switch (result) {
+    case "correct":
+      return 0;
+    case "too_low":
+      return -1;
+    case "too_high":
+      return 1;
+    default:
+      return null;
+  }
+}
 
 interface TokenConfig {
   settingsId?: number;
@@ -63,13 +82,67 @@ export default function GameBoard({ gameAddress, tokenId, tokenConfig }: Props) 
     fullRange,
     maxAttempts,
     lastFeedback,
-    guessHistory,
+    guessHistory: localGuessHistory,
     stats,
     isLoading,
     isGuessing,
     isStarting,
     error,
+    injectGuessFeedback,
+    setGuessHistoryFromAPI,
   } = useNumberGuess(gameAddress, tokenId);
+
+  // API: fetch session + guess history
+  const {
+    data: apiSessionData,
+    refetch: refetchApiGuesses,
+  } = useSessionGuesses(tokenId);
+
+  // API: global stats (for GameStats component)
+  const { data: globalStats } = useNumberGuessStats();
+
+  // Convert API guesses to local GuessHistoryEntry format
+  const apiGuessHistory: GuessHistoryEntry[] =
+    apiSessionData?.guesses.map((g: ApiGuess) => ({
+      value: g.guessValue,
+      feedback: apiResultToFeedback(g.result),
+      timestamp: new Date(g.blockTimestamp).getTime(),
+    })) ?? [];
+
+  // Use API history when available, fall back to local state
+  const guessHistory =
+    apiGuessHistory.length > 0 ? apiGuessHistory : localGuessHistory;
+
+  // Sync API history into hook state when it loads
+  useEffect(() => {
+    if (apiGuessHistory.length > 0) {
+      setGuessHistoryFromAPI(apiGuessHistory);
+    }
+  }, [apiSessionData]);
+
+  // WebSocket: real-time guess feedback
+  useNumberGuessWebSocket({
+    channels: ["guess", "game_won", "game_lost"],
+    tokenId,
+    onGuess: useCallback(
+      (data: WsGuessPayload) => {
+        const feedback = apiResultToFeedback(data.result);
+        injectGuessFeedback(feedback, {
+          min: data.rangeMinAfter,
+          max: data.rangeMaxAfter,
+        });
+        refetchApiGuesses();
+      },
+      [injectGuessFeedback, refetchApiGuesses]
+    ),
+    onGameWon: useCallback(() => {
+      refetchApiGuesses();
+    }, [refetchApiGuesses]),
+    onGameLost: useCallback(() => {
+      refetchApiGuesses();
+    }, [refetchApiGuesses]),
+    enabled: gameStatus === GameStatus.PLAYING,
+  });
 
   // Get settings-based full range (survives page refresh)
   const { settings } = useNumberGuessConfig(gameAddress);
@@ -266,7 +339,7 @@ export default function GameBoard({ gameAddress, tokenId, tokenConfig }: Props) 
             <GuessHistoryBar guessHistory={guessHistory} />
 
             <Box sx={{ display: "flex", justifyContent: "center", mt: 1 }}>
-              <GameStats stats={stats} />
+              <GameStats stats={stats} globalStats={globalStats ?? undefined} />
             </Box>
           </Box>
         )}

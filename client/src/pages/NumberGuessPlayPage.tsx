@@ -4,12 +4,9 @@ import { ArrowBack } from "@mui/icons-material";
 import { useTokenDetail } from "../hooks/useTokenDetail";
 import { GameBoard } from "../components/numberguess";
 import LoadingSpinner from "../components/common/LoadingSpinner";
-import { useChainConfig } from "../contexts/NetworkContext";
-
 export default function NumberGuessPlayPage() {
   const { tokenId } = useParams<{ tokenId: string }>();
   const navigate = useNavigate();
-  const { chainConfig } = useChainConfig();
   const { token, isLoading, error } = useTokenDetail(tokenId || "");
 
   if (isLoading) {
@@ -33,7 +30,7 @@ export default function NumberGuessPlayPage() {
     );
   }
 
-  const gameAddress = token.gameAddress || chainConfig.numberGuessAddress;
+  const gameAddress = token.gameAddress;
 
   if (!gameAddress || gameAddress === "0x0") {
     return (

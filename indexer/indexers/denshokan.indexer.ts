@@ -751,6 +751,16 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                 },
               });
 
+              // Ensure game_stats row exists so the API doesn't 404 before first mint
+              await db.insert(schema.gameStats).values({
+                gameId: decoded.gameId,
+                totalTokens: 0,
+                activeGames: 0,
+                completedGames: 0,
+                uniquePlayers: 0,
+                lastUpdated: blockTimestamp,
+              }).onConflictDoNothing();
+
               break;
             }
 
