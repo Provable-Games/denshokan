@@ -305,10 +305,6 @@ pub trait IDenshokanFilter<TState> {
     /// Includes: owner, player_name, is_playable, game_address, game_over, completed_objective,
     /// lifecycle
     fn tokens_full_state_batch(self: @TState, token_ids: Array<felt252>) -> Array<TokenFullState>;
-
-    /// Returns token URIs for multiple tokens in one call
-    /// Each URI is fetched via ERC721Metadata::token_uri
-    fn token_uri_batch(self: @TState, token_ids: Array<felt252>) -> Array<ByteArray>;
 }
 
 #[derive(Drop, Serde)]
@@ -335,13 +331,6 @@ pub struct SettingsResult {
 pub struct ObjectivesResult {
     pub entries: Array<ObjectiveEntry>,
     pub total: u32,
-}
-
-/// Interface for batch token URI generation on the Denshokan contract itself.
-/// Enables the viewer to delegate via a single dispatch instead of N dispatches.
-#[starknet::interface]
-pub trait IDenshokanTokenUriBatch<TState> {
-    fn token_uri_batch(self: @TState, token_ids: Array<felt252>) -> Array<ByteArray>;
 }
 
 #[starknet::interface]
