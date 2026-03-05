@@ -24,7 +24,7 @@ use game_components_embeddable_game_standard::token::extensions::settings::setti
 use game_components_embeddable_game_standard::token::extensions::skills::skills::SkillsComponent;
 use game_components_embeddable_game_standard::token::structs::TokenMetadata;
 use game_components_embeddable_game_standard::token::token_component::CoreTokenComponent;
-use game_components_utilities::renderer::svg::create_custom_metadata;
+use game_components_utilities::renderer::metadata::create_custom_metadata;
 use openzeppelin_access::ownable::OwnableComponent;
 use openzeppelin_interfaces::erc2981::{IERC2981, IERC2981_ID};
 use openzeppelin_interfaces::erc721::{

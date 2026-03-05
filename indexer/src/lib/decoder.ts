@@ -713,6 +713,7 @@ export interface GameMetadataUpdateEvent {
   rendererAddress: string;
   royaltyFraction: string;
   skillsAddress: string;
+  version: number;
 }
 
 /**
@@ -767,6 +768,9 @@ export function decodeGameMetadataUpdate(keys: readonly string[], data: readonly
   idx += 1;
 
   const skillsAddress = feltToHex(data[idx]);
+  idx += 1;
+
+  const version = Number(hexToBigInt(data[idx]));
 
   return {
     gameId: Number(hexToBigInt(keys[1])),
@@ -782,6 +786,7 @@ export function decodeGameMetadataUpdate(keys: readonly string[], data: readonly
     rendererAddress,
     royaltyFraction,
     skillsAddress,
+    version,
   };
 }
 

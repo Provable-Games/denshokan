@@ -217,7 +217,9 @@ deploy_game() {
             1 \
             1 \
             $DENSHOKAN_ADDRESS \
-            0 $royalty_bps || {
+            0 $royalty_bps \
+            1 \
+            1 || {
         print_error "Failed to initialize game $idx ($name)"
         exit 1
     }
