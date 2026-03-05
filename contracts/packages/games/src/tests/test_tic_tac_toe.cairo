@@ -700,7 +700,7 @@ fn test_game_details_player_won_status() {
 
     let game_det = details.game_details(token_id);
     // Status is the 6th element (index 5). Access via snapshot since GameDetail is not Copy.
-    assert!(game_det.at(5).value == @"Player Won", "Status should be 'Player Won'");
+    assert!(*game_det.at(5).value == 'Player Won', "Status should be 'Player Won'");
 }
 
 /// Verify game_details reports "AI Won" status after AI wins.
@@ -716,7 +716,7 @@ fn test_game_details_ai_won_status() {
     ttt.make_move(token_id, 6); // X:6, O:7 (AI wins with 1,4,7)
 
     let game_det = details.game_details(token_id);
-    assert!(game_det.at(5).value == @"AI Won", "Status should be 'AI Won'");
+    assert!(*game_det.at(5).value == 'AI Won', "Status should be 'AI Won'");
 }
 
 /// Verify game_details reports "Playing" status mid-game.
@@ -730,7 +730,7 @@ fn test_game_details_playing_status() {
     ttt.make_move(token_id, 0); // Just one move, game still in progress
 
     let game_det = details.game_details(token_id);
-    assert!(game_det.at(5).value == @"Playing", "Status should be 'Playing'");
+    assert!(*game_det.at(5).value == 'Playing', "Status should be 'Playing'");
 }
 
 /// Verify game_details reports "Draw" status after a drawn game.
@@ -763,7 +763,7 @@ fn test_game_details_draw_status() {
     // If the game resulted in a draw, verify the status
     if ttt.games_drawn(token_id) > 0 {
         let game_det = details.game_details(token_id);
-        assert!(game_det.at(5).value == @"Draw", "Status should be 'Draw'");
+        assert!(*game_det.at(5).value == 'Draw', "Status should be 'Draw'");
     }
     // The game ended one way or another - verify it is over
     assert!(token_data.game_over(token_id), "Game should be over");
@@ -1290,27 +1290,27 @@ fn test_game_details_all_fields_after_player_win() {
     assert!(game_det.len() == 6, "Should have 6 game details");
 
     // Field 0: Wins
-    assert!(game_det.at(0).name == @"Wins", "First field should be Wins");
-    assert!(game_det.at(0).value == @"1", "Wins should be 1");
+    assert!(*game_det.at(0).name == 'Wins', "First field should be Wins");
+    assert!(*game_det.at(0).value == '1', "Wins should be 1");
 
     // Field 1: Losses
-    assert!(game_det.at(1).name == @"Losses", "Second field should be Losses");
-    assert!(game_det.at(1).value == @"0", "Losses should be 0");
+    assert!(*game_det.at(1).name == 'Losses', "Second field should be Losses");
+    assert!(*game_det.at(1).value == '0', "Losses should be 0");
 
     // Field 2: Draws
-    assert!(game_det.at(2).name == @"Draws", "Third field should be Draws");
-    assert!(game_det.at(2).value == @"0", "Draws should be 0");
+    assert!(*game_det.at(2).name == 'Draws', "Third field should be Draws");
+    assert!(*game_det.at(2).value == '0', "Draws should be 0");
 
     // Field 3: Games Played
-    assert!(game_det.at(3).name == @"Games Played", "Fourth field should be Games Played");
-    assert!(game_det.at(3).value == @"1", "Games Played should be 1");
+    assert!(*game_det.at(3).name == 'Games Played', "Fourth field should be Games Played");
+    assert!(*game_det.at(3).value == '1', "Games Played should be 1");
 
     // Field 4: Board (non-zero since game was played)
-    assert!(game_det.at(4).name == @"Board", "Fifth field should be Board");
+    assert!(*game_det.at(4).name == 'Board', "Fifth field should be Board");
 
     // Field 5: Status
-    assert!(game_det.at(5).name == @"Status", "Sixth field should be Status");
-    assert!(game_det.at(5).value == @"Player Won", "Status should be Player Won");
+    assert!(*game_det.at(5).name == 'Status', "Sixth field should be Status");
+    assert!(*game_det.at(5).value == 'Player Won', "Status should be Player Won");
 }
 
 /// Verify all 6 game detail fields after AI win.
@@ -1327,11 +1327,11 @@ fn test_game_details_all_fields_after_ai_win() {
 
     let game_det = details.game_details(token_id);
 
-    assert!(game_det.at(0).value == @"0", "Wins should be 0 after AI win");
-    assert!(game_det.at(1).value == @"1", "Losses should be 1 after AI win");
-    assert!(game_det.at(2).value == @"0", "Draws should be 0");
-    assert!(game_det.at(3).value == @"1", "Games Played should be 1");
-    assert!(game_det.at(5).value == @"AI Won", "Status should be AI Won");
+    assert!(*game_det.at(0).value == '0', "Wins should be 0 after AI win");
+    assert!(*game_det.at(1).value == '1', "Losses should be 1 after AI win");
+    assert!(*game_det.at(2).value == '0', "Draws should be 0");
+    assert!(*game_det.at(3).value == '1', "Games Played should be 1");
+    assert!(*game_det.at(5).value == 'AI Won', "Status should be AI Won");
 }
 
 // ==========================================================================
