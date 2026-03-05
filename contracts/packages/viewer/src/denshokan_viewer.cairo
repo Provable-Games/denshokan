@@ -5,9 +5,8 @@
 
 use core::num::traits::Zero;
 use denshokan_interfaces::filter::{
-    FilterResult, IDenshokanFilter, IDenshokanSettingsObjectives, IDenshokanTokenUriBatch,
-    IDenshokanTokenUriBatchDispatcher, IDenshokanTokenUriBatchDispatcherTrait, ObjectiveEntry,
-    ObjectivesResult, SettingsEntry, SettingsResult, TokenFullState,
+    FilterResult, IDenshokanFilter, IDenshokanSettingsObjectives, ObjectiveEntry, ObjectivesResult,
+    SettingsEntry, SettingsResult, TokenFullState,
 };
 use game_components_embeddable_game_standard::minigame::extensions::objectives::interface::{
     IMINIGAME_OBJECTIVES_ID, IMinigameObjectivesDetailsDispatcher,
@@ -788,14 +787,6 @@ pub mod DenshokanViewer {
             // Single dispatch: viewer → denshokan (component handles everything locally)
             let token = self._get_token();
             token.token_full_state_batch(token_ids.span())
-        }
-
-        fn token_uri_batch(self: @ContractState, token_ids: Array<felt252>) -> Array<ByteArray> {
-            // Single dispatch: viewer → denshokan (contract handles caching internally)
-            let denshokan = IDenshokanTokenUriBatchDispatcher {
-                contract_address: self._get_denshokan_address(),
-            };
-            denshokan.token_uri_batch(token_ids)
         }
     }
 

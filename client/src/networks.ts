@@ -70,14 +70,14 @@ const NETWORKS: Record<ChainId, DenshokanChainConfig> = {
       "https://denshokan-api-production.up.railway.app",
     wsUrl: import.meta.env.VITE_SEPOLIA_WS_URL || "",
     explorerUrl: "https://sepolia.voyager.online",
-    denshokanAddress: "0x06e1ba3fcb31a59847ea16af9f5955729bd28a527ff0c003edfc848781b0c4f0",
-    registryAddress: "0x01c3c36502431b78680d6297b207e9eb84c7b051e22e92f0e58bc65262a5c3f1",
-    viewerAddress: "0x03c55470cfa363f4bd0b103331a76f05816a5f1e6be4aa315f973926049e9494",
+    denshokanAddress: "0x048d55f031928a769248d99b32e3c02456a953728789396be348d4815deb5c86",
+    registryAddress: "0x03bd94c3c2938d8b605e0432e024aa22853327dc052f54b45ec4bd86dd779b8c",
+    viewerAddress: "0x0755744181d6e329b56c3fffa927823ff865411724ddd8d1bde4888860260a93",
     numberGuessApiUrl: import.meta.env.VITE_SEPOLIA_NUMBER_GUESS_API_URL || "",
     numberGuessWsUrl: import.meta.env.VITE_SEPOLIA_NUMBER_GUESS_WS_URL || "",
     gameContracts: [
       {
-        address: "0x05abe035f762612a25363668bf7146c77e1ab7c08e90bd1e7a01061f7ec5a00f",
+        address: "0x02c91407a6131ba6fe5af89ac843bcd51af2058d9ecef251d780739745cdba42",
         methods: MINIGAME_METHODS,
       },
     ],
