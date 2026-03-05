@@ -235,7 +235,7 @@ export default function GameBoard({
 
       // Step 4: Navigate to the new play page
       setShowResultModal(false);
-      navigate(`/tokens/${newTokenId}/play`);
+      navigate(`/tokens/${newTokenId}/play`, { state: { gameStarted: true, gameAddress } });
     } catch (e: any) {
       setMintError(e.message || "Failed to mint and play");
     } finally {

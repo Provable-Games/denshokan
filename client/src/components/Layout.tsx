@@ -6,6 +6,7 @@ import { useMintEvents } from "@provable-games/denshokan-sdk/react";
 import type { MintEvent } from "@provable-games/denshokan-sdk";
 import { useNumberGuessWebSocket } from "../hooks/useNumberGuessWebSocket";
 import type { WsGuessPayload, WsGameEndPayload } from "../hooks/numberGuessApi.types";
+import { getDisplayName } from "../hooks/useCartridgeUsernames";
 import Header from "./Header";
 
 function MintNotifications() {
@@ -35,9 +36,9 @@ function GuessNotifications() {
   const { isConnected } = useNumberGuessWebSocket({
     channels: ["guess", "game_won", "game_lost"],
     onGuess: useCallback(
-      (data: WsGuessPayload) => {
+      async (data: WsGuessPayload) => {
         const player = data.player
-          ? `${data.player.slice(0, 6)}...${data.player.slice(-4)}`
+          ? await getDisplayName(data.player)
           : `token ${data.tokenId.slice(0, 8)}...`;
         const label = data.result === "correct" ? "Correct!" : data.result === "too_low" ? "Too low" : "Too high";
         const colors = GUESS_COLORS[data.result];
