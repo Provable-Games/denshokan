@@ -39,6 +39,7 @@ pub trait ITicTacToeInit<TContractState> {
         minigame_token_address: ContractAddress,
         royalty_fraction: Option<u128>,
         skills_address: Option<ContractAddress>,
+        version: u64,
     );
 }
 
@@ -711,6 +712,7 @@ pub mod TicTacToe {
             minigame_token_address: ContractAddress,
             royalty_fraction: Option<u128>,
             skills_address: Option<ContractAddress>,
+            version: u64,
         ) {
             let settings_address = match settings_address {
                 Option::Some(address) => {
@@ -751,6 +753,7 @@ pub mod TicTacToe {
                     minigame_token_address,
                     royalty_fraction,
                     skills_address,
+                    version,
                 );
 
             // Create a default settings entry

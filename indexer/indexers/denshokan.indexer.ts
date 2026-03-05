@@ -784,6 +784,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                 rendererAddress: decoded.rendererAddress,
                 royaltyFraction: decoded.royaltyFraction,
                 skillsAddress: decoded.skillsAddress,
+                version: decoded.version,
                 lastUpdatedBlock: blockNumber,
                 lastUpdatedAt: blockTimestamp,
               }).onConflictDoUpdate({
@@ -801,6 +802,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                   rendererAddress: decoded.rendererAddress,
                   royaltyFraction: decoded.royaltyFraction,
                   skillsAddress: decoded.skillsAddress,
+                  version: decoded.version,
                   lastUpdatedBlock: blockNumber,
                   lastUpdatedAt: blockTimestamp,
                 },

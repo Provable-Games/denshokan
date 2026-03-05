@@ -209,6 +209,7 @@ sncast --profile "$PROFILE" --wait \
         1 \
         $DENSHOKAN_ADDRESS \
         0 500 \
+        1 \
         1 || {
     print_error "Failed to initialize TicTacToe"
     exit 1

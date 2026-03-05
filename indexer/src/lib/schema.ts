@@ -163,6 +163,7 @@ export const games = pgTable(
     rendererAddress: text("renderer_address"),
     royaltyFraction: numeric("royalty_fraction"),
     skillsAddress: text("skills_address"),
+    version: integer("version"),
     createdAt: timestamp("created_at").defaultNow(),
     lastUpdatedBlock: bigint("last_updated_block", { mode: "bigint" }),
     lastUpdatedAt: timestamp("last_updated_at").defaultNow(),

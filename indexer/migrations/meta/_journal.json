@@ -36,6 +36,13 @@
       "when": 1772899800000,
       "tag": "0004_token_uri",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1772986200000,
+      "tag": "0005_game_version",
+      "breakpoints": true
     }
   ]
 }

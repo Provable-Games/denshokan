@@ -54,6 +54,7 @@ fn setup_tic_tac_toe() -> (ITicTacToeDispatcher, ContractAddress) {
             denshokan_address,
             Option::Some(500),
             Option::None,
+            1,
         );
 
     (ttt, ttt_address)
