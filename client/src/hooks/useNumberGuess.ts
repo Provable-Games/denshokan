@@ -456,11 +456,13 @@ export function useNumberGuess(
   }, [statusData, guessCountData, tokenId]);
 
   // Capture full range when game starts or when initial range loads
+  // Only mark as captured when we have real rangeData (not the hardcoded fallback)
   useEffect(() => {
     if (
       gameStatus === GameStatus.PLAYING &&
       !fullRangeCaptured.current &&
-      guessCount === 0
+      guessCount === 0 &&
+      rangeData
     ) {
       fullRangeCaptured.current = true;
       setFullRange(range);
