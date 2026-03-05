@@ -77,7 +77,7 @@ const NETWORKS: Record<ChainId, DenshokanChainConfig> = {
     numberGuessWsUrl: import.meta.env.VITE_SEPOLIA_NUMBER_GUESS_WS_URL || "",
     gameContracts: [
       {
-        address: "0x02c91407a6131ba6fe5af89ac843bcd51af2058d9ecef251d780739745cdba42",
+        address: "0x00279b5c380763406f32c4a51d6553b84da30ff7bbe786f8d9d16306c4cdaecb",
         methods: MINIGAME_METHODS,
       },
     ],

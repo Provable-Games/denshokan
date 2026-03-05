@@ -1,6 +1,4 @@
-import { useState } from "react";
-import { Box, Skeleton } from "@mui/material";
-import BrokenImageIcon from "@mui/icons-material/BrokenImage";
+import { Box } from "@mui/material";
 
 interface Props {
   tokenUri?: string | null;
@@ -60,15 +58,15 @@ function resolveImageSrc(tokenUri: string): string | null {
 }
 
 export default function TokenImage({ tokenUri, alt = "Token", height = 200, objectFit = "contain", sx }: Props) {
-  const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState(false);
-
   if (!tokenUri) {
     return (
-      <Skeleton
-        variant="rectangular"
-        animation="wave"
-        sx={{ height, width: "100%", ...sx }}
+      <Box
+        sx={{
+          height,
+          width: "100%",
+          bgcolor: "rgba(255,255,255,0.03)",
+          ...sx,
+        }}
       />
     );
   }
@@ -76,44 +74,18 @@ export default function TokenImage({ tokenUri, alt = "Token", height = 200, obje
   const src = resolveImageSrc(tokenUri);
   if (!src) return null;
 
-  if (error) {
-    return (
-      <Box
-        sx={{
-          height,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          bgcolor: "rgba(255,255,255,0.03)",
-          ...sx,
-        }}
-      >
-        <BrokenImageIcon sx={{ fontSize: 40, color: "text.disabled" }} />
-      </Box>
-    );
-  }
-
   return (
     <Box sx={{ position: "relative", ...sx }}>
-      {!loaded && (
-        <Skeleton
-          variant="rectangular"
-          animation="wave"
-          sx={{ height, width: "100%" }}
-        />
-      )}
-      <Box
-        component="img"
-        src={src}
-        alt={alt}
-        onLoad={() => setLoaded(true)}
-        onError={() => setError(true)}
-        sx={{
+      <object
+        data={src}
+        type={src.startsWith("data:image/svg") ? "image/svg+xml" : undefined}
+        aria-label={alt}
+        style={{
           width: "100%",
-          height,
+          height: typeof height === "number" ? `${height}px` : height,
           objectFit,
-          display: loaded ? "block" : "none",
-          bgcolor: "rgba(0,0,0,0.2)",
+          backgroundColor: "rgba(0,0,0,0.2)",
+          pointerEvents: "none",
         }}
       />
     </Box>

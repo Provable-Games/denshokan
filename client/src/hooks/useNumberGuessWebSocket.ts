@@ -14,7 +14,7 @@ const seenMessages = new Set<string>();
 export interface UseNumberGuessWebSocketOptions {
   channels: WsChannel[];
   tokenId?: string;
-  onGuess?: (data: WsGuessPayload) => void;
+  onGuess?: (data: WsGuessPayload) => void | Promise<void>;
   onGameWon?: (data: WsGameEndPayload) => void;
   onGameLost?: (data: WsGameEndPayload) => void;
   onNewGame?: (data: WsNewGamePayload) => void;

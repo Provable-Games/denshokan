@@ -869,7 +869,7 @@ fn test_objectives_details() {
         *details.objectives.at(0).name == 'target_wins',
         "Objective entry name should be 'target_wins'",
     );
-    assert!(*details.objectives.at(0).value == 3, "Objective entry value should be 3");
+    assert!(*details.objectives.at(0).value == '3', "Objective entry value should be '3'");
 }
 
 /// Verify objectives_details panics for non-existent objective.

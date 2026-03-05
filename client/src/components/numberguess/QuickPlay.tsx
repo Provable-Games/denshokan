@@ -119,7 +119,7 @@ export default function QuickPlay({ gameAddress }: Props) {
       await sendAsync([newGameCall]);
 
       // Step 4: Navigate to the play page (pass state so GameBoard knows game is already started)
-      navigate(`/tokens/${newTokenId}/play`, { state: { gameStarted: true } });
+      navigate(`/tokens/${newTokenId}/play`, { state: { gameStarted: true, gameAddress } });
     } catch (e: any) {
       setError(e.message || "Failed to start game");
     } finally {

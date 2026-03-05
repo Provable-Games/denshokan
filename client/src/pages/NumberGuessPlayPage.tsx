@@ -8,38 +8,44 @@ export default function NumberGuessPlayPage() {
   const { tokenId } = useParams<{ tokenId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const gameStarted = (location.state as any)?.gameStarted === true;
+  const locationState = location.state as any;
+  const gameStarted = locationState?.gameStarted === true;
+  const stateGameAddress: string | null = locationState?.gameAddress || null;
   const { token, game, isLoading, error } = useTokenDetail(tokenId || "");
 
-  if (isLoading) {
-    return <LoadingSpinner message="Loading token..." />;
+  // When arriving from QuickPlay/PlayAgain, the token may not be indexed yet.
+  // Skip the loading/error gate and let GameBoard render with the token ID.
+  if (!gameStarted) {
+    if (isLoading) {
+      return <LoadingSpinner message="Loading token..." />;
+    }
+
+    if (error || !token) {
+      return (
+        <Box sx={{ p: 3 }}>
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error?.message || "Token not found"}
+          </Alert>
+          <Button
+            variant="outlined"
+            startIcon={<ArrowBack />}
+            onClick={() => navigate(-1)}
+          >
+            Go Back
+          </Button>
+        </Box>
+      );
+    }
   }
 
-  if (error || !token) {
-    return (
-      <Box sx={{ p: 3 }}>
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error?.message || "Token not found"}
-        </Alert>
-        <Button
-          variant="outlined"
-          startIcon={<ArrowBack />}
-          onClick={() => navigate(-1)}
-        >
-          Go Back
-        </Button>
-      </Box>
-    );
-  }
-
-  const gameAddress = token.gameAddress || game?.contractAddress || null;
+  const gameAddress = token?.gameAddress || game?.contractAddress || stateGameAddress;
 
   console.log("[NumberGuessPlayPage]", {
     tokenId,
-    tokenGameAddress: token.gameAddress,
+    tokenGameAddress: token?.gameAddress,
     gameContractAddress: game?.contractAddress,
     resolvedGameAddress: gameAddress,
-    gameId: token.gameId,
+    gameId: token?.gameId,
     game,
   });
 
@@ -83,22 +89,23 @@ export default function NumberGuessPlayPage() {
             Number Guess
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            {token.playerName || `Token #${tokenId?.slice(0, 12)}...`}
+            {token?.playerName || `Token #${tokenId?.slice(0, 12)}...`}
           </Typography>
         </Box>
       </Box>
 
       {/* Game Board */}
       <GameBoard
+        key={tokenId}
         gameAddress={gameAddress}
         tokenId={tokenId || ""}
         gameAlreadyStarted={gameStarted}
-        tokenConfig={{
+        tokenConfig={token ? {
           settingsId: token.settingsId || undefined,
           objectiveId: token.objectiveId || undefined,
           playerName: token.playerName || undefined,
           soulbound: token.soulbound,
-        }}
+        } : undefined}
       />
     </Box>
   );
