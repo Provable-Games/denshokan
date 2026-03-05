@@ -124,6 +124,7 @@ dependencies = [
  "openzeppelin_interfaces",
  "openzeppelin_introspection",
  "openzeppelin_token",
+ "openzeppelin_upgrades",
  "snforge_std",
 ]
 
