@@ -29,6 +29,7 @@ const MINIGAME_METHODS = [
   { name: "mint_game", entrypoint: "mint_game" },
   { name: "new_game", entrypoint: "new_game" },
   { name: "guess", entrypoint: "guess" },
+  { name: "make_move", entrypoint: "make_move" },
   { name: "create_settings", entrypoint: "create_settings" },
   { name: "create_objective", entrypoint: "create_objective" },
 ];
@@ -70,14 +71,18 @@ const NETWORKS: Record<ChainId, DenshokanChainConfig> = {
       "https://denshokan-api-production.up.railway.app",
     wsUrl: import.meta.env.VITE_SEPOLIA_WS_URL || "",
     explorerUrl: "https://sepolia.voyager.online",
-    denshokanAddress: "0x048d55f031928a769248d99b32e3c02456a953728789396be348d4815deb5c86",
-    registryAddress: "0x03bd94c3c2938d8b605e0432e024aa22853327dc052f54b45ec4bd86dd779b8c",
-    viewerAddress: "0x0755744181d6e329b56c3fffa927823ff865411724ddd8d1bde4888860260a93",
+    denshokanAddress: "0x0142712722e62a38f9c40fcc904610e1a14c70125876ecaaf25d803556734467",
+    registryAddress: "0x040f1ed9880611bb7273bf51fd67123ebbba04c282036e2f81314061f6f9b1a1",
+    viewerAddress: "0x025d92f18c6c1ed2114774adf68249a95fc468d9381ab33fa4b9ccfff7cf5f9f",
     numberGuessApiUrl: import.meta.env.VITE_SEPOLIA_NUMBER_GUESS_API_URL || "",
     numberGuessWsUrl: import.meta.env.VITE_SEPOLIA_NUMBER_GUESS_WS_URL || "",
     gameContracts: [
       {
-        address: "0x00279b5c380763406f32c4a51d6553b84da30ff7bbe786f8d9d16306c4cdaecb",
+        address: "0x072bf4d1484599165731399c38f1c3aa27dcb31f88dac80b31098c925d7843a5",
+        methods: MINIGAME_METHODS,
+      },
+      {
+        address: "0x04484ca347cd957b9d591890ac7488ce0c0cd7920819f0c6376aedb953458a38",
         methods: MINIGAME_METHODS,
       },
     ],
