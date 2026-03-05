@@ -181,8 +181,11 @@ jobs:
           IS_FORK: ${{ github.event.pull_request.head.repo.fork }}
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
           REVIEW_AUTOMATION_CHANGED: ${{ steps.filter.outputs.review_automation_changed }}
-          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          CODEX_AUTH_DOT_JSON: ${{ secrets.CODEX_AUTH_DOT_JSON }}
+          # Resolve secret availability as booleans to avoid tainting job outputs.
+          # Passing actual secret values into env causes GitHub to redact any output
+          # that might contain them, which breaks the review_matrix output.
+          HAS_CLAUDE_SECRET: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
+          HAS_CODEX_SECRET: ${{ secrets.CODEX_AUTH_DOT_JSON != '' }}
         run: |
           CAN_RUN_AI_REVIEWS="true"
           AI_REVIEWS_BLOCK_REASON="available"
@@ -198,7 +201,7 @@ jobs:
             CAN_RUN_AI_REVIEWS="false"
             AI_REVIEWS_BLOCK_REASON="fork"
             echo "AI reviews disabled for fork pull requests."
-          elif [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ] || [ -z "$CODEX_AUTH_DOT_JSON" ]; then
+          elif [ "$HAS_CLAUDE_SECRET" != "true" ] || [ "$HAS_CODEX_SECRET" != "true" ]; then
             CAN_RUN_AI_REVIEWS="false"
             if [ "$IS_TRUSTED_BOT_PR" = "true" ]; then
               AI_REVIEWS_BLOCK_REASON="missing_secrets_trusted_bot"
