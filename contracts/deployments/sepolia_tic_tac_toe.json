@@ -1,11 +1,11 @@
 {
   "profile": "sepolia",
-  "timestamp": "2026-02-28T10:49:56Z",
-  "registry_address": "0x00901bfe1da0d447c4f3b81dfc19505f4796bc1968794de1ce8e0e6ee9fb086b",
-  "denshokan_address": "0x04c5c1c662dabf2698052b8a1413420d4dd7b74ef373c33015feb50cffa46fdb",
+  "timestamp": "2026-03-05T16:17:56Z",
+  "registry_address": "0x040f1ed9880611bb7273bf51fd67123ebbba04c282036e2f81314061f6f9b1a1",
+  "denshokan_address": "0x0142712722e62a38f9c40fcc904610e1a14c70125876ecaaf25d803556734467",
   "tic_tac_toe": {
-    "class_hash": "0x0681262784608f3ecff38bf2653b2eaef59584facc387cceeeef6baf5f7e0df1",
-    "address": "0x03e2b0ec812689075808fa18a76d5d193f5fa13b223fbcc9005c889d7dd190f7",
+    "class_hash": "0x2ee44c92080b47068dbfd3755070d1ab27e4fc06b2665449cac81d60f581baa",
+    "address": "0x072bf4d1484599165731399c38f1c3aa27dcb31f88dac80b31098c925d7843a5",
     "name": "Tic Tac Toe",
     "genre": "Puzzle",
     "royalty_bps": 500
