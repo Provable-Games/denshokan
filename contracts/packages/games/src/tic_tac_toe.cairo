@@ -58,26 +58,6 @@ pub trait ITicTacToeInit<TContractState> {
 //   ---------
 //   6 | 7 | 8
 
-/// Convert a u32 to a felt252 short string (ASCII digits).
-fn u32_to_ascii_felt(mut value: u32) -> felt252 {
-    if value == 0 {
-        return '0';
-    }
-    let mut result: felt252 = 0;
-    let mut shift: felt252 = 1;
-    loop {
-        if value == 0 {
-            break;
-        }
-        let digit: u32 = value % 10;
-        let ascii: felt252 = (digit + 48).into();
-        result = result + ascii * shift;
-        shift = shift * 256;
-        value = value / 10;
-    }
-    result
-}
-
 const EMPTY: u32 = 0;
 const PLAYER_X: u32 = 1;
 const AI_O: u32 = 2;
@@ -272,6 +252,7 @@ pub mod TicTacToe {
     };
     use game_components_embeddable_game_standard::minigame::minigame_component::MinigameComponent;
     use game_components_embeddable_game_standard::minigame::structs::GameDetail;
+    use game_components_utilities::utils::encoding::u128_to_ascii_felt;
     use openzeppelin_introspection::src5::SRC5Component;
     use starknet::storage::{
         Map, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess,
@@ -279,7 +260,7 @@ pub mod TicTacToe {
     use starknet::{ContractAddress, get_contract_address};
     use super::{
         AI_O, EMPTY, PLAYER_X, STATUS_AI_WIN, STATUS_DRAW, STATUS_PLAYER_WIN, STATUS_PLAYING,
-        ai_move, board_full, check_winner, get_cell, set_cell, u32_to_ascii_felt,
+        ai_move, board_full, check_winner, get_cell, set_cell,
     };
 
     // ======================================================================
@@ -422,23 +403,23 @@ pub mod TicTacToe {
             let board_val = self.boards.entry(token_id).read();
             let status_val = self.status.entry(token_id).read();
 
-            let status_str: ByteArray = if status_val == STATUS_PLAYING {
-                "Playing"
+            let status_felt: felt252 = if status_val == STATUS_PLAYING {
+                'Playing'
             } else if status_val == STATUS_PLAYER_WIN {
-                "Player Won"
+                'Player Won'
             } else if status_val == STATUS_AI_WIN {
-                "AI Won"
+                'AI Won'
             } else {
-                "Draw"
+                'Draw'
             };
 
             array![
-                GameDetail { name: "Wins", value: format!("{}", won) },
-                GameDetail { name: "Losses", value: format!("{}", lost) },
-                GameDetail { name: "Draws", value: format!("{}", drawn) },
-                GameDetail { name: "Games Played", value: format!("{}", played) },
-                GameDetail { name: "Board", value: format!("{}", board_val) },
-                GameDetail { name: "Status", value: status_str },
+                GameDetail { name: 'Wins', value: u128_to_ascii_felt(won.into()) },
+                GameDetail { name: 'Losses', value: u128_to_ascii_felt(lost.into()) },
+                GameDetail { name: 'Draws', value: u128_to_ascii_felt(drawn.into()) },
+                GameDetail { name: 'Games Played', value: u128_to_ascii_felt(played.into()) },
+                GameDetail { name: 'Board', value: u128_to_ascii_felt(board_val.into()) },
+                GameDetail { name: 'Status', value: status_felt },
             ]
                 .span()
         }
@@ -600,7 +581,9 @@ pub mod TicTacToe {
             let mut objectives = array![];
             objectives
                 .append(
-                    GameObjective { name: 'target_wins', value: u32_to_ascii_felt(target_wins) },
+                    GameObjective {
+                        name: 'target_wins', value: u128_to_ascii_felt(target_wins.into()),
+                    },
                 );
 
             GameObjectiveDetails { name, description, objectives: objectives.span() }
