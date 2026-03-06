@@ -1,7 +1,8 @@
 import { useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Box, Typography, Grid, Button, Card } from "@mui/material";
-import { PlayArrow } from "@mui/icons-material";
+import { Box, Typography, Grid, Button, Card, Breadcrumbs, Link as MuiLink } from "@mui/material";
+import { PlayArrow, NavigateNext } from "@mui/icons-material";
+import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   useScoreUpdates,
@@ -72,6 +73,21 @@ export default function TokenDetailPage() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: "easeOut" }}
     >
+      {/* Breadcrumbs */}
+      <Breadcrumbs separator={<NavigateNext fontSize="small" />} sx={{ mb: 2 }}>
+        <MuiLink component={Link} to="/games" underline="hover" color="text.secondary">
+          Games
+        </MuiLink>
+        {game && (
+          <MuiLink component={Link} to={`/games/${game.gameId}`} underline="hover" color="text.secondary">
+            {game.name || `Game #${game.gameId}`}
+          </MuiLink>
+        )}
+        <Typography color="text.primary">
+          Token #{token.tokenId.slice(0, 8)}...
+        </Typography>
+      </Breadcrumbs>
+
       {/* Header */}
       <Box
         sx={{

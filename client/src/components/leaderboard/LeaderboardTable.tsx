@@ -25,6 +25,15 @@ export default function LeaderboardTable({ entries }: Props) {
           </TableRow>
         </TableHead>
         <TableBody>
+          {entries.length === 0 && (
+            <TableRow>
+              <TableCell colSpan={4} sx={{ textAlign: "center", py: 4 }}>
+                <Typography color="text.secondary">
+                  No entries yet. Be the first to play!
+                </Typography>
+              </TableCell>
+            </TableRow>
+          )}
           {entries.map((entry) => (
             <TableRow key={entry.tokenId} hover>
               <TableCell>

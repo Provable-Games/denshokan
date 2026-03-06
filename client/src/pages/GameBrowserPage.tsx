@@ -1,7 +1,8 @@
 import { Box, Typography } from "@mui/material";
+import { SportsEsports } from "@mui/icons-material";
 import { useGameList } from "../hooks/useGameList";
 import GameGrid from "../components/games/GameGrid";
-import LoadingSpinner from "../components/common/LoadingSpinner";
+import { GameCardSkeletonGrid } from "../components/common/SkeletonCard";
 import EmptyState from "../components/common/EmptyState";
 
 export default function GameBrowserPage() {
@@ -13,9 +14,13 @@ export default function GameBrowserPage() {
         Games
       </Typography>
       {loading ? (
-        <LoadingSpinner message="Loading games..." />
+        <GameCardSkeletonGrid />
       ) : games.length === 0 ? (
-        <EmptyState title="No games found" description="Games will appear here once registered." />
+        <EmptyState
+          title="No games found"
+          description="Games will appear here once registered."
+          icon={<SportsEsports />}
+        />
       ) : (
         <GameGrid games={games} />
       )}

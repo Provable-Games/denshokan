@@ -19,7 +19,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <LocalizationProvider dateAdapter={AdapterDayjs}>
-        <SnackbarProvider maxSnack={3}>
+        <SnackbarProvider maxSnack={3} anchorOrigin={{ vertical: "bottom", horizontal: "right" }}>
           <StarknetProvider>
             <NetworkProvider>
               <DenshokanProviderWrapper>

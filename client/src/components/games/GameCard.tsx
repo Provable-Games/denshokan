@@ -1,4 +1,5 @@
 import { Card, CardContent, CardActionArea, Typography, Chip, Box } from "@mui/material";
+import { SportsEsports } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 
 interface Props {
@@ -17,13 +18,26 @@ export default function GameCard({ game }: Props) {
   return (
     <Card>
       <CardActionArea onClick={() => navigate(`/games/${game.gameId}`)}>
-        {game.imageUrl && (
+        {game.imageUrl ? (
           <Box
             component="img"
             src={game.imageUrl}
             alt={game.name || "Game"}
             sx={{ width: "100%", height: 160, objectFit: "cover" }}
           />
+        ) : (
+          <Box
+            sx={{
+              width: "100%",
+              height: 160,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "linear-gradient(135deg, rgba(124,77,255,0.15) 0%, rgba(255,158,64,0.10) 100%)",
+            }}
+          >
+            <SportsEsports sx={{ fontSize: 48, opacity: 0.3 }} />
+          </Box>
         )}
         <CardContent>
           <Typography variant="h6" gutterBottom>
