@@ -9,7 +9,10 @@ import {
   Button,
   Stack,
   Link,
+  Collapse,
 } from "@mui/material";
+import { Token, PlayArrow, CheckCircle, People, ExpandMore } from "@mui/icons-material";
+import { motion } from "framer-motion";
 import {
   useScoreUpdates,
   useMintEvents,
@@ -19,7 +22,12 @@ import {
 import { useGameDetail } from "../hooks/useGameDetail";
 import { useChainConfig } from "../contexts/NetworkContext";
 import { GameConfigSection, QuickPlay } from "../components/numberguess";
-import LoadingSpinner from "../components/common/LoadingSpinner";
+import { StatCardSkeletonGrid } from "../components/common/SkeletonCard";
+import LiveIndicator from "../components/common/LiveIndicator";
+import { useState } from "react";
+
+const statColors = ["#7C4DFF", "#FF9E40", "#66BB6A", "#42A5F5"];
+const statIcons = [<Token key="t" />, <PlayArrow key="p" />, <CheckCircle key="c" />, <People key="pe" />];
 
 export default function GameDetailPage() {
   const { gameId } = useParams<{ gameId: string }>();
@@ -28,6 +36,7 @@ export default function GameDetailPage() {
   const { game, stats, isLoading, error, refetch } = useGameDetail(id);
   const { chainConfig } = useChainConfig();
   const { isConnected } = useConnectionStatus();
+  const [configOpen, setConfigOpen] = useState(false);
 
   const refetchingRef = useRef(false);
 
@@ -58,7 +67,18 @@ export default function GameDetailPage() {
     onEvent: debouncedRefetch,
   });
 
-  if (isLoading) return <LoadingSpinner message="Loading game..." />;
+  if (isLoading) {
+    return (
+      <Box>
+        <Box sx={{ mb: 3 }}>
+          <Box sx={{ width: "40%", height: 40, bgcolor: "action.hover", borderRadius: 1, mb: 1 }} />
+          <Box sx={{ width: "60%", height: 20, bgcolor: "action.hover", borderRadius: 1 }} />
+        </Box>
+        <StatCardSkeletonGrid count={4} />
+      </Box>
+    );
+  }
+
   if (error || !game) {
     return (
       <Box sx={{ textAlign: "center", py: 6 }}>
@@ -74,6 +94,15 @@ export default function GameDetailPage() {
       </Box>
     );
   }
+
+  const statEntries = stats
+    ? [
+        { label: "Total Tokens", value: stats.totalTokens },
+        { label: "Active Games", value: stats.activeGames },
+        { label: "Completed", value: stats.completedGames },
+        { label: "Players", value: stats.uniquePlayers },
+      ]
+    : [];
 
   return (
     <Box>
@@ -103,6 +132,13 @@ export default function GameDetailPage() {
         </Typography>
       )}
 
+      {/* Quick Play (Number Guess only) — placed above buttons */}
+      {game.contractAddress && game.name === "Number Guess" && (
+        <Box sx={{ mb: 4 }}>
+          <QuickPlay gameAddress={game.contractAddress} />
+        </Box>
+      )}
+
       <Stack direction="row" spacing={1} sx={{ mb: 4 }}>
         <Button
           variant="outlined"
@@ -115,60 +151,65 @@ export default function GameDetailPage() {
         </Button>
       </Stack>
 
-      {/* Quick Play (Number Guess only) */}
-      {game.contractAddress && game.name === "Number Guess" && (
-        <Box sx={{ mb: 4 }}>
-          <QuickPlay gameAddress={game.contractAddress} />
-        </Box>
-      )}
-
       {stats && (
         <>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
             <Typography variant="h5">Stats</Typography>
-            {isConnected && (
-              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                <Box
-                  sx={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: "50%",
-                    bgcolor: "success.main",
-                  }}
-                />
-                <Typography variant="caption" color="success.main">
-                  Live
-                </Typography>
-              </Box>
-            )}
+            {isConnected && <LiveIndicator />}
           </Box>
           <Grid container spacing={2} sx={{ mb: 4 }}>
-            {[
-              { label: "Total Tokens", value: stats.totalTokens },
-              { label: "Active Games", value: stats.activeGames },
-              { label: "Completed", value: stats.completedGames },
-              { label: "Players", value: stats.uniquePlayers },
-            ].map(({ label, value }) => (
+            {statEntries.map(({ label, value }, i) => (
               <Grid size={{ xs: 6, sm: 3 }} key={label}>
-                <Card variant="outlined">
-                  <CardContent sx={{ textAlign: "center" }}>
-                    <Typography variant="h4">{value}</Typography>
-                    <Typography color="text.secondary">{label}</Typography>
-                  </CardContent>
-                </Card>
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.08 }}
+                >
+                  <Card
+                    variant="outlined"
+                    sx={{
+                      borderTop: `3px solid ${statColors[i]}`,
+                      background: `linear-gradient(180deg, ${statColors[i]}08, transparent)`,
+                    }}
+                  >
+                    <CardContent sx={{ textAlign: "center" }}>
+                      <Box sx={{ color: statColors[i], mb: 0.5, "& .MuiSvgIcon-root": { fontSize: 28 } }}>
+                        {statIcons[i]}
+                      </Box>
+                      <Typography variant="h4">{value}</Typography>
+                      <Typography color="text.secondary">{label}</Typography>
+                    </CardContent>
+                  </Card>
+                </motion.div>
               </Grid>
             ))}
           </Grid>
         </>
       )}
 
-      {/* Game Configuration Section */}
+      {/* Game Configuration Section — collapsible */}
       {game.contractAddress && (
         <Box sx={{ mt: 4 }}>
-          <GameConfigSection
-            gameAddress={game.contractAddress}
-            gameName={game.name || undefined}
-          />
+          <Button
+            onClick={() => setConfigOpen((v) => !v)}
+            endIcon={
+              <ExpandMore
+                sx={{
+                  transform: configOpen ? "rotate(180deg)" : "rotate(0deg)",
+                  transition: "transform 0.2s",
+                }}
+              />
+            }
+            sx={{ mb: 1, color: "text.secondary" }}
+          >
+            Game Configuration
+          </Button>
+          <Collapse in={configOpen}>
+            <GameConfigSection
+              gameAddress={game.contractAddress}
+              gameName={game.name || undefined}
+            />
+          </Collapse>
         </Box>
       )}
     </Box>

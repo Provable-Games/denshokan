@@ -318,8 +318,23 @@ export default function MintForm({ onMint, minting, error }: Props) {
         variant="contained"
         size="large"
         fullWidth
-        disabled={!isConnected || !selectedGame || minting || !recipientValid}
-        onClick={handleSubmit}
+        disabled={isConnected ? (!selectedGame || minting || !recipientValid) : false}
+        onClick={isConnected ? handleSubmit : () => {
+          // Trigger wallet connect - uses first available connector
+          const event = new CustomEvent("open-wallet-connect");
+          window.dispatchEvent(event);
+        }}
+        sx={{
+          background: "linear-gradient(135deg, #7C4DFF, #3F1DCB)",
+          boxShadow: "0 4px 20px rgba(124,77,255,0.3)",
+          "&:hover": {
+            background: "linear-gradient(135deg, #9C6FFF, #5A3DE0)",
+            boxShadow: "0 6px 28px rgba(124,77,255,0.45)",
+          },
+          "&.Mui-disabled": {
+            background: "rgba(124,77,255,0.2)",
+          },
+        }}
       >
         {!isConnected
           ? "Connect Wallet to Mint"

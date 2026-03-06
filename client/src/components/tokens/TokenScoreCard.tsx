@@ -1,5 +1,6 @@
 import { Card, CardContent, Typography, Box } from "@mui/material";
 import { motion, AnimatePresence } from "framer-motion";
+import LiveIndicator from "../common/LiveIndicator";
 
 interface Props {
   score: number;
@@ -21,26 +22,7 @@ export default function TokenScoreCard({ score, isLive, isGameOver }: Props) {
           <Typography color="text.secondary" variant="overline">
             Current Score
           </Typography>
-          {isLive && (
-            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-              <Box
-                sx={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: "50%",
-                  bgcolor: "success.main",
-                  animation: "pulse 2s infinite",
-                  "@keyframes pulse": {
-                    "0%, 100%": { opacity: 1 },
-                    "50%": { opacity: 0.4 },
-                  },
-                }}
-              />
-              <Typography variant="caption" color="success.main">
-                Live
-              </Typography>
-            </Box>
-          )}
+          {isLive && <LiveIndicator />}
           {isGameOver && (
             <Typography variant="caption" color="warning.main">
               Final

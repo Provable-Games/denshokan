@@ -1,6 +1,7 @@
 import { useCallback, useEffect } from "react";
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import { Box } from "@mui/material";
+import { AnimatePresence, motion } from "framer-motion";
 import { useSnackbar } from "notistack";
 import { useMintEvents } from "@provable-games/denshokan-sdk/react";
 import type { MintEvent } from "@provable-games/denshokan-sdk";
@@ -98,13 +99,25 @@ function GuessNotifications() {
 }
 
 export default function Layout() {
+  const location = useLocation();
+
   return (
     <Box sx={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
       <Header />
       <MintNotifications />
       <GuessNotifications />
       <Box component="main" sx={{ flex: 1, p: 3 }}>
-        <Outlet />
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={location.pathname}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.2 }}
+          >
+            <Outlet />
+          </motion.div>
+        </AnimatePresence>
       </Box>
     </Box>
   );
