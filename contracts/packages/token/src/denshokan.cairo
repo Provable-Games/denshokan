@@ -42,6 +42,9 @@ use starknet::{ClassHash, ContractAddress};
 fn try_call_and_deserialize<T, +Serde<T>, +Drop<T>>(
     address: ContractAddress, selector: felt252, calldata: Span<felt252>, default: T,
 ) -> T {
+    if address.is_zero() {
+        return default;
+    }
     match call_contract_syscall(address, selector, calldata) {
         Result::Ok(result) => {
             let mut result_span = result;
