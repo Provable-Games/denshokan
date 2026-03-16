@@ -1,5 +1,5 @@
 [package]
-cairo-version = "2.12.2"
+cairo-version = "2.15.0"
 name = "dojo_tic_tac_toe"
 version = "1.0.0"
 edition = "2024_07"
@@ -8,8 +8,11 @@ edition = "2024_07"
 sierra-replace-ids = true
 
 [dependencies]
-starknet = "2.15.2"
+starknet = "2.15.0"
 dojo = "1.8.0"
+game_components_embeddable_game_standard = { git = "https://github.com/Provable-Games/game-components.git", branch = "next" }
+game_components_utilities = { git = "https://github.com/Provable-Games/game-components.git", branch = "next" }
+openzeppelin_introspection = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0" }
 
 [tool.scarb]
 allow-prebuilt-plugins = ["dojo_cairo_macros"]
@@ -18,26 +21,8 @@ allow-prebuilt-plugins = ["dojo_cairo_macros"]
 build-external-contracts = ["dojo::world::world_contract::world"]
 
 [dev-dependencies]
-cairo_test = "2.12.2"
+cairo_test = "2.15.0"
 dojo_cairo_test = "1.8.0"
 
 [tool.fmt]
 sort-module-level-items = true
-
-[tool.dojo]
-
-[tool.dojo.namespace]
-default = "tic_tac_toe"
-
-[tool.dojo.env]
-rpc_url = "http://localhost:5050/"
-account_address = "0x127fd5f1fe78a71f8bcd1fec63e3fe2f0486b6ecd5c86a0466c3a21fa5cfcec"
-private_key = "0xc5b2fcab997346f3ea1c00b002ecf6f382c5f9c9659a3894eb783c5320f912"
-
-[tool.dojo.world]
-name = "Tic Tac Toe"
-description = "On-chain Tic Tac Toe game built with Dojo"
-seed = "dojo_tic_tac_toe"
-
-[tool.dojo.writers]
-"tic_tac_toe" = ["tic_tac_toe-game_actions"]
