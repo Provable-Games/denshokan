@@ -1,0 +1,38 @@
+[world]
+name = "Tic Tac Toe"
+description = "On-chain Tic Tac Toe game built with Dojo"
+seed = "dojo_tic_tac_toe-v9"
+
+[namespace]
+default = "tic_tac_toe"
+
+[env]
+rpc_url = "https://api.cartridge.gg/x/starknet/sepolia"
+# account_address = ""
+# private_key = ""
+
+[writers]
+"tic_tac_toe" = ["tic_tac_toe-game_actions", "tic_tac_toe-game_setup", "tic_tac_toe-game_settings", "tic_tac_toe-game_objectives"]
+
+[migration]
+order_inits = [
+    "tic_tac_toe-game_actions",
+    "tic_tac_toe-game_settings",
+    "tic_tac_toe-game_objectives",
+    "tic_tac_toe-game_setup",
+]
+
+[init_call_args]
+"tic_tac_toe-game_actions" = [
+    "0x0142712722e62a38f9c40fcc904610e1a14c70125876ecaaf25d803556734467", # denshokan_address
+]
+"tic_tac_toe-game_settings" = [
+    "0x0142712722e62a38f9c40fcc904610e1a14c70125876ecaaf25d803556734467", # denshokan_address
+]
+"tic_tac_toe-game_objectives" = [
+    "0x0142712722e62a38f9c40fcc904610e1a14c70125876ecaaf25d803556734467", # denshokan_address
+]
+"tic_tac_toe-game_setup" = [
+    "0x065d2AB17338b5AffdEbAF95E2D79834B5f30Bac596fF55563c62C3c98700150", # creator_address
+    "0x0142712722e62a38f9c40fcc904610e1a14c70125876ecaaf25d803556734467", # denshokan_address
+]

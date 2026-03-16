@@ -72,6 +72,55 @@ pub struct GameCounter {
     pub count: u64,
 }
 
+/// Per-token game state shared between game_setup and game_actions via the Dojo world.
+/// game_actions writes this model; game_setup reads it for IMinigameTokenData/IMinigameDetails.
+#[derive(Copy, Drop, Serde)]
+#[dojo::model]
+pub struct TokenGameState {
+    #[key]
+    pub token_id: felt252,
+    /// Packed board: 2 bits per cell, 18 bits total.
+    pub board: u32,
+    /// Game status: 0=playing, 1=player_win, 2=ai_win, 3=draw.
+    pub status: u8,
+    pub games_played: u32,
+    pub games_won: u32,
+    pub games_drawn: u32,
+    /// Cumulative score (wins count).
+    pub score: u64,
+}
+
+/// Game settings definition.
+#[derive(Drop, Serde)]
+#[dojo::model]
+pub struct SettingsModel {
+    #[key]
+    pub settings_id: u32,
+    pub name: ByteArray,
+    pub description: ByteArray,
+    pub exists: bool,
+}
+
+/// Game objective definition.
+#[derive(Copy, Drop, Serde)]
+#[dojo::model]
+pub struct ObjectiveModel {
+    #[key]
+    pub objective_id: u32,
+    pub target_wins: u32,
+    pub exists: bool,
+}
+
+/// Singleton config for settings/objectives counts.
+#[derive(Copy, Drop, Serde)]
+#[dojo::model]
+pub struct GameConfig {
+    #[key]
+    pub id: u8, // always 0, singleton
+    pub settings_count: u32,
+    pub objectives_count: u32,
+}
+
 // ==========================================================================
 // PURE BOARD LOGIC
 // ==========================================================================

@@ -1,0 +1,39 @@
+[world]
+name = "Tic Tac Toe"
+description = "On-chain Tic Tac Toe game built with Dojo"
+seed = "dojo_tic_tac_toe"
+
+[namespace]
+default = "tic_tac_toe"
+
+[env]
+rpc_url = "http://localhost:5050/"
+# Default account for katana with seed = 0
+account_address = "0x127fd5f1fe78a71f8bcd1fec63e3fe2f0486b6ecd5c86a0466c3a21fa5cfcec"
+private_key = "0xc5b2fcab997346f3ea1c00b002ecf6f382c5f9c9659a3894eb783c5320f912"
+
+[writers]
+"tic_tac_toe" = ["tic_tac_toe-game_actions", "tic_tac_toe-game_setup", "tic_tac_toe-game_settings", "tic_tac_toe-game_objectives"]
+
+[migration]
+order_inits = [
+    "tic_tac_toe-game_actions",
+    "tic_tac_toe-game_setup",
+    "tic_tac_toe-game_settings",
+    "tic_tac_toe-game_objectives",
+]
+
+[init_call_args]
+"tic_tac_toe-game_actions" = [
+    "0x0142712722e62a38f9c40fcc904610e1a14c70125876ecaaf25d803556734467", # denshokan_address
+]
+"tic_tac_toe-game_settings" = [
+    "0x0142712722e62a38f9c40fcc904610e1a14c70125876ecaaf25d803556734467", # denshokan_address
+]
+"tic_tac_toe-game_objectives" = [
+    "0x0142712722e62a38f9c40fcc904610e1a14c70125876ecaaf25d803556734467", # denshokan_address
+]
+"tic_tac_toe-game_setup" = [
+    "0x127fd5f1fe78a71f8bcd1fec63e3fe2f0486b6ecd5c86a0466c3a21fa5cfcec", # creator_address
+    "0x0142712722e62a38f9c40fcc904610e1a14c70125876ecaaf25d803556734467", # denshokan_address
+]
