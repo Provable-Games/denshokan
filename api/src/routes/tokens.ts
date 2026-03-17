@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { eq, desc, and, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { tokens, scoreHistory } from "../db/schema.js";
-import { parseTokenId, parseGameId, parseAddress, parsePositiveInt } from "../utils/validation.js";
+import { parseTokenId, parseGameId, parseAddress, parseNonNegativeInt } from "../utils/validation.js";
 
 const app = new Hono();
 
@@ -11,8 +11,8 @@ app.get("/", async (c) => {
   const gameId = parseGameId(c.req.query("game_id"));
   const owner = parseAddress(c.req.query("owner"));
   const gameOver = c.req.query("game_over");
-  const limit = parsePositiveInt(c.req.query("limit"), 50);
-  const offset = parsePositiveInt(c.req.query("offset"), 0);
+  const limit = parseNonNegativeInt(c.req.query("limit"), 50);
+  const offset = parseNonNegativeInt(c.req.query("offset"), 0);
 
   const conditions = [];
   if (gameId !== null) conditions.push(eq(tokens.gameId, gameId));
@@ -71,7 +71,7 @@ app.get("/:id/scores", async (c) => {
     return c.json({ error: "Invalid token ID" }, 400);
   }
 
-  const limit = parsePositiveInt(c.req.query("limit"), 100);
+  const limit = parseNonNegativeInt(c.req.query("limit"), 100);
 
   const results = await db
     .select()

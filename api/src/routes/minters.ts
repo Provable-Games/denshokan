@@ -2,14 +2,14 @@ import { Hono } from "hono";
 import { eq, desc, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { minters } from "../db/schema.js";
-import { parsePositiveInt } from "../utils/validation.js";
+import { parseNonNegativeInt } from "../utils/validation.js";
 
 const app = new Hono();
 
 // GET /minters - List all minters (paginated)
 app.get("/", async (c) => {
-  const limit = parsePositiveInt(c.req.query("limit"), 50);
-  const offset = parsePositiveInt(c.req.query("offset"), 0);
+  const limit = parseNonNegativeInt(c.req.query("limit"), 50);
+  const offset = parseNonNegativeInt(c.req.query("offset"), 0);
 
   const [results, countResult] = await Promise.all([
     db

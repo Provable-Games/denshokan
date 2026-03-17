@@ -28,9 +28,9 @@ export function parseAddress(value: string | undefined): string | null {
   return `0x${BigInt(value).toString(16)}`;
 }
 
-export function parsePositiveInt(value: string | undefined, defaultValue: number): number {
+export function parseNonNegativeInt(value: string | undefined, defaultValue: number): number {
   if (!value) return defaultValue;
   const num = parseInt(value, 10);
-  if (isNaN(num) || num < 1) return defaultValue;
+  if (isNaN(num) || num < 0) return defaultValue;
   return num;
 }
