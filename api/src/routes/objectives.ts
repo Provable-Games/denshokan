@@ -2,14 +2,14 @@ import { Hono } from "hono";
 import { eq, desc, sql, and } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { objectives } from "../db/schema.js";
-import { parsePositiveInt, parseAddress } from "../utils/validation.js";
+import { parseNonNegativeInt, parseAddress } from "../utils/validation.js";
 
 const app = new Hono();
 
 // GET /objectives - All objectives, paginated, with optional game_address filter
 app.get("/", async (c) => {
-  const limit = parsePositiveInt(c.req.query("limit"), 50);
-  const offset = parsePositiveInt(c.req.query("offset"), 0);
+  const limit = parseNonNegativeInt(c.req.query("limit"), 50);
+  const offset = parseNonNegativeInt(c.req.query("offset"), 0);
   const gameAddress = parseAddress(c.req.query("game_address"));
 
   const conditions = [];
@@ -46,7 +46,7 @@ app.get("/", async (c) => {
 
 // GET /objectives/:objectiveId - Single objective by composite key
 app.get("/:objectiveId", async (c) => {
-  const objectiveId = parsePositiveInt(c.req.param("objectiveId"), -1);
+  const objectiveId = parseNonNegativeInt(c.req.param("objectiveId"), -1);
   if (objectiveId < 0) {
     return c.json({ error: "Invalid objective ID" }, 400);
   }

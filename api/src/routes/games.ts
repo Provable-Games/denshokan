@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { eq, desc, sql, and } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { games, gameStats, objectives, settings } from "../db/schema.js";
-import { parseGameId, parsePositiveInt } from "../utils/validation.js";
+import { parseGameId, parseNonNegativeInt } from "../utils/validation.js";
 
 const app = new Hono();
 
@@ -41,8 +41,8 @@ async function resolveGameId(rawId: string): Promise<{ gameId: number; gameAddre
 
 // GET /games - List games (paginated)
 app.get("/", async (c) => {
-  const limit = parsePositiveInt(c.req.query("limit"), 50);
-  const offset = parsePositiveInt(c.req.query("offset"), 0);
+  const limit = parseNonNegativeInt(c.req.query("limit"), 50);
+  const offset = parseNonNegativeInt(c.req.query("offset"), 0);
 
   const [results, countResult] = await Promise.all([
     db
@@ -94,7 +94,7 @@ app.get("/:id/objectives/:objectiveId", async (c) => {
     return c.json({ error: "Game not found" }, 404);
   }
 
-  const objectiveId = parsePositiveInt(c.req.param("objectiveId"), -1);
+  const objectiveId = parseNonNegativeInt(c.req.param("objectiveId"), -1);
   if (objectiveId < 0) {
     return c.json({ error: "Invalid objective ID" }, 400);
   }
@@ -150,7 +150,7 @@ app.get("/:id/settings/:settingsId", async (c) => {
     return c.json({ error: "Game not found" }, 404);
   }
 
-  const settingsId = parsePositiveInt(c.req.param("settingsId"), -1);
+  const settingsId = parseNonNegativeInt(c.req.param("settingsId"), -1);
   if (settingsId < 0) {
     return c.json({ error: "Invalid settings ID" }, 400);
   }

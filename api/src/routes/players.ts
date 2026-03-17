@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { eq, and, desc, sql, countDistinct } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { tokens } from "../db/schema.js";
-import { parseAddress, parseGameId, parsePositiveInt } from "../utils/validation.js";
+import { parseAddress, parseGameId, parseNonNegativeInt } from "../utils/validation.js";
 
 const app = new Hono();
 
@@ -15,8 +15,8 @@ app.get("/:address/tokens", async (c) => {
 
   const gameId = parseGameId(c.req.query("game_id"));
   const gameOver = c.req.query("game_over");
-  const limit = parsePositiveInt(c.req.query("limit"), 50);
-  const offset = parsePositiveInt(c.req.query("offset"), 0);
+  const limit = parseNonNegativeInt(c.req.query("limit"), 50);
+  const offset = parseNonNegativeInt(c.req.query("offset"), 0);
 
   const conditions = [eq(tokens.ownerAddress, address)];
   if (gameId !== null) conditions.push(eq(tokens.gameId, gameId));

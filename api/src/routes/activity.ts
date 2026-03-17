@@ -2,14 +2,14 @@ import { Hono } from "hono";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { tokenEvents, gameStats } from "../db/schema.js";
-import { parsePositiveInt, parseGameId } from "../utils/validation.js";
+import { parseNonNegativeInt, parseGameId } from "../utils/validation.js";
 
 const app = new Hono();
 
 // GET /activity - Recent token events (paginated)
 app.get("/", async (c) => {
-  const limit = parsePositiveInt(c.req.query("limit"), 50);
-  const offset = parsePositiveInt(c.req.query("offset"), 0);
+  const limit = parseNonNegativeInt(c.req.query("limit"), 50);
+  const offset = parseNonNegativeInt(c.req.query("offset"), 0);
   const eventType = c.req.query("type");
 
   const conditions = [];
