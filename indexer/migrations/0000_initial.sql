@@ -119,7 +119,8 @@ CREATE TABLE "tokens" (
 	"owner_address" text NOT NULL,
 	"player_name" text,
 	"client_url" text,
-	"context_data" text,
+	"context_data" jsonb,
+	"context_id" integer,
 	"renderer_address" text,
 	"current_score" bigint NOT NULL,
 	"created_at_block" bigint NOT NULL,
@@ -151,6 +152,7 @@ CREATE INDEX "tokens_owner_game_idx" ON "tokens" USING btree ("owner_address","g
 CREATE INDEX "tokens_objective_idx" ON "tokens" USING btree ("objective_id");--> statement-breakpoint
 CREATE INDEX "tokens_minted_by_idx" ON "tokens" USING btree ("minted_by");--> statement-breakpoint
 CREATE INDEX "tokens_settings_idx" ON "tokens" USING btree ("settings_id");--> statement-breakpoint
+CREATE INDEX "tokens_context_id_idx" ON "tokens" USING btree ("context_id");--> statement-breakpoint
 
 -- Notify trigger functions for real-time WebSocket updates via PostgreSQL LISTEN/NOTIFY
 
