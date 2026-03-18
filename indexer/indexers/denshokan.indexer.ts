@@ -586,13 +586,14 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
             case EVENT_SELECTORS.TokenContextUpdate: {
               const decoded = decodeTokenContextUpdate(keys, data);
               logger.info(
-                `TokenContextUpdate: token_id=${decoded.tokenId}, data_len=${decoded.data.length}`
+                `TokenContextUpdate: token_id=${decoded.tokenId}, context_id=${decoded.contextId}, name=${decoded.data.name}, context_pairs=${decoded.data.context.length}`
               );
 
               await db
                 .update(schema.tokens)
                 .set({
                   contextData: decoded.data,
+                  contextId: decoded.contextId,
                   lastUpdatedBlock: blockNumber,
                   lastUpdatedAt: blockTimestamp,
                 })

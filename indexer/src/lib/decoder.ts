@@ -329,11 +329,17 @@ export interface MinterRegistryUpdateEvent {
 /**
  * TokenContextUpdate event
  * Keys: [selector, token_id(u64)]
- * Data: [data(ByteArray)]
+ * Data: [GameContextDetails { name: ByteArray, description: ByteArray, id: Option<u32>, context: Span<GameContext> }]
  */
 export interface TokenContextUpdateEvent {
   tokenId: bigint;
-  data: string;
+  /** Structured context data: name, description, and key-value pairs */
+  data: {
+    name: string;
+    description: string;
+    context: Array<{ name: string; value: string }>;
+  };
+  contextId: number | null;
 }
 
 /**
@@ -512,13 +518,52 @@ export function decodeMinterRegistryUpdate(keys: readonly string[], data: readon
 /**
  * Decode TokenContextUpdate event
  * Keys: [selector, token_id(u64)]
- * Data: [data(ByteArray)]
+ * Data: [GameContextDetails { name: ByteArray, description: ByteArray, id: Option<u32>, context: Span<GameContext> }]
+ *
+ * Cairo Option<u32> serialization: variant felt (0=None, 1=Some), followed by value felt if Some.
  */
 export function decodeTokenContextUpdate(keys: readonly string[], data: readonly string[]): TokenContextUpdateEvent {
-  const { value } = decodeByteArray(data, 0);
+  let idx = 0;
+
+  // Decode name (ByteArray)
+  const nameResult = decodeByteArray(data, idx);
+  idx += nameResult.consumed;
+
+  // Decode description (ByteArray)
+  const descriptionResult = decodeByteArray(data, idx);
+  idx += descriptionResult.consumed;
+
+  // Decode Option<u32> for id
+  let contextId: number | null = null;
+  const optionVariant = Number(hexToBigInt(data[idx]));
+  idx += 1;
+  if (optionVariant === 1) {
+    // Some variant — next felt is the u32 value
+    contextId = Number(hexToBigInt(data[idx]));
+    idx += 1;
+  }
+
+  // Decode context Span<GameContext> — array of { name: felt252, value: felt252 }
+  const contextPairs: Array<{ name: string; value: string }> = [];
+  if (idx < data.length) {
+    const spanLen = Number(hexToBigInt(data[idx]));
+    idx += 1;
+    for (let i = 0; i < spanLen && idx + 1 < data.length; i++) {
+      const name = feltToString(data[idx]);
+      const value = decodeFelt252AsString(data[idx + 1]);
+      contextPairs.push({ name, value });
+      idx += 2;
+    }
+  }
+
   return {
     tokenId: hexToBigInt(keys[1]),
-    data: value,
+    data: {
+      name: nameResult.value,
+      description: descriptionResult.value,
+      context: contextPairs,
+    },
+    contextId,
   };
 }
 

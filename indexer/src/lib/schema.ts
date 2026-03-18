@@ -73,8 +73,13 @@ export const tokens = pgTable(
     playerName: text("player_name"),
     clientUrl: text("client_url"),
 
-    // From TokenContextUpdate
-    contextData: text("context_data"),
+    // From TokenContextUpdate — structured context { name, description, context: [{name, value}] }
+    contextData: jsonb("context_data").$type<{
+      name: string;
+      description: string;
+      context: Array<{ name: string; value: string }>;
+    }>(),
+    contextId: integer("context_id"),
     // From TokenRendererUpdate
     rendererAddress: text("renderer_address"),
     // From TokenSkillsUpdate
@@ -106,6 +111,8 @@ export const tokens = pgTable(
     index("tokens_minted_by_idx").on(table.mintedBy),
     // Settings queries
     index("tokens_settings_idx").on(table.settingsId),
+    // Context ID queries
+    index("tokens_context_id_idx").on(table.contextId),
   ]
 );
 

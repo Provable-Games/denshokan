@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { eq, desc, and, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { tokens, scoreHistory } from "../db/schema.js";
-import { parseTokenId, parseGameId, parseAddress, parseNonNegativeInt } from "../utils/validation.js";
+import { parseTokenId, parseGameId, parseAddress, parseNonNegativeInt, parseOptionalNonNegativeInt } from "../utils/validation.js";
 
 const app = new Hono();
 
@@ -11,6 +11,8 @@ app.get("/", async (c) => {
   const gameId = parseGameId(c.req.query("game_id"));
   const owner = parseAddress(c.req.query("owner"));
   const gameOver = c.req.query("game_over");
+  const contextId = parseOptionalNonNegativeInt(c.req.query("context_id"));
+  const contextName = c.req.query("context_name");
   const limit = parseNonNegativeInt(c.req.query("limit"), 50);
   const offset = parseNonNegativeInt(c.req.query("offset"), 0);
 
@@ -19,6 +21,8 @@ app.get("/", async (c) => {
   if (owner !== null) conditions.push(eq(tokens.ownerAddress, owner));
   if (gameOver === "true") conditions.push(eq(tokens.gameOver, true));
   if (gameOver === "false") conditions.push(eq(tokens.gameOver, false));
+  if (contextId !== null) conditions.push(eq(tokens.contextId, contextId));
+  if (contextName) conditions.push(sql`${tokens.contextData}->>'name' = ${contextName}`);
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;
 
