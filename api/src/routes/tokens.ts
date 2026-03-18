@@ -6,6 +6,35 @@ import { parseTokenId, parseGameId, parseAddress, parseNonNegativeInt, parseOpti
 
 const app = new Hono();
 
+// In-memory minter cache (minter_id -> contract_address)
+// Refreshed on first request and when a cache miss occurs
+let minterCache = new Map<string, string>();
+let minterCacheReady = false;
+
+async function loadMinterCache() {
+  const rows = await db.select({ minterId: minters.minterId, contractAddress: minters.contractAddress }).from(minters);
+  minterCache = new Map(rows.map((r) => [r.minterId.toString(), r.contractAddress]));
+  minterCacheReady = true;
+}
+
+async function resolveMinterAddress(mintedBy: string): Promise<string | null> {
+  if (!minterCacheReady) await loadMinterCache();
+  return minterCache.get(mintedBy) ?? null;
+}
+
+async function resolveMinterId(address: string): Promise<bigint | null> {
+  if (!minterCacheReady) await loadMinterCache();
+  for (const [id, addr] of minterCache) {
+    if (addr === address) return BigInt(id);
+  }
+  // Cache miss — refresh and retry once
+  await loadMinterCache();
+  for (const [id, addr] of minterCache) {
+    if (addr === address) return BigInt(id);
+  }
+  return null;
+}
+
 // GET /tokens - List tokens (paginated, filterable)
 app.get("/", async (c) => {
   const gameId = parseGameId(c.req.query("game_id"));
@@ -24,20 +53,22 @@ app.get("/", async (c) => {
   if (gameOver === "false") conditions.push(eq(tokens.gameOver, false));
   if (contextId !== null) conditions.push(eq(tokens.contextId, contextId));
   if (contextName) conditions.push(sql`${tokens.contextData}->>'name' = ${contextName}`);
-  if (minterAddress) conditions.push(eq(minters.contractAddress, minterAddress));
+  if (minterAddress) {
+    const minterId = await resolveMinterId(minterAddress);
+    if (minterId !== null) {
+      conditions.push(eq(tokens.mintedBy, minterId));
+    } else {
+      // Minter not found — return empty
+      return c.json({ data: [], total: 0, limit, offset: Math.max(offset, 0) });
+    }
+  }
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;
 
-  // LEFT JOIN minters to resolve minter address in a single query
-  // When minter_address filter is used, the JOIN + WHERE handles filtering
   const [results, countResult] = await Promise.all([
     db
-      .select({
-        token: tokens,
-        minterAddress: minters.contractAddress,
-      })
+      .select()
       .from(tokens)
-      .leftJoin(minters, eq(tokens.mintedBy, minters.minterId))
       .where(where)
       .orderBy(desc(tokens.lastUpdatedAt))
       .limit(Math.min(limit, 100))
@@ -45,15 +76,14 @@ app.get("/", async (c) => {
     db
       .select({ count: sql<number>`count(*)::int` })
       .from(tokens)
-      .leftJoin(minters, eq(tokens.mintedBy, minters.minterId))
       .where(where),
   ]);
 
   return c.json({
-    data: results.map((r) => ({
-      ...serializeToken(r.token),
-      minterAddress: r.minterAddress,
-    })),
+    data: await Promise.all(results.map(async (t) => ({
+      ...serializeToken(t),
+      minterAddress: await resolveMinterAddress(t.mintedBy.toString()),
+    }))),
     total: countResult[0]?.count ?? 0,
     limit,
     offset: Math.max(offset, 0),
@@ -68,12 +98,8 @@ app.get("/:id", async (c) => {
   }
 
   const result = await db
-    .select({
-      token: tokens,
-      minterAddress: minters.contractAddress,
-    })
+    .select()
     .from(tokens)
-    .leftJoin(minters, eq(tokens.mintedBy, minters.minterId))
     .where(eq(tokens.tokenId, tokenId))
     .limit(1);
 
@@ -83,8 +109,8 @@ app.get("/:id", async (c) => {
 
   return c.json({
     data: {
-      ...serializeToken(result[0].token),
-      minterAddress: result[0].minterAddress,
+      ...serializeToken(result[0]),
+      minterAddress: await resolveMinterAddress(result[0].mintedBy.toString()),
     },
   });
 });
