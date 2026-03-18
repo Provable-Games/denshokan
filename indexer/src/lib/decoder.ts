@@ -534,10 +534,11 @@ export function decodeTokenContextUpdate(keys: readonly string[], data: readonly
   idx += descriptionResult.consumed;
 
   // Decode Option<u32> for id
+  // Cairo Serde: Option::Some = variant 0, Option::None = variant 1
   let contextId: number | null = null;
   const optionVariant = Number(hexToBigInt(data[idx]));
   idx += 1;
-  if (optionVariant === 1) {
+  if (optionVariant === 0) {
     // Some variant — next felt is the u32 value
     contextId = Number(hexToBigInt(data[idx]));
     idx += 1;
