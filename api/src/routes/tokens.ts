@@ -17,17 +17,6 @@ app.get("/", async (c) => {
   const limit = parseNonNegativeInt(c.req.query("limit"), 50);
   const offset = parseNonNegativeInt(c.req.query("offset"), 0);
 
-  // Resolve minter address to minter_id for filtering
-  let minterId: bigint | null = null;
-  if (minterAddress) {
-    const minterRow = await db
-      .select({ minterId: minters.minterId })
-      .from(minters)
-      .where(eq(minters.contractAddress, minterAddress))
-      .limit(1);
-    minterId = minterRow[0]?.minterId ?? null;
-  }
-
   const conditions = [];
   if (gameId !== null) conditions.push(eq(tokens.gameId, gameId));
   if (owner !== null) conditions.push(eq(tokens.ownerAddress, owner));
@@ -35,14 +24,20 @@ app.get("/", async (c) => {
   if (gameOver === "false") conditions.push(eq(tokens.gameOver, false));
   if (contextId !== null) conditions.push(eq(tokens.contextId, contextId));
   if (contextName) conditions.push(sql`${tokens.contextData}->>'name' = ${contextName}`);
-  if (minterId !== null) conditions.push(eq(tokens.mintedBy, minterId));
+  if (minterAddress) conditions.push(eq(minters.contractAddress, minterAddress));
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;
 
+  // LEFT JOIN minters to resolve minter address in a single query
+  // When minter_address filter is used, the JOIN + WHERE handles filtering
   const [results, countResult] = await Promise.all([
     db
-      .select()
+      .select({
+        token: tokens,
+        minterAddress: minters.contractAddress,
+      })
       .from(tokens)
+      .leftJoin(minters, eq(tokens.mintedBy, minters.minterId))
       .where(where)
       .orderBy(desc(tokens.lastUpdatedAt))
       .limit(Math.min(limit, 100))
@@ -50,11 +45,15 @@ app.get("/", async (c) => {
     db
       .select({ count: sql<number>`count(*)::int` })
       .from(tokens)
+      .leftJoin(minters, eq(tokens.mintedBy, minters.minterId))
       .where(where),
   ]);
 
   return c.json({
-    data: results.map(serializeToken),
+    data: results.map((r) => ({
+      ...serializeToken(r.token),
+      minterAddress: r.minterAddress,
+    })),
     total: countResult[0]?.count ?? 0,
     limit,
     offset: Math.max(offset, 0),
@@ -69,8 +68,12 @@ app.get("/:id", async (c) => {
   }
 
   const result = await db
-    .select()
+    .select({
+      token: tokens,
+      minterAddress: minters.contractAddress,
+    })
     .from(tokens)
+    .leftJoin(minters, eq(tokens.mintedBy, minters.minterId))
     .where(eq(tokens.tokenId, tokenId))
     .limit(1);
 
@@ -78,7 +81,12 @@ app.get("/:id", async (c) => {
     return c.json({ error: "Token not found" }, 404);
   }
 
-  return c.json({ data: serializeToken(result[0]) });
+  return c.json({
+    data: {
+      ...serializeToken(result[0].token),
+      minterAddress: result[0].minterAddress,
+    },
+  });
 });
 
 // GET /tokens/:id/scores - Score history for a token
