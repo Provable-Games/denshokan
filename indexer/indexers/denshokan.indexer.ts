@@ -245,10 +245,11 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
 
       const blockNumber = header.blockNumber ?? 0n;
       const blockTimestamp = header.timestamp ?? new Date();
+      const blk = `[block=${blockNumber}]`;
 
       if (events.length > 0) {
         logger.info(
-          `Processing ${events.length} events at block ${blockNumber}`
+          `${blk} Processing ${events.length} events`
         );
       }
 
@@ -278,7 +279,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                 // Mint: decode packed token ID for immutable fields
                 const packed = decodePackedTokenId(decoded.tokenId);
                 logger.info(
-                  `Transfer (mint): token_id=${decoded.tokenId}, to=${decoded.to}, game_id=${packed.gameId}`
+                  `${blk} Transfer (mint): token_id=${decoded.tokenId}, to=${decoded.to}, game_id=${packed.gameId}`
                 );
 
                 await db.insert(schema.tokens).values({
@@ -350,7 +351,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
               } else {
                 // Regular transfer: update owner
                 logger.info(
-                  `Transfer: token_id=${decoded.tokenId}, from=${decoded.from}, to=${decoded.to}`
+                  `${blk} Transfer: token_id=${decoded.tokenId}, from=${decoded.from}, to=${decoded.to}`
                 );
 
                 await db
@@ -380,7 +381,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
             case EVENT_SELECTORS.ScoreUpdate: {
               const decoded = decodeScoreUpdate(keys, data);
               logger.info(
-                `ScoreUpdate: token_id=${decoded.tokenId}, score=${decoded.score}`
+                `${blk} ScoreUpdate: token_id=${decoded.tokenId}, score=${decoded.score}`
               );
 
               // Update current score on token
@@ -426,7 +427,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
             case EVENT_SELECTORS.TokenPlayerNameUpdate: {
               const decoded = decodeTokenPlayerNameUpdate(keys, data);
               logger.info(
-                `TokenPlayerNameUpdate: id=${decoded.id}, name=${decoded.playerName}`
+                `${blk} TokenPlayerNameUpdate: id=${decoded.id}, name=${decoded.playerName}`
               );
 
               // Update player name on token
@@ -459,7 +460,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
             case EVENT_SELECTORS.TokenClientUrlUpdate: {
               const decoded = decodeTokenClientUrlUpdate(keys, data);
               logger.info(
-                `TokenClientUrlUpdate: id=${decoded.id}, url=${decoded.clientUrl}`
+                `${blk} TokenClientUrlUpdate: id=${decoded.id}, url=${decoded.clientUrl}`
               );
 
               // Update client URL on token
@@ -491,7 +492,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
 
             case EVENT_SELECTORS.GameOver: {
               const decoded = decodeGameOver(keys);
-              logger.info(`GameOver: token_id=${decoded.tokenId}`);
+              logger.info(`${blk} GameOver: token_id=${decoded.tokenId}`);
 
               // Get token to find its gameId
               const token = await db
@@ -537,7 +538,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
 
             case EVENT_SELECTORS.CompletedObjective: {
               const decoded = decodeCompletedObjective(keys);
-              logger.info(`CompletedObjective: token_id=${decoded.tokenId}`);
+              logger.info(`${blk} CompletedObjective: token_id=${decoded.tokenId}`);
 
               await db
                 .update(schema.tokens)
@@ -565,7 +566,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
             case EVENT_SELECTORS.MinterRegistryUpdate: {
               const decoded = decodeMinterRegistryUpdate(keys, data);
               logger.info(
-                `MinterRegistryUpdate: minter_id=${decoded.minterId}, address=${decoded.minterAddress}`
+                `${blk} MinterRegistryUpdate: minter_id=${decoded.minterId}, address=${decoded.minterAddress}`
               );
 
               await db.insert(schema.minters).values({
@@ -586,7 +587,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
             case EVENT_SELECTORS.TokenContextUpdate: {
               const decoded = decodeTokenContextUpdate(keys, data);
               logger.info(
-                `TokenContextUpdate: token_id=${decoded.tokenId}, context_id=${decoded.contextId}, name=${decoded.data.name}, context_pairs=${decoded.data.context.length}`
+                `${blk} TokenContextUpdate: token_id=${decoded.tokenId}, context_id=${decoded.contextId}, name=${decoded.data.name}, context_pairs=${decoded.data.context.length}`
               );
 
               await db
@@ -616,7 +617,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
             case EVENT_SELECTORS.ObjectiveCreated: {
               const decoded = decodeObjectiveCreated(keys, data);
               logger.info(
-                `ObjectiveCreated: game=${decoded.gameAddress}, objective_id=${decoded.objectiveId}, name=${decoded.name}`
+                `${blk} ObjectiveCreated: game=${decoded.gameAddress}, objective_id=${decoded.objectiveId}, name=${decoded.name}`
               );
 
               await db.insert(schema.objectives).values({
@@ -647,7 +648,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
             case EVENT_SELECTORS.SettingsCreated: {
               const decoded = decodeSettingsCreated(keys, data);
               logger.info(
-                `SettingsCreated: game=${decoded.gameAddress}, settings_id=${decoded.settingsId}, name=${decoded.name}`
+                `${blk} SettingsCreated: game=${decoded.gameAddress}, settings_id=${decoded.settingsId}, name=${decoded.name}`
               );
 
               await db.insert(schema.settings).values({
@@ -677,7 +678,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
             case EVENT_SELECTORS.TokenRendererUpdate: {
               const decoded = decodeTokenRendererUpdate(keys, data);
               logger.info(
-                `TokenRendererUpdate: token_id=${decoded.tokenId}, renderer=${decoded.renderer}`
+                `${blk} TokenRendererUpdate: token_id=${decoded.tokenId}, renderer=${decoded.renderer}`
               );
 
               await db
@@ -706,7 +707,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
             case EVENT_SELECTORS.TokenSkillsUpdate: {
               const decoded = decodeTokenSkillsUpdate(keys, data);
               logger.info(
-                `TokenSkillsUpdate: token_id=${decoded.tokenId}, skills=${decoded.skillsAddress}`
+                `${blk} TokenSkillsUpdate: token_id=${decoded.tokenId}, skills=${decoded.skillsAddress}`
               );
 
               await db
@@ -735,7 +736,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
             case EVENT_SELECTORS.GameRegistryUpdate: {
               const decoded = decodeGameRegistryUpdate(keys, data);
               logger.info(
-                `GameRegistryUpdate: game_id=${decoded.gameId}, contract=${decoded.contractAddress}`
+                `${blk} GameRegistryUpdate: game_id=${decoded.gameId}, contract=${decoded.contractAddress}`
               );
 
               await db.insert(schema.games).values({
@@ -768,7 +769,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
             case EVENT_SELECTORS.GameMetadataUpdate: {
               const decoded = decodeGameMetadataUpdate(keys, data);
               logger.info(
-                `GameMetadataUpdate: game_id=${decoded.gameId}, name=${decoded.name}`
+                `${blk} GameMetadataUpdate: game_id=${decoded.gameId}, name=${decoded.name}`
               );
 
               await db.insert(schema.games).values({
@@ -815,7 +816,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
             case EVENT_SELECTORS.GameRoyaltyUpdate: {
               const decoded = decodeGameRoyaltyUpdate(keys, data);
               logger.info(
-                `GameRoyaltyUpdate: game_id=${decoded.gameId}, fraction=${decoded.royaltyFraction}`
+                `${blk} GameRoyaltyUpdate: game_id=${decoded.gameId}, fraction=${decoded.royaltyFraction}`
               );
 
               await db
@@ -835,7 +836,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
               if (production !== "live") break; // Only process at head
 
               const decoded = decodeMetadataUpdate(keys);
-              logger.info(`MetadataUpdate: token_id=${decoded.tokenId}`);
+              logger.info(`${blk} MetadataUpdate: token_id=${decoded.tokenId}`);
 
               // Synchronous fetch — at head, we want immediate URI updates
               await fetchAndStoreTokenUri(db, decoded.tokenId);
