@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { eq, desc, sql, and } from "drizzle-orm";
+import { eq, desc, asc, sql, and } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { objectives } from "../db/schema.js";
 import { parseNonNegativeInt, parseAddress } from "../utils/validation.js";
@@ -8,6 +8,8 @@ const app = new Hono();
 
 // GET /objectives - All objectives, paginated, with optional game_address filter
 app.get("/", async (c) => {
+  const sortBy = c.req.query("sort_by");
+  const sortOrder = c.req.query("sort_order") === "asc" ? "asc" : "desc";
   const limit = parseNonNegativeInt(c.req.query("limit"), 50);
   const offset = parseNonNegativeInt(c.req.query("offset"), 0);
   const gameAddress = parseAddress(c.req.query("game_address"));
@@ -19,12 +21,19 @@ app.get("/", async (c) => {
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;
 
+  const sortFields: Record<string, any> = {
+    name: objectives.name,
+    created: objectives.createdAt,
+  };
+  const sortColumn = sortFields[sortBy ?? ""] ?? objectives.createdAt;
+  const orderBy = sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn);
+
   const [results, countResult] = await Promise.all([
     db
       .select()
       .from(objectives)
       .where(where)
-      .orderBy(desc(objectives.createdAt))
+      .orderBy(orderBy)
       .limit(Math.min(limit, 100))
       .offset(Math.max(offset, 0)),
     db

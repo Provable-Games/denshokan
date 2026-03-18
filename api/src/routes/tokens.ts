@@ -43,7 +43,8 @@ app.get("/", async (c) => {
   const contextId = parseOptionalNonNegativeInt(c.req.query("context_id"));
   const contextName = c.req.query("context_name");
   const minterAddress = parseAddress(c.req.query("minter_address"));
-  const sort = c.req.query("sort");
+  const sortBy = c.req.query("sort_by");
+  const sortOrder = c.req.query("sort_order") === "asc" ? "asc" : "desc";
   const limit = parseNonNegativeInt(c.req.query("limit"), 50);
   const offset = parseNonNegativeInt(c.req.query("offset"), 0);
 
@@ -67,15 +68,16 @@ app.get("/", async (c) => {
   const where = conditions.length > 0 ? and(...conditions) : undefined;
 
   // Resolve sort order
-  const orderBy = (() => {
-    switch (sort) {
-      case "score_desc": return desc(tokens.currentScore);
-      case "score_asc": return asc(tokens.currentScore);
-      case "minted_desc": return desc(tokens.mintedAt);
-      case "minted_asc": return asc(tokens.mintedAt);
-      default: return desc(tokens.lastUpdatedAt);
-    }
-  })();
+  const sortFields: Record<string, any> = {
+    score: tokens.currentScore,
+    minted: tokens.mintedAt,
+    updated: tokens.lastUpdatedAt,
+    start: tokens.startDelay,
+    end: tokens.endDelay,
+    name: tokens.playerName,
+  };
+  const sortColumn = sortFields[sortBy ?? ""] ?? tokens.lastUpdatedAt;
+  const orderBy = sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn);
 
   const [results, countResult] = await Promise.all([
     db
