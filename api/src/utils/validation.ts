@@ -34,3 +34,10 @@ export function parseNonNegativeInt(value: string | undefined, defaultValue: num
   if (isNaN(num) || num < 0) return defaultValue;
   return num;
 }
+
+export function parseOptionalNonNegativeInt(value: string | undefined): number | null {
+  if (!value) return null;
+  const num = parseInt(value, 10);
+  if (isNaN(num) || num < 0) return null;
+  return num;
+}
