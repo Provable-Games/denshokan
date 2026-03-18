@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { eq, desc, and, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { tokens, scoreHistory } from "../db/schema.js";
+import { tokens, scoreHistory, minters } from "../db/schema.js";
 import { parseTokenId, parseGameId, parseAddress, parseNonNegativeInt, parseOptionalNonNegativeInt } from "../utils/validation.js";
 
 const app = new Hono();
@@ -13,8 +13,20 @@ app.get("/", async (c) => {
   const gameOver = c.req.query("game_over");
   const contextId = parseOptionalNonNegativeInt(c.req.query("context_id"));
   const contextName = c.req.query("context_name");
+  const minterAddress = parseAddress(c.req.query("minter_address"));
   const limit = parseNonNegativeInt(c.req.query("limit"), 50);
   const offset = parseNonNegativeInt(c.req.query("offset"), 0);
+
+  // Resolve minter address to minter_id for filtering
+  let minterId: bigint | null = null;
+  if (minterAddress) {
+    const minterRow = await db
+      .select({ minterId: minters.minterId })
+      .from(minters)
+      .where(eq(minters.contractAddress, minterAddress))
+      .limit(1);
+    minterId = minterRow[0]?.minterId ?? null;
+  }
 
   const conditions = [];
   if (gameId !== null) conditions.push(eq(tokens.gameId, gameId));
@@ -23,6 +35,7 @@ app.get("/", async (c) => {
   if (gameOver === "false") conditions.push(eq(tokens.gameOver, false));
   if (contextId !== null) conditions.push(eq(tokens.contextId, contextId));
   if (contextName) conditions.push(sql`${tokens.contextData}->>'name' = ${contextName}`);
+  if (minterId !== null) conditions.push(eq(tokens.mintedBy, minterId));
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;
 
