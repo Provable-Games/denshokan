@@ -12,6 +12,7 @@ app.get("/", async (c) => {
   const owner = parseAddress(c.req.query("owner"));
   const gameOver = c.req.query("game_over");
   const contextId = parseOptionalNonNegativeInt(c.req.query("context_id"));
+  const contextName = c.req.query("context_name");
   const limit = parseNonNegativeInt(c.req.query("limit"), 50);
   const offset = parseNonNegativeInt(c.req.query("offset"), 0);
 
@@ -21,6 +22,7 @@ app.get("/", async (c) => {
   if (gameOver === "true") conditions.push(eq(tokens.gameOver, true));
   if (gameOver === "false") conditions.push(eq(tokens.gameOver, false));
   if (contextId !== null) conditions.push(eq(tokens.contextId, contextId));
+  if (contextName) conditions.push(sql`${tokens.contextData}->>'name' = ${contextName}`);
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;
 

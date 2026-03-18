@@ -333,7 +333,12 @@ export interface MinterRegistryUpdateEvent {
  */
 export interface TokenContextUpdateEvent {
   tokenId: bigint;
-  data: string;
+  /** Structured context data: name, description, and key-value pairs */
+  data: {
+    name: string;
+    description: string;
+    context: Array<{ name: string; value: string }>;
+  };
   contextId: number | null;
 }
 
@@ -538,11 +543,26 @@ export function decodeTokenContextUpdate(keys: readonly string[], data: readonly
     idx += 1;
   }
 
-  // Skip context Span for now — not needed
+  // Decode context Span<GameContext> — array of { name: felt252, value: felt252 }
+  const contextPairs: Array<{ name: string; value: string }> = [];
+  if (idx < data.length) {
+    const spanLen = Number(hexToBigInt(data[idx]));
+    idx += 1;
+    for (let i = 0; i < spanLen && idx + 1 < data.length; i++) {
+      const name = feltToString(data[idx]);
+      const value = decodeFelt252AsString(data[idx + 1]);
+      contextPairs.push({ name, value });
+      idx += 2;
+    }
+  }
 
   return {
     tokenId: hexToBigInt(keys[1]),
-    data: nameResult.value,
+    data: {
+      name: nameResult.value,
+      description: descriptionResult.value,
+      context: contextPairs,
+    },
     contextId,
   };
 }

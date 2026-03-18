@@ -73,8 +73,12 @@ export const tokens = pgTable(
     playerName: text("player_name"),
     clientUrl: text("client_url"),
 
-    // From TokenContextUpdate
-    contextData: text("context_data"),
+    // From TokenContextUpdate — structured context { name, description, context: [{name, value}] }
+    contextData: jsonb("context_data").$type<{
+      name: string;
+      description: string;
+      context: Array<{ name: string; value: string }>;
+    }>(),
     contextId: integer("context_id"),
     // From TokenRendererUpdate
     rendererAddress: text("renderer_address"),
