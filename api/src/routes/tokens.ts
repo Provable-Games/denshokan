@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { eq, desc, and, sql } from "drizzle-orm";
+import { eq, desc, asc, and, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { tokens, scoreHistory, minters } from "../db/schema.js";
 import { parseTokenId, parseGameId, parseAddress, parseNonNegativeInt, parseOptionalNonNegativeInt } from "../utils/validation.js";
@@ -43,6 +43,7 @@ app.get("/", async (c) => {
   const contextId = parseOptionalNonNegativeInt(c.req.query("context_id"));
   const contextName = c.req.query("context_name");
   const minterAddress = parseAddress(c.req.query("minter_address"));
+  const sort = c.req.query("sort");
   const limit = parseNonNegativeInt(c.req.query("limit"), 50);
   const offset = parseNonNegativeInt(c.req.query("offset"), 0);
 
@@ -65,12 +66,23 @@ app.get("/", async (c) => {
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;
 
+  // Resolve sort order
+  const orderBy = (() => {
+    switch (sort) {
+      case "score_desc": return desc(tokens.currentScore);
+      case "score_asc": return asc(tokens.currentScore);
+      case "minted_desc": return desc(tokens.mintedAt);
+      case "minted_asc": return asc(tokens.mintedAt);
+      default: return desc(tokens.lastUpdatedAt);
+    }
+  })();
+
   const [results, countResult] = await Promise.all([
     db
       .select()
       .from(tokens)
       .where(where)
-      .orderBy(desc(tokens.lastUpdatedAt))
+      .orderBy(orderBy)
       .limit(Math.min(limit, 100))
       .offset(Math.max(offset, 0)),
     db
