@@ -1,25 +1,25 @@
 {
   "profile": "sepolia",
-  "timestamp": "2026-02-28T10:53:20Z",
-  "registry_address": "0x00901bfe1da0d447c4f3b81dfc19505f4796bc1968794de1ce8e0e6ee9fb086b",
-  "denshokan_address": "0x04c5c1c662dabf2698052b8a1413420d4dd7b74ef373c33015feb50cffa46fdb",
-  "mock_class_hash": "0x077d08e99d91d29add65fa3520f2ecde145c7d302165870e0a0784feb97e9159",
+  "timestamp": "2026-03-19T16:28:34Z",
+  "registry_address": "0x02d6dfa06df59948cd5b967ef9644d071525ddc5226bf21e0578d7265e22113d",
+  "denshokan_address": "0x05178014ac8150207c795a9e426cfcbb0546ba1e033e869b04e0b6d8c2791e64",
+  "mock_class_hash": "0x05116fcd1fd797b2d7577986a3962d40eb0c99ead57e3a89b1cfe28d09cb84d1",
   "games": [
     {
       "name": "Loot Survivor",
-      "address": "0x01668b774f6b30f200a574350cbb77c4c8df9e14c02cbba6b143c02a1f40c32b",
+      "address": "0x032642b751c45f458eaca417a4b4927da147d0273c5cbb36412bc8a64ad0c086",
       "genre": "Roguelike",
       "royalty_bps": 500
     },
     {
       "name": "Dark Shuffle",
-      "address": "0x04997a8162fe7c08c350791451fe8e386c06cdae98d1a78aabd727880bd1ee61",
+      "address": "0x014ab11ec001c547c5f0a3a5b7a9a0663df0ccb68b08a6aacdf0ffd172e8931f",
       "genre": "Card Game",
       "royalty_bps": 300
     },
     {
       "name": "Pixel Pong",
-      "address": "0x04ccc63a18da6c649daac4abc6de3cf3af034b59e2f4dad445ae8ec43952fd69",
+      "address": "0x02f98e66e6b1868f5c1858ba990e57c3a96af5b53c627174e0a69f67eee32d10",
       "genre": "Arcade",
       "royalty_bps": 250
     }

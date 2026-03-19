@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { eq, desc, sql, and } from "drizzle-orm";
+import { eq, desc, asc, sql, and } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { games, gameStats, objectives, settings } from "../db/schema.js";
 import { parseGameId, parseNonNegativeInt } from "../utils/validation.js";
@@ -41,14 +41,24 @@ async function resolveGameId(rawId: string): Promise<{ gameId: number; gameAddre
 
 // GET /games - List games (paginated)
 app.get("/", async (c) => {
+  const sortBy = c.req.query("sort_by");
+  const sortOrder = c.req.query("sort_order") === "asc" ? "asc" : "desc";
   const limit = parseNonNegativeInt(c.req.query("limit"), 50);
   const offset = parseNonNegativeInt(c.req.query("offset"), 0);
+
+  const sortFields: Record<string, any> = {
+    name: games.name,
+    created: games.createdAt,
+    updated: games.lastUpdatedAt,
+  };
+  const sortColumn = sortFields[sortBy ?? ""] ?? games.createdAt;
+  const orderBy = sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn);
 
   const [results, countResult] = await Promise.all([
     db
       .select()
       .from(games)
-      .orderBy(desc(games.createdAt))
+      .orderBy(orderBy)
       .limit(Math.min(limit, 100))
       .offset(Math.max(offset, 0)),
     db

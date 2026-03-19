@@ -55,6 +55,8 @@ fn setup_tic_tac_toe() -> (ITicTacToeDispatcher, ContractAddress) {
             Option::Some(500),
             Option::None,
             1,
+            Option::None,
+            Option::None,
         );
 
     (ttt, ttt_address)

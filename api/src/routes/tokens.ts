@@ -1,10 +1,39 @@
 import { Hono } from "hono";
-import { eq, desc, and, sql } from "drizzle-orm";
+import { eq, desc, asc, and, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { tokens, scoreHistory } from "../db/schema.js";
+import { tokens, scoreHistory, minters } from "../db/schema.js";
 import { parseTokenId, parseGameId, parseAddress, parseNonNegativeInt, parseOptionalNonNegativeInt } from "../utils/validation.js";
 
 const app = new Hono();
+
+// In-memory minter cache (minter_id -> contract_address)
+// Refreshed on first request and when a cache miss occurs
+let minterCache = new Map<string, string>();
+let minterCacheReady = false;
+
+async function loadMinterCache() {
+  const rows = await db.select({ minterId: minters.minterId, contractAddress: minters.contractAddress }).from(minters);
+  minterCache = new Map(rows.map((r) => [r.minterId.toString(), r.contractAddress]));
+  minterCacheReady = true;
+}
+
+async function resolveMinterAddress(mintedBy: string): Promise<string | null> {
+  if (!minterCacheReady) await loadMinterCache();
+  return minterCache.get(mintedBy) ?? null;
+}
+
+async function resolveMinterId(address: string): Promise<bigint | null> {
+  if (!minterCacheReady) await loadMinterCache();
+  for (const [id, addr] of minterCache) {
+    if (addr === address) return BigInt(id);
+  }
+  // Cache miss — refresh and retry once
+  await loadMinterCache();
+  for (const [id, addr] of minterCache) {
+    if (addr === address) return BigInt(id);
+  }
+  return null;
+}
 
 // GET /tokens - List tokens (paginated, filterable)
 app.get("/", async (c) => {
@@ -13,6 +42,9 @@ app.get("/", async (c) => {
   const gameOver = c.req.query("game_over");
   const contextId = parseOptionalNonNegativeInt(c.req.query("context_id"));
   const contextName = c.req.query("context_name");
+  const minterAddress = parseAddress(c.req.query("minter_address"));
+  const sortBy = c.req.query("sort_by");
+  const sortOrder = c.req.query("sort_order") === "asc" ? "asc" : "desc";
   const limit = parseNonNegativeInt(c.req.query("limit"), 50);
   const offset = parseNonNegativeInt(c.req.query("offset"), 0);
 
@@ -23,15 +55,36 @@ app.get("/", async (c) => {
   if (gameOver === "false") conditions.push(eq(tokens.gameOver, false));
   if (contextId !== null) conditions.push(eq(tokens.contextId, contextId));
   if (contextName) conditions.push(sql`${tokens.contextData}->>'name' = ${contextName}`);
+  if (minterAddress) {
+    const minterId = await resolveMinterId(minterAddress);
+    if (minterId !== null) {
+      conditions.push(eq(tokens.mintedBy, minterId));
+    } else {
+      // Minter not found — return empty
+      return c.json({ data: [], total: 0, limit, offset: Math.max(offset, 0) });
+    }
+  }
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+  // Resolve sort order
+  const sortFields: Record<string, any> = {
+    score: tokens.currentScore,
+    minted: tokens.mintedAt,
+    updated: tokens.lastUpdatedAt,
+    start: tokens.startDelay,
+    end: tokens.endDelay,
+    name: tokens.playerName,
+  };
+  const sortColumn = sortFields[sortBy ?? ""] ?? tokens.lastUpdatedAt;
+  const orderBy = sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn);
 
   const [results, countResult] = await Promise.all([
     db
       .select()
       .from(tokens)
       .where(where)
-      .orderBy(desc(tokens.lastUpdatedAt))
+      .orderBy(orderBy)
       .limit(Math.min(limit, 100))
       .offset(Math.max(offset, 0)),
     db
@@ -41,7 +94,10 @@ app.get("/", async (c) => {
   ]);
 
   return c.json({
-    data: results.map(serializeToken),
+    data: await Promise.all(results.map(async (t) => ({
+      ...serializeToken(t),
+      minterAddress: await resolveMinterAddress(t.mintedBy.toString()),
+    }))),
     total: countResult[0]?.count ?? 0,
     limit,
     offset: Math.max(offset, 0),
@@ -65,7 +121,12 @@ app.get("/:id", async (c) => {
     return c.json({ error: "Token not found" }, 404);
   }
 
-  return c.json({ data: serializeToken(result[0]) });
+  return c.json({
+    data: {
+      ...serializeToken(result[0]),
+      minterAddress: await resolveMinterAddress(result[0].mintedBy.toString()),
+    },
+  });
 });
 
 // GET /tokens/:id/scores - Score history for a token

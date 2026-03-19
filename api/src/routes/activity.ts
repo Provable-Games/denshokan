@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, asc, eq, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { tokenEvents, gameStats } from "../db/schema.js";
 import { parseNonNegativeInt, parseGameId } from "../utils/validation.js";
@@ -8,6 +8,8 @@ const app = new Hono();
 
 // GET /activity - Recent token events (paginated)
 app.get("/", async (c) => {
+  const sortBy = c.req.query("sort_by");
+  const sortOrder = c.req.query("sort_order") === "asc" ? "asc" : "desc";
   const limit = parseNonNegativeInt(c.req.query("limit"), 50);
   const offset = parseNonNegativeInt(c.req.query("offset"), 0);
   const eventType = c.req.query("type");
@@ -17,12 +19,18 @@ app.get("/", async (c) => {
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;
 
+  const sortFields: Record<string, any> = {
+    timestamp: tokenEvents.blockTimestamp,
+  };
+  const sortColumn = sortFields[sortBy ?? ""] ?? tokenEvents.blockTimestamp;
+  const orderBy = sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn);
+
   const [results, countResult] = await Promise.all([
     db
       .select()
       .from(tokenEvents)
       .where(where)
-      .orderBy(desc(tokenEvents.blockTimestamp))
+      .orderBy(orderBy)
       .limit(Math.min(limit, 100))
       .offset(Math.max(offset, 0)),
     db
