@@ -309,6 +309,53 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                   },
                 });
 
+                // Backfill mutable fields from events that fired before
+                // this mint (the contract emits TokenContextUpdate,
+                // TokenPlayerNameUpdate, TokenClientUrlUpdate, etc.
+                // before Transfer, so the earlier UPDATEs hit no row).
+                const preMintEvents = await db
+                  .select({
+                    eventType: schema.tokenEvents.eventType,
+                    eventData: schema.tokenEvents.eventData,
+                  })
+                  .from(schema.tokenEvents)
+                  .where(eq(schema.tokenEvents.tokenId, toId(decoded.tokenId)));
+
+                if (preMintEvents.length > 0) {
+                  const patch: Record<string, unknown> = {};
+                  for (const evt of preMintEvents) {
+                    try {
+                      const d = JSON.parse(evt.eventData as string);
+                      switch (evt.eventType) {
+                        case "context_update":
+                          patch.contextId = d.contextId ?? null;
+                          patch.contextData = d.data ?? null;
+                          break;
+                        case "player_name":
+                          patch.playerName = d.playerName ?? null;
+                          break;
+                        case "client_url":
+                          patch.clientUrl = d.clientUrl ?? null;
+                          break;
+                        case "renderer_update":
+                          patch.rendererAddress = d.renderer ?? d.rendererAddress ?? null;
+                          break;
+                        case "skills_update":
+                          patch.skillsAddress = d.skillsAddress ?? null;
+                          break;
+                      }
+                    } catch {
+                      // Best-effort: skip unparseable events
+                    }
+                  }
+                  if (Object.keys(patch).length > 0) {
+                    await db
+                      .update(schema.tokens)
+                      .set(patch)
+                      .where(eq(schema.tokens.tokenId, toId(decoded.tokenId)));
+                  }
+                }
+
                 // Queue async token_uri fetch (non-blocking)
                 queueUriFetch(decoded.tokenId);
 
