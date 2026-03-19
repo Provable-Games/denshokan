@@ -40,6 +40,8 @@ pub trait ITicTacToeInit<TContractState> {
         royalty_fraction: Option<u128>,
         skills_address: Option<ContractAddress>,
         version: u64,
+        license: Option<ByteArray>,
+        game_fee_bps: Option<u16>,
     );
 }
 
@@ -719,6 +721,8 @@ pub mod TicTacToe {
             royalty_fraction: Option<u128>,
             skills_address: Option<ContractAddress>,
             version: u64,
+            license: Option<ByteArray>,
+            game_fee_bps: Option<u16>,
         ) {
             let settings_address = match settings_address {
                 Option::Some(address) => {
@@ -760,6 +764,8 @@ pub mod TicTacToe {
                     royalty_fraction,
                     skills_address,
                     version,
+                    license,
+                    game_fee_bps,
                 );
 
             // Create a default settings entry

@@ -89,6 +89,9 @@ pub mod MinigameRegistry {
             // Mint the ERC721 creator token to the creator
             self.erc721.mint(creator_address, game_id.into());
         }
+
+        fn assert_registry_owner(self: @ContractState) {// No owner restriction - registry is permissionless
+        }
     }
 
     // ==========================================================================
