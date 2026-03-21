@@ -82,6 +82,8 @@ export const EVENT_SELECTORS = {
   GameRegistryUpdate: hash.getSelectorFromName("GameRegistryUpdate"),
   GameMetadataUpdate: hash.getSelectorFromName("GameMetadataUpdate"),
   GameRoyaltyUpdate: hash.getSelectorFromName("GameRoyaltyUpdate"),
+  GameFeeUpdate: hash.getSelectorFromName("GameFeeUpdate"),
+  DefaultGameFeeUpdate: hash.getSelectorFromName("DefaultGameFeeUpdate"),
   MetadataUpdate: hash.getSelectorFromName("MetadataUpdate"),
 } as const;
 
@@ -841,4 +843,44 @@ export function decodeGameRoyaltyUpdate(keys: readonly string[], data: readonly 
     gameId: Number(hexToBigInt(keys[1])),
     royaltyFraction: hexToBigInt(data[0]).toString(),
   };
+}
+
+// ============ Game Fee Events ============
+
+/**
+ * GameFeeUpdate event
+ * Keys: [selector, game_id(u64)]
+ * Data: [license(ByteArray), fee_numerator(u16)]
+ */
+export interface GameFeeUpdateEvent {
+  gameId: number;
+  license: string;
+  feeNumerator: number;
+}
+
+/**
+ * DefaultGameFeeUpdate event
+ * Keys: [selector]
+ * Data: [license(ByteArray), fee_numerator(u16)]
+ */
+export interface DefaultGameFeeUpdateEvent {
+  license: string;
+  feeNumerator: number;
+}
+
+export function decodeGameFeeUpdate(keys: readonly string[], data: readonly string[]): GameFeeUpdateEvent {
+  const gameId = Number(hexToBigInt(keys[1]));
+  let idx = 0;
+  const license = decodeByteArray(data, idx);
+  idx += license.consumed;
+  const feeNumerator = Number(hexToBigInt(data[idx]));
+  return { gameId, license: license.value, feeNumerator };
+}
+
+export function decodeDefaultGameFeeUpdate(_keys: readonly string[], data: readonly string[]): DefaultGameFeeUpdateEvent {
+  let idx = 0;
+  const license = decodeByteArray(data, idx);
+  idx += license.consumed;
+  const feeNumerator = Number(hexToBigInt(data[idx]));
+  return { license: license.value, feeNumerator };
 }
