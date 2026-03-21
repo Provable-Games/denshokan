@@ -19,6 +19,8 @@
  * - GameRegistryUpdate: Game registration from registry contract
  * - GameMetadataUpdate: Game metadata from registry contract
  * - GameRoyaltyUpdate: Game royalty changes from registry contract
+ * - GameFeeUpdate: Per-game license and fee changes from registry contract
+ * - DefaultGameFeeUpdate: Default license and fee changes from registry contract
  *
  * Architecture Notes:
  * - Uses high-level defineIndexer API for simplicity
@@ -61,6 +63,8 @@ import {
   decodeGameRegistryUpdate,
   decodeGameMetadataUpdate,
   decodeGameRoyaltyUpdate,
+  decodeGameFeeUpdate,
+  decodeDefaultGameFeeUpdate,
   decodePackedTokenId,
   feltToHex,
   stringifyWithBigInt,
@@ -875,6 +879,35 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                 })
                 .where(eq(schema.games.gameId, decoded.gameId));
 
+              break;
+            }
+
+            case EVENT_SELECTORS.GameFeeUpdate: {
+              const decoded = decodeGameFeeUpdate(keys, data);
+              logger.info(
+                `${blk} GameFeeUpdate: game_id=${decoded.gameId}, license=${decoded.license}, fee=${decoded.feeNumerator}`
+              );
+
+              await db
+                .update(schema.games)
+                .set({
+                  license: decoded.license,
+                  gameFeeBps: decoded.feeNumerator,
+                  lastUpdatedBlock: blockNumber,
+                  lastUpdatedAt: blockTimestamp,
+                })
+                .where(eq(schema.games.gameId, decoded.gameId));
+
+              break;
+            }
+
+            case EVENT_SELECTORS.DefaultGameFeeUpdate: {
+              const decoded = decodeDefaultGameFeeUpdate(keys, data);
+              logger.info(
+                `${blk} DefaultGameFeeUpdate: license=${decoded.license}, fee=${decoded.feeNumerator}`
+              );
+              // Default fee is not persisted per-game — SDK uses RPC fallback.
+              // Games with explicit per-game fees are unaffected.
               break;
             }
 
