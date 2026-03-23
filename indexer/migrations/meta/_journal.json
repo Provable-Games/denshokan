@@ -50,6 +50,13 @@
       "when": 1774252800000,
       "tag": "0006_game_fee_license",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1774339200000,
+      "tag": "0007_enrich_ws_payloads",
+      "breakpoints": true
     }
   ]
 }

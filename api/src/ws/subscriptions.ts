@@ -93,11 +93,14 @@ function matchesFilters(sub: Subscription, data: Record<string, unknown>): boole
   }
   if (sub.contextIds.size > 0) {
     const contextId = data.context_id;
-    if (contextId == null || !sub.contextIds.has(Number(contextId))) return false;
+    // If the payload lacks context_id, let it through (field may not be present
+    // in older trigger payloads). Only reject when the field is present but
+    // doesn't match the subscription filter.
+    if (contextId != null && !sub.contextIds.has(Number(contextId))) return false;
   }
   if (sub.mintedByIds.size > 0) {
     const mintedBy = data.minted_by;
-    if (mintedBy == null || !sub.mintedByIds.has(Number(mintedBy))) return false;
+    if (mintedBy != null && !sub.mintedByIds.has(Number(mintedBy))) return false;
   }
   if (sub.owners.size > 0) {
     const owner = data.owner_address;
@@ -105,11 +108,11 @@ function matchesFilters(sub: Subscription, data: Record<string, unknown>): boole
   }
   if (sub.settingsIds.size > 0) {
     const settingsId = data.settings_id;
-    if (settingsId == null || !sub.settingsIds.has(Number(settingsId))) return false;
+    if (settingsId != null && !sub.settingsIds.has(Number(settingsId))) return false;
   }
   if (sub.objectiveIds.size > 0) {
     const objectiveId = data.objective_id;
-    if (objectiveId == null || !sub.objectiveIds.has(Number(objectiveId))) return false;
+    if (objectiveId != null && !sub.objectiveIds.has(Number(objectiveId))) return false;
   }
   return true;
 }
