@@ -5,6 +5,11 @@ import { pool } from "../db/client.js";
 interface Subscription {
   channels: Set<string>;
   gameIds: Set<string>;
+  contextIds: Set<number>;
+  mintedByIds: Set<number>;
+  owners: Set<string>;
+  settingsIds: Set<number>;
+  objectiveIds: Set<number>;
 }
 
 // Valid PG LISTEN channels (from 004_functions.sql + 0002_websocket_triggers.sql)
@@ -37,6 +42,20 @@ for (const [friendly, pg] of Object.entries(CHANNEL_MAP)) {
   REVERSE_CHANNEL_MAP[pg] = friendly;
 }
 
+/** Resolve minter contract addresses to their minted_by (minter_id) integers */
+async function resolveMinterAddresses(addresses: string[]): Promise<number[]> {
+  try {
+    const result = await pool.query<{ minter_id: string }>(
+      `SELECT minter_id FROM minters WHERE contract_address = ANY($1)`,
+      [addresses],
+    );
+    return result.rows.map((r) => Number(r.minter_id));
+  } catch (e) {
+    console.error("[WebSocket] Failed to resolve minter addresses:", e);
+    return [];
+  }
+}
+
 const clients = new Map<WSContext, Subscription>();
 let pgClient: pg.PoolClient | null = null;
 let initialized = false;
@@ -67,6 +86,34 @@ async function initPgListener() {
   }
 }
 
+function matchesFilters(sub: Subscription, data: Record<string, unknown>): boolean {
+  if (sub.gameIds.size > 0) {
+    const gameId = data.game_id;
+    if (gameId != null && !sub.gameIds.has(String(gameId))) return false;
+  }
+  if (sub.contextIds.size > 0) {
+    const contextId = data.context_id;
+    if (contextId == null || !sub.contextIds.has(Number(contextId))) return false;
+  }
+  if (sub.mintedByIds.size > 0) {
+    const mintedBy = data.minted_by;
+    if (mintedBy == null || !sub.mintedByIds.has(Number(mintedBy))) return false;
+  }
+  if (sub.owners.size > 0) {
+    const owner = data.owner_address;
+    if (owner == null || !sub.owners.has(String(owner).toLowerCase())) return false;
+  }
+  if (sub.settingsIds.size > 0) {
+    const settingsId = data.settings_id;
+    if (settingsId == null || !sub.settingsIds.has(Number(settingsId))) return false;
+  }
+  if (sub.objectiveIds.size > 0) {
+    const objectiveId = data.objective_id;
+    if (objectiveId == null || !sub.objectiveIds.has(Number(objectiveId))) return false;
+  }
+  return true;
+}
+
 function broadcast(channel: string, payload: unknown) {
   const friendlyName = REVERSE_CHANNEL_MAP[channel] ?? channel;
   const now = Date.now();
@@ -76,13 +123,11 @@ function broadcast(channel: string, payload: unknown) {
     _timing: { serverTs: now },
   });
 
+  const data = payload as Record<string, unknown>;
+
   for (const [ws, sub] of clients) {
     if (!sub.channels.has(channel)) continue;
-
-    if (sub.gameIds.size > 0) {
-      const gameId = (payload as Record<string, unknown>)?.game_id;
-      if (gameId && !sub.gameIds.has(String(gameId))) continue;
-    }
+    if (!matchesFilters(sub, data)) continue;
 
     try {
       ws.send(message);
@@ -103,16 +148,26 @@ export function createWSEvents(): WSEvents {
       const sub: Subscription = {
         channels: new Set(),
         gameIds: new Set(),
+        contextIds: new Set(),
+        mintedByIds: new Set(),
+        owners: new Set(),
+        settingsIds: new Set(),
+        objectiveIds: new Set(),
       };
       clients.set(ws, sub);
     },
 
-    onMessage(evt: MessageEvent<WSMessageReceive>, ws: WSContext) {
+    async onMessage(evt: MessageEvent<WSMessageReceive>, ws: WSContext) {
       try {
         const msg = JSON.parse(String(evt.data)) as {
           type: string;
           channels?: string[];
           gameIds?: string[];
+          contextIds?: number[];
+          minterAddresses?: string[];
+          owners?: string[];
+          settingsIds?: number[];
+          objectiveIds?: number[];
         };
 
         const sub = clients.get(ws);
@@ -125,6 +180,22 @@ export function createWSEvents(): WSEvents {
           }
           if (Array.isArray(msg.gameIds)) {
             for (const gid of msg.gameIds) sub.gameIds.add(String(gid));
+          }
+          if (Array.isArray(msg.contextIds)) {
+            for (const cid of msg.contextIds) sub.contextIds.add(Number(cid));
+          }
+          if (Array.isArray(msg.minterAddresses) && msg.minterAddresses.length > 0) {
+            const mintedByIds = await resolveMinterAddresses(msg.minterAddresses);
+            for (const id of mintedByIds) sub.mintedByIds.add(id);
+          }
+          if (Array.isArray(msg.owners)) {
+            for (const addr of msg.owners) sub.owners.add(String(addr).toLowerCase());
+          }
+          if (Array.isArray(msg.settingsIds)) {
+            for (const sid of msg.settingsIds) sub.settingsIds.add(Number(sid));
+          }
+          if (Array.isArray(msg.objectiveIds)) {
+            for (const oid of msg.objectiveIds) sub.objectiveIds.add(Number(oid));
           }
           ws.send(JSON.stringify({ type: "subscribed", channels: [...sub.channels] }));
         }
