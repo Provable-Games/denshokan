@@ -1,4 +1,4 @@
-# Denshokan
+# Fun Factory
 
 <!-- Version badges - keep in sync with Scarb.toml and package.json -->
 
@@ -8,27 +8,29 @@
 [![Docs](https://img.shields.io/badge/Docs-Embeddable%20Game%20Standard-blue)](https://docs.provable.games/embeddable-game-standard)
 [![codecov](https://codecov.io/gh/Provable-Games/denshokan/branch/main/graph/badge.svg)](https://codecov.io/gh/Provable-Games/denshokan)
 
-Game token contracts and indexer for Starknet. Denshokan (伝承館) means "Hall of Legends" - a place where game achievements are preserved.
+The embeddable game collection on Starknet. Powered by [Denshokan](https://docs.provable.games/embeddable-game-standard) (伝承館) — game token contracts that preserve achievements onchain.
+
+**[funfactory.gg](https://funfactory.gg)**
 
 ## Architecture
 
 ```
 denshokan/
 ├── contracts/               # Cairo smart contracts (Scarb 2.15.0, Cairo 2.15.0)
-│   ├── src/
-│   │   ├── denshokan.cairo          # Main ERC721 token contract
-│   │   ├── denshokan_viewer.cairo   # Filter/query API contract
-│   │   ├── filter.cairo             # Token filtering utilities
-│   │   ├── minigame_registry.cairo  # Game registry contract
-│   │   ├── number_guess.cairo       # Number guessing minigame
-│   │   └── tic_tac_toe.cairo        # Tic-tac-toe minigame
-│   ├── tests/                       # Unit and integration tests
-│   └── scripts/                     # Deployment scripts (sncast)
+│   ├── packages/
+│   │   ├── interfaces/          # denshokan_interfaces - Filter traits & structs
+│   │   ├── token/               # denshokan_token - Main ERC721 token contract
+│   │   ├── viewer/              # denshokan_viewer - Filter/query API contract
+│   │   ├── registry/            # denshokan_registry - Game registration contract
+│   │   ├── renderer/            # denshokan_renderer - Default SVG renderer
+│   │   ├── games/               # denshokan_games - Number guess & tic-tac-toe
+│   │   └── testing/             # denshokan_testing - Shared test helpers
+│   ├── scripts/                 # Deployment scripts (sncast)
+│   └── deployments/             # Deployment artifacts
 ├── indexer/                 # Apibara indexer (TypeScript)
 │   ├── indexers/                # Indexer definitions
 │   ├── src/lib/                 # Schema and decoders
-│   ├── migrations/              # PostgreSQL migrations
-│   └── api/                     # API specifications (OpenAPI, GraphQL, gRPC)
+│   └── migrations/              # PostgreSQL migrations
 ├── api/                     # Hono REST API + WebSocket server
 │   └── src/
 │       ├── routes/              # tokens, games, activity, players, minters
@@ -93,9 +95,9 @@ cd contracts && scarb build
 # Run tests
 snforge test
 
-# Run specific test category
-snforge test unit::
-snforge test integration::
+# Run specific package tests
+snforge test -p denshokan_token
+snforge test -p denshokan_games
 
 # Format code
 scarb fmt -w
@@ -125,9 +127,10 @@ cp .env.example .env
 The script will:
 1. Build contracts with `scarb build`
 2. Declare and deploy MinigameRegistry (unless `GAME_REGISTRY_ADDRESS` is set)
-3. Declare and deploy Denshokan token contract
-4. Declare and deploy DenshokanViewer contract
-5. Save deployment info to `contracts/deployments/`
+3. Declare and deploy DefaultRenderer
+4. Declare and deploy Denshokan token contract
+5. Declare and deploy DenshokanViewer contract
+6. Save deployment info to `contracts/deployments/`
 
 ### Indexer
 
@@ -161,11 +164,13 @@ Hono-based REST API with WebSocket support:
 | `GET /health` | Health check |
 | `WS /ws` | Real-time event subscriptions |
 
-## API Specifications
+## SDK
 
-- **REST**: `indexer/api/openapi.yaml`
-- **gRPC**: `indexer/api/proto/game_service.proto`
-- **GraphQL**: `indexer/api/schema.graphql`
+The TypeScript SDK is available as [`@provable-games/denshokan-sdk`](https://www.npmjs.com/package/@provable-games/denshokan-sdk):
+
+```bash
+npm install @provable-games/denshokan-sdk
+```
 
 ## Native Events
 
