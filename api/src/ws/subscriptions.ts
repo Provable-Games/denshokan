@@ -115,7 +115,7 @@ function matchesFilters(sub: Subscription, data: Record<string, unknown>): boole
   }
   if (sub.owners.size > 0) {
     const owner = data.owner_address;
-    if (owner == null || !sub.owners.has(String(owner).toLowerCase())) return false;
+    if (owner == null || !sub.owners.has(normalizeAddress(String(owner)))) return false;
   }
   if (sub.settingsIds.size > 0) {
     const settingsId = data.settings_id;
@@ -203,7 +203,7 @@ export function createWSEvents(): WSEvents {
             for (const id of mintedByIds) sub.mintedByIds.add(id);
           }
           if (Array.isArray(msg.owners)) {
-            for (const addr of msg.owners) sub.owners.add(String(addr).toLowerCase());
+            for (const addr of msg.owners) sub.owners.add(normalizeAddress(String(addr)));
           }
           if (Array.isArray(msg.settingsIds)) {
             for (const sid of msg.settingsIds) sub.settingsIds.add(Number(sid));
