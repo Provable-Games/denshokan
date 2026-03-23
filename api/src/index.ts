@@ -22,8 +22,8 @@ const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app });
 
 // Middleware
 app.use("*", cors());
-app.use("/activity/stats", rateLimit(30));
-app.use("*", rateLimit(100));
+app.use("/activity/stats", rateLimit(60));
+app.use("*", rateLimit(300));
 
 // Health
 app.get("/health", async (c) => {
