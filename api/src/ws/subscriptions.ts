@@ -43,11 +43,22 @@ for (const [friendly, pg] of Object.entries(CHANNEL_MAP)) {
 }
 
 /** Resolve minter contract addresses to their minted_by (minter_id) integers */
+/** Normalize a hex address to unpadded lowercase (matches indexer storage format) */
+function normalizeAddress(addr: string): string {
+  try {
+    return `0x${BigInt(addr).toString(16)}`;
+  } catch {
+    return addr.toLowerCase();
+  }
+}
+
 async function resolveMinterAddresses(addresses: string[]): Promise<number[]> {
   try {
+    // Normalize to unpadded lowercase hex to match how the indexer stores addresses
+    const normalized = addresses.map(normalizeAddress);
     const result = await pool.query<{ minter_id: string }>(
       `SELECT minter_id FROM minters WHERE contract_address = ANY($1)`,
-      [addresses],
+      [normalized],
     );
     return result.rows.map((r) => Number(r.minter_id));
   } catch (e) {
