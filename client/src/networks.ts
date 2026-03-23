@@ -49,12 +49,12 @@ const NETWORKS: Record<ChainId, DenshokanChainConfig> = {
       "https://api.cartridge.gg/x/starknet/mainnet",
     apiUrl:
       import.meta.env.VITE_MAINNET_API_URL ||
-      "https://denshokan-api-production-a145.up.railway.app",
+      "https://denshokan-api-production.up.railway.app",
     wsUrl: import.meta.env.VITE_MAINNET_WS_URL || "",
     explorerUrl: "https://voyager.online",
-    denshokanAddress: "0x00c40d0eb2af0d67dac903dfd7c623cba47405f72261727778155a98f93cb4fa",
-    registryAddress: "0x06e4116f7f71f929b51b99dc8bc26bf7cae8a139691e21bc27fb881e93d5bd29",
-    viewerAddress: "0x074da3c0325537366a4458fe0aa4c283460914775725eb2c6c267ee3c425a0d8",
+    denshokanAddress: "0x04a8ca498b599a626756545c657f918905eb877f331801a02067d280d0312888",
+    registryAddress: "0x03a7585714a5c2be8fd4333ff2ce7ef2a00d344fd319aa625693cf9af4449d9c",
+    viewerAddress: "0x079d33700028250eb89ad937fc3b633818e22fac3b6f5f6388448ea256737ac7",
     numberGuessApiUrl: import.meta.env.VITE_MAINNET_NUMBER_GUESS_API_URL || "",
     numberGuessWsUrl: import.meta.env.VITE_MAINNET_NUMBER_GUESS_WS_URL || "",
     gameContracts: [],
@@ -68,7 +68,7 @@ const NETWORKS: Record<ChainId, DenshokanChainConfig> = {
       "https://api.cartridge.gg/x/starknet/sepolia",
     apiUrl:
       import.meta.env.VITE_SEPOLIA_API_URL ||
-      "https://denshokan-api-production.up.railway.app",
+      "https://denshokan-api-sepolia.up.railway.app",
     wsUrl: import.meta.env.VITE_SEPOLIA_WS_URL || "",
     explorerUrl: "https://sepolia.voyager.online",
     denshokanAddress: "0x05178014ac8150207c795a9e426cfcbb0546ba1e033e869b04e0b6d8c2791e64",
