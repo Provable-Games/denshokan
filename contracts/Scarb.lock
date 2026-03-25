@@ -153,8 +153,8 @@ source = "git+https://github.com/EkuboProtocol/starknet-contracts.git?tag=v4.0.1
 
 [[package]]
 name = "game_components_embeddable_game_standard"
-version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=main#f81e2ff983e4c0681541e09a587b5c4430a7857b"
+version = "1.1.1"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=feat%2Ffelt252-enumerable#d5d8a51ea748ac153db1742b72dd30df93aab349"
 dependencies = [
  "game_components_interfaces",
  "game_components_metagame",
@@ -167,8 +167,8 @@ dependencies = [
 
 [[package]]
 name = "game_components_interfaces"
-version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=main#f81e2ff983e4c0681541e09a587b5c4430a7857b"
+version = "1.1.1"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=feat%2Ffelt252-enumerable#d5d8a51ea748ac153db1742b72dd30df93aab349"
 dependencies = [
  "ekubo",
  "metagame_extensions_interfaces",
@@ -176,8 +176,8 @@ dependencies = [
 
 [[package]]
 name = "game_components_metagame"
-version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=main#f81e2ff983e4c0681541e09a587b5c4430a7857b"
+version = "1.1.1"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=feat%2Ffelt252-enumerable#d5d8a51ea748ac153db1742b72dd30df93aab349"
 dependencies = [
  "game_components_interfaces",
  "game_components_utilities",
@@ -188,8 +188,8 @@ dependencies = [
 
 [[package]]
 name = "game_components_test_common"
-version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=main#f81e2ff983e4c0681541e09a587b5c4430a7857b"
+version = "1.1.1"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=feat%2Ffelt252-enumerable#d5d8a51ea748ac153db1742b72dd30df93aab349"
 dependencies = [
  "game_components_embeddable_game_standard",
  "game_components_interfaces",
@@ -205,8 +205,8 @@ dependencies = [
 
 [[package]]
 name = "game_components_utilities"
-version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=main#f81e2ff983e4c0681541e09a587b5c4430a7857b"
+version = "1.1.1"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=feat%2Ffelt252-enumerable#d5d8a51ea748ac153db1742b72dd30df93aab349"
 dependencies = [
  "alexandria_encoding",
  "game_components_embeddable_game_standard",
