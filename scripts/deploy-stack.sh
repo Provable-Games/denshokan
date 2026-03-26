@@ -64,6 +64,13 @@ fi
 
 PROFILE="${PROFILE:-sepolia}"
 
+# TOKEN_OWNER is required for core deployment
+if [ "$GAMES_ONLY" = false ] && [ -z "${TOKEN_OWNER:-}" ]; then
+    print_error "TOKEN_OWNER is required. Set it in contracts/.env or as an environment variable."
+    echo "  This must be the address that will own the contracts on the target network ($PROFILE)."
+    exit 1
+fi
+
 # ============================
 # STEP 1: DEPLOY CORE
 # ============================
