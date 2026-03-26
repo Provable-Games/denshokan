@@ -55,10 +55,10 @@ TOKEN_NAME="${TOKEN_NAME:-Denshokan}"
 TOKEN_SYMBOL="${TOKEN_SYMBOL:-DNSH}"
 TOKEN_BASE_URI="${TOKEN_BASE_URI:-https://api.denshokan.dev/token/}"
 
-# Owner parameters
+# Owner parameters (REQUIRED)
 # TOKEN_OWNER: Address that owns the Denshokan token contract (can upgrade)
 # VIEWER_OWNER: Address that can upgrade the DenshokanViewer contract
-# If not set, will use the deployer account address from snfoundry.toml profile
+# Must be explicitly set — will NOT be inferred from sncast account list.
 TOKEN_OWNER="${TOKEN_OWNER:-}"
 VIEWER_OWNER="${VIEWER_OWNER:-}"
 
@@ -86,16 +86,8 @@ echo "    Symbol: $TOKEN_SYMBOL"
 echo "    Base URI: $TOKEN_BASE_URI"
 echo ""
 echo "  Owner Parameters:"
-if [ -n "$TOKEN_OWNER" ]; then
-    echo "    Token Owner: $TOKEN_OWNER"
-else
-    echo "    Token Owner: (will use deployer account)"
-fi
-if [ -n "$VIEWER_OWNER" ]; then
-    echo "    Viewer Owner: $VIEWER_OWNER"
-else
-    echo "    Viewer Owner: (will use deployer account)"
-fi
+echo "    Token Owner: $TOKEN_OWNER"
+echo "    Viewer Owner: $VIEWER_OWNER"
 echo ""
 if [ -n "$GAME_REGISTRY_ADDRESS" ]; then
     echo "  Using existing registry: $GAME_REGISTRY_ADDRESS"
@@ -248,15 +240,12 @@ fi
 # DEPLOY DENSHOKAN TOKEN
 # ============================
 
-# Get token owner address (use deployer account if not specified)
+# Require TOKEN_OWNER to be explicitly set
 if [ -z "$TOKEN_OWNER" ]; then
-    print_info "Fetching deployer account address for token owner..."
-    TOKEN_OWNER=$(sncast --profile "$PROFILE" account list 2>&1 | grep "address:" | head -1 | grep -oE '0x[0-9a-fA-F]+')
-    if [ -z "$TOKEN_OWNER" ]; then
-        print_error "Failed to get deployer account address. Set TOKEN_OWNER manually."
-        exit 1
-    fi
-    print_info "Using deployer account as token owner: $TOKEN_OWNER"
+    print_error "TOKEN_OWNER is required. Set it in .env or as an environment variable."
+    echo "  This must be the address that will own the contract on the target network ($PROFILE)."
+    echo "  Example: TOKEN_OWNER=0x... ./scripts/deploy_denshokan.sh"
+    exit 1
 fi
 
 print_info "Declaring Denshokan contract..."
@@ -304,15 +293,10 @@ print_info "Denshokan deployed at: $CONTRACT_ADDRESS"
 # DEPLOY DENSHOKAN VIEWER
 # ============================
 
-# Get viewer owner address (use deployer account if not specified)
+# Default VIEWER_OWNER to TOKEN_OWNER if not set
 if [ -z "$VIEWER_OWNER" ]; then
-    print_info "Fetching deployer account address for viewer owner..."
-    VIEWER_OWNER=$(sncast --profile "$PROFILE" account list 2>&1 | grep "address:" | head -1 | grep -oE '0x[0-9a-fA-F]+')
-    if [ -z "$VIEWER_OWNER" ]; then
-        print_error "Failed to get deployer account address. Set VIEWER_OWNER manually."
-        exit 1
-    fi
-    print_info "Using deployer account as viewer owner: $VIEWER_OWNER"
+    VIEWER_OWNER="$TOKEN_OWNER"
+    print_info "VIEWER_OWNER not set, using TOKEN_OWNER: $VIEWER_OWNER"
 fi
 
 print_info "Declaring DenshokanViewer contract..."

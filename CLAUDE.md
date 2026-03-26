@@ -287,7 +287,25 @@ Use `#[fork("MAINNET_LATEST")]` or `#[fork("SEPOLIA_LATEST")]` attribute on test
 
 ## Deployment
 
-### Contract Deployment
+### Full Stack Deploy (Recommended)
+
+Deploy core contracts + game contracts + sync env in one command:
+
+```bash
+./scripts/deploy-stack.sh                    # Full deploy (core + games + sync)
+./scripts/deploy-stack.sh --skip-games       # Core only (Registry, Renderer, Token, Viewer)
+./scripts/deploy-stack.sh --games-only       # Games only (uses existing core addresses from .env)
+```
+
+This script:
+1. Deploys Denshokan core contracts via `contracts/scripts/deploy_denshokan.sh`
+2. Updates `contracts/.env` with new addresses
+3. Deploys Number Guess from sibling repo (`../number-guess` or `NUMBER_GUESS_DIR`)
+4. Syncs addresses to `indexer/.env` and `client/src/networks.ts`
+
+**Important:** After deploy, manually update `gameContracts` in `client/src/networks.ts` with the new Number Guess address if it changed.
+
+### Individual Contract Deployment
 
 ```bash
 cd contracts
@@ -298,10 +316,11 @@ cp .env.example .env
 
 Deployments saved to `contracts/deployments/`.
 
-Additional deployment scripts:
-- `./scripts/deploy_number_guess.sh`
-- `./scripts/deploy_tic_tac_toe.sh`
-- `./scripts/deploy_template_games.sh`
+### Game Contracts (Sibling Repos)
+
+Game contracts live in separate repos but depend on Denshokan addresses:
+
+- **Number Guess** (`../number-guess`) — Requires `DENSHOKAN_ADDRESS` and `GAME_REGISTRY_ADDRESS` in its `contracts/.env`. The `deploy-stack.sh` script handles this automatically.
 
 ### Syncing Environment Variables
 
@@ -312,7 +331,7 @@ After deploying contracts, sync addresses to all targets:
 ./scripts/sync-env.sh --dry-run  # Preview changes without writing
 ```
 
-Source of truth is `contracts/.env`. Game addresses are loaded from deployment JSON files in `contracts/deployments/`. The script updates:
+Source of truth is `contracts/.env`. The script updates:
 - `indexer/.env` — `DENSHOKAN_ADDRESS`, `REGISTRY_ADDRESS`
 - `client/src/networks.ts` — address fields in the `SN_MAIN` or `SN_SEPOLIA` section (based on `PROFILE`)
 

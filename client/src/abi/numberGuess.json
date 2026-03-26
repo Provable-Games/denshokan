@@ -127,11 +127,11 @@
     "members": [
       {
         "name": "name",
-        "type": "core::byte_array::ByteArray"
+        "type": "core::felt252"
       },
       {
         "name": "value",
-        "type": "core::byte_array::ByteArray"
+        "type": "core::felt252"
       }
     ]
   },
@@ -558,11 +558,11 @@
   {
     "type": "impl",
     "name": "NumberGuessImpl",
-    "interface_name": "denshokan_games::number_guess::INumberGuess"
+    "interface_name": "number_guess::number_guess::INumberGuess"
   },
   {
     "type": "interface",
-    "name": "denshokan_games::number_guess::INumberGuess",
+    "name": "number_guess::number_guess::INumberGuess",
     "items": [
       {
         "type": "function",
@@ -729,11 +729,11 @@
   {
     "type": "impl",
     "name": "NumberGuessConfigImpl",
-    "interface_name": "denshokan_games::number_guess::INumberGuessConfig"
+    "interface_name": "number_guess::number_guess::INumberGuessConfig"
   },
   {
     "type": "interface",
-    "name": "denshokan_games::number_guess::INumberGuessConfig",
+    "name": "number_guess::number_guess::INumberGuessConfig",
     "items": [
       {
         "type": "function",
@@ -800,7 +800,7 @@
   {
     "type": "impl",
     "name": "NumberGuessInitImpl",
-    "interface_name": "denshokan_games::number_guess::INumberGuessInit"
+    "interface_name": "number_guess::number_guess::INumberGuessInit"
   },
   {
     "type": "enum",
@@ -845,8 +845,22 @@
     ]
   },
   {
+    "type": "enum",
+    "name": "core::option::Option::<core::integer::u16>",
+    "variants": [
+      {
+        "name": "Some",
+        "type": "core::integer::u16"
+      },
+      {
+        "name": "None",
+        "type": "()"
+      }
+    ]
+  },
+  {
     "type": "interface",
-    "name": "denshokan_games::number_guess::INumberGuessInit",
+    "name": "number_guess::number_guess::INumberGuessInit",
     "items": [
       {
         "type": "function",
@@ -911,6 +925,18 @@
           {
             "name": "skills_address",
             "type": "core::option::Option::<core::starknet::contract_address::ContractAddress>"
+          },
+          {
+            "name": "version",
+            "type": "core::integer::u64"
+          },
+          {
+            "name": "license",
+            "type": "core::option::Option::<core::byte_array::ByteArray>"
+          },
+          {
+            "name": "game_fee_bps",
+            "type": "core::option::Option::<core::integer::u16>"
           }
         ],
         "outputs": [],
@@ -1263,7 +1289,76 @@
   },
   {
     "type": "event",
-    "name": "denshokan_games::number_guess::NumberGuess::Event",
+    "name": "number_guess::number_guess::NewGameStarted",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "token_id",
+        "type": "core::felt252",
+        "kind": "key"
+      },
+      {
+        "name": "settings_id",
+        "type": "core::integer::u32",
+        "kind": "data"
+      },
+      {
+        "name": "range_min",
+        "type": "core::integer::u32",
+        "kind": "data"
+      },
+      {
+        "name": "range_max",
+        "type": "core::integer::u32",
+        "kind": "data"
+      },
+      {
+        "name": "max_attempts",
+        "type": "core::integer::u32",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "number_guess::number_guess::GuessMade",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "token_id",
+        "type": "core::felt252",
+        "kind": "key"
+      },
+      {
+        "name": "guess_value",
+        "type": "core::integer::u32",
+        "kind": "data"
+      },
+      {
+        "name": "result",
+        "type": "core::integer::u8",
+        "kind": "data"
+      },
+      {
+        "name": "guess_count",
+        "type": "core::integer::u32",
+        "kind": "data"
+      },
+      {
+        "name": "range_min",
+        "type": "core::integer::u32",
+        "kind": "data"
+      },
+      {
+        "name": "range_max",
+        "type": "core::integer::u32",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "number_guess::number_guess::NumberGuess::Event",
     "kind": "enum",
     "variants": [
       {
@@ -1285,6 +1380,16 @@
         "name": "SRC5Event",
         "type": "openzeppelin_introspection::src5::SRC5Component::Event",
         "kind": "flat"
+      },
+      {
+        "name": "NewGameStarted",
+        "type": "number_guess::number_guess::NewGameStarted",
+        "kind": "nested"
+      },
+      {
+        "name": "GuessMade",
+        "type": "number_guess::number_guess::GuessMade",
+        "kind": "nested"
       }
     ]
   }
