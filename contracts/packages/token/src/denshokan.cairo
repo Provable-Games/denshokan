@@ -16,6 +16,7 @@ use game_components_embeddable_game_standard::registry::interface::{
     GameMetadata, IMinigameRegistryDispatcher, IMinigameRegistryDispatcherTrait,
 };
 use game_components_embeddable_game_standard::token::extensions::context::context::ContextComponent;
+use game_components_embeddable_game_standard::token::extensions::enumerable::enumerable::EnumerableComponent;
 use game_components_embeddable_game_standard::token::extensions::minter::minter::MinterComponent;
 use game_components_embeddable_game_standard::token::extensions::objectives::objectives::ObjectivesComponent;
 use game_components_embeddable_game_standard::token::extensions::renderer::renderer::RendererComponent;
@@ -33,7 +34,6 @@ use openzeppelin_interfaces::upgrades::IUpgradeable;
 use openzeppelin_introspection::src5::SRC5Component;
 use openzeppelin_token::common::erc2981::erc2981::{DefaultConfig, ERC2981Component};
 use openzeppelin_token::erc721::ERC721Component;
-use openzeppelin_token::erc721::extensions::erc721_enumerable::ERC721EnumerableComponent;
 use openzeppelin_upgrades::UpgradeableComponent;
 use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
 use starknet::syscalls::call_contract_syscall;
@@ -134,9 +134,7 @@ pub mod Denshokan {
     component!(path: ERC2981Component, storage: erc2981, event: ERC2981Event);
     component!(path: SRC5Component, storage: src5, event: SRC5Event);
     component!(path: CoreTokenComponent, storage: core_token, event: CoreTokenEvent);
-    component!(
-        path: ERC721EnumerableComponent, storage: erc721_enumerable, event: ERC721EnumerableEvent,
-    );
+    component!(path: EnumerableComponent, storage: erc721_enumerable, event: EnumerableEvent);
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
     component!(path: UpgradeableComponent, storage: upgradeable, event: UpgradeableEvent);
 
@@ -164,7 +162,7 @@ pub mod Denshokan {
         #[substorage(v0)]
         core_token: CoreTokenComponent::Storage,
         #[substorage(v0)]
-        erc721_enumerable: ERC721EnumerableComponent::Storage,
+        erc721_enumerable: EnumerableComponent::Storage,
         #[substorage(v0)]
         ownable: OwnableComponent::Storage,
         #[substorage(v0)]
@@ -202,7 +200,7 @@ pub mod Denshokan {
         #[flat]
         CoreTokenEvent: CoreTokenComponent::Event,
         #[flat]
-        ERC721EnumerableEvent: ERC721EnumerableComponent::Event,
+        EnumerableEvent: EnumerableComponent::Event,
         #[flat]
         OwnableEvent: OwnableComponent::Event,
         #[flat]
@@ -235,8 +233,7 @@ pub mod Denshokan {
     #[abi(embed_v0)]
     impl CoreTokenImpl = CoreTokenComponent::CoreTokenImpl<ContractState>;
     #[abi(embed_v0)]
-    impl ERC721EnumerableImpl =
-        ERC721EnumerableComponent::ERC721EnumerableImpl<ContractState>;
+    impl EnumerableImpl = EnumerableComponent::EnumerableImpl<ContractState>;
     #[abi(embed_v0)]
     impl OwnableImpl = OwnableComponent::OwnableImpl<ContractState>;
     #[abi(embed_v0)]
@@ -268,7 +265,7 @@ pub mod Denshokan {
     impl SkillsInternalImpl = SkillsComponent::InternalImpl<ContractState>;
     impl OwnableInternalImpl = OwnableComponent::InternalImpl<ContractState>;
     impl UpgradeableInternalImpl = UpgradeableComponent::InternalImpl<ContractState>;
-    impl ERC721EnumerableInternalImpl = ERC721EnumerableComponent::InternalImpl<ContractState>;
+    impl EnumerableInternalImpl = EnumerableComponent::InternalImpl<ContractState>;
 
     // ================================================================================================
     // OPTIONAL TRAIT IMPLEMENTATIONS
@@ -516,7 +513,7 @@ pub mod Denshokan {
                 }
             }
 
-            // Update ERC721Enumerable tracking
+            // Enumerable tracking
             let mut contract_state = self.get_contract_mut();
             contract_state.erc721_enumerable.before_update(to, token_id);
         }
