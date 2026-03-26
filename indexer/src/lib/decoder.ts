@@ -68,11 +68,8 @@ export function stringifyWithBigInt(obj: unknown): string {
  */
 export const EVENT_SELECTORS = {
   Transfer: hash.getSelectorFromName("Transfer"),
-  ScoreUpdate: hash.getSelectorFromName("ScoreUpdate"),
   TokenPlayerNameUpdate: hash.getSelectorFromName("TokenPlayerNameUpdate"),
   TokenClientUrlUpdate: hash.getSelectorFromName("TokenClientUrlUpdate"),
-  GameOver: hash.getSelectorFromName("GameOver"),
-  CompletedObjective: hash.getSelectorFromName("CompletedObjective"),
   MinterRegistryUpdate: hash.getSelectorFromName("MinterRegistryUpdate"),
   TokenContextUpdate: hash.getSelectorFromName("TokenContextUpdate"),
   ObjectiveCreated: hash.getSelectorFromName("ObjectiveCreated"),
@@ -271,16 +268,6 @@ export interface TransferEvent {
 }
 
 /**
- * ScoreUpdate event
- * Keys: [selector, token_id]
- * Data: [score]
- */
-export interface ScoreUpdateEvent {
-  tokenId: bigint;
-  score: bigint;
-}
-
-/**
  * TokenPlayerNameUpdate event
  * Keys: [selector, id]
  * Data: [player_name]
@@ -298,24 +285,6 @@ export interface TokenPlayerNameUpdateEvent {
 export interface TokenClientUrlUpdateEvent {
   id: bigint;
   clientUrl: string;
-}
-
-/**
- * GameOver event
- * Keys: [selector, token_id(u64)]
- * Data: []
- */
-export interface GameOverEvent {
-  tokenId: bigint;
-}
-
-/**
- * CompletedObjective event
- * Keys: [selector, token_id(u64)]
- * Data: []
- */
-export interface CompletedObjectiveEvent {
-  tokenId: bigint;
 }
 
 /**
@@ -406,18 +375,6 @@ export function decodeTransfer(keys: readonly string[], data: readonly string[])
 }
 
 /**
- * Decode ScoreUpdate event
- * Keys: [selector, token_id]
- * Data: [score]
- */
-export function decodeScoreUpdate(keys: readonly string[], data: readonly string[]): ScoreUpdateEvent {
-  return {
-    tokenId: hexToBigInt(keys[1]),
-    score: hexToBigInt(data[0]),
-  };
-}
-
-/**
  * Decode TokenPlayerNameUpdate event
  * Keys: [selector, id]
  * Data: [player_name]
@@ -480,28 +437,6 @@ export function decodeTokenClientUrlUpdate(keys: readonly string[], data: readon
   return {
     id: hexToBigInt(keys[1]),
     clientUrl,
-  };
-}
-
-/**
- * Decode GameOver event
- * Keys: [selector, token_id(u64)]
- * Data: []
- */
-export function decodeGameOver(keys: readonly string[]): GameOverEvent {
-  return {
-    tokenId: hexToBigInt(keys[1]),
-  };
-}
-
-/**
- * Decode CompletedObjective event
- * Keys: [selector, token_id(u64)]
- * Data: []
- */
-export function decodeCompletedObjective(keys: readonly string[]): CompletedObjectiveEvent {
-  return {
-    tokenId: hexToBigInt(keys[1]),
   };
 }
 
@@ -883,4 +818,71 @@ export function decodeDefaultGameFeeUpdate(_keys: readonly string[], data: reado
   idx += license.consumed;
   const feeNumerator = Number(hexToBigInt(data[idx]));
   return { license: license.value, feeNumerator };
+}
+
+// ============ Token URI Parsing ============
+
+/**
+ * Parsed attributes extracted from token URI metadata JSON.
+ * Null values indicate the attribute was not found in the URI.
+ */
+export interface TokenUriAttributes {
+  score: bigint | null;
+  gameOver: boolean | null;
+  completedObjectives: boolean | null;
+}
+
+/**
+ * Parse token URI to extract score, gameOver, and completedObjectives
+ * from the NFT metadata attributes array.
+ *
+ * Handles both data:application/json;base64,... URIs and plain JSON strings.
+ *
+ * Attributes format:
+ *   { "trait_type": "Score", "value": "123" }
+ *   { "trait_type": "Game Over", "value": "true" }
+ *   { "trait_type": "Objectives Completed", "value": "true" }
+ */
+export function parseTokenUriAttributes(uri: string): TokenUriAttributes {
+  const result: TokenUriAttributes = {
+    score: null,
+    gameOver: null,
+    completedObjectives: null,
+  };
+
+  try {
+    let json: string;
+
+    if (uri.startsWith("data:application/json;base64,")) {
+      json = Buffer.from(uri.slice("data:application/json;base64,".length), "base64").toString("utf-8");
+    } else if (uri.startsWith("data:application/json,")) {
+      json = decodeURIComponent(uri.slice("data:application/json,".length));
+    } else if (uri.startsWith("{")) {
+      json = uri;
+    } else {
+      return result;
+    }
+
+    const metadata = JSON.parse(json);
+    const attributes: Array<{ trait_type: string; value: string }> = metadata.attributes;
+    if (!Array.isArray(attributes)) return result;
+
+    for (const attr of attributes) {
+      switch (attr.trait_type) {
+        case "Score":
+          result.score = BigInt(attr.value);
+          break;
+        case "Game Over":
+          result.gameOver = attr.value === "true";
+          break;
+        case "Objectives Completed":
+          result.completedObjectives = attr.value === "true";
+          break;
+      }
+    }
+  } catch {
+    // Parse failure — return nulls so caller can skip attribute updates
+  }
+
+  return result;
 }

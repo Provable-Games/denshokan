@@ -2070,52 +2070,6 @@
   },
   {
     "type": "event",
-    "name": "game_components_embeddable_game_standard::token::token_component::CoreTokenComponent::ScoreUpdate",
-    "kind": "struct",
-    "members": [
-      {
-        "name": "token_id",
-        "type": "core::felt252",
-        "kind": "key"
-      },
-      {
-        "name": "score",
-        "type": "core::integer::u64",
-        "kind": "data"
-      }
-    ]
-  },
-  {
-    "type": "event",
-    "name": "game_components_embeddable_game_standard::token::token_component::CoreTokenComponent::GameOver",
-    "kind": "struct",
-    "members": [
-      {
-        "name": "token_id",
-        "type": "core::felt252",
-        "kind": "key"
-      },
-      {
-        "name": "score",
-        "type": "core::integer::u64",
-        "kind": "data"
-      }
-    ]
-  },
-  {
-    "type": "event",
-    "name": "game_components_embeddable_game_standard::token::token_component::CoreTokenComponent::CompletedObjective",
-    "kind": "struct",
-    "members": [
-      {
-        "name": "token_id",
-        "type": "core::felt252",
-        "kind": "key"
-      }
-    ]
-  },
-  {
-    "type": "event",
     "name": "game_components_embeddable_game_standard::token::token_component::CoreTokenComponent::Event",
     "kind": "enum",
     "variants": [
@@ -2132,21 +2086,6 @@
       {
         "name": "MetadataUpdate",
         "type": "game_components_embeddable_game_standard::token::token_component::CoreTokenComponent::MetadataUpdate",
-        "kind": "nested"
-      },
-      {
-        "name": "ScoreUpdate",
-        "type": "game_components_embeddable_game_standard::token::token_component::CoreTokenComponent::ScoreUpdate",
-        "kind": "nested"
-      },
-      {
-        "name": "GameOver",
-        "type": "game_components_embeddable_game_standard::token::token_component::CoreTokenComponent::GameOver",
-        "kind": "nested"
-      },
-      {
-        "name": "CompletedObjective",
-        "type": "game_components_embeddable_game_standard::token::token_component::CoreTokenComponent::CompletedObjective",
         "kind": "nested"
       }
     ]
