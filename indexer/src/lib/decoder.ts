@@ -864,19 +864,20 @@ export function parseTokenUriAttributes(uri: string): TokenUriAttributes {
     }
 
     const metadata = JSON.parse(json);
-    const attributes: Array<{ trait_type: string; value: string }> = metadata.attributes;
+    const attributes: Array<{ trait_type?: string; trait?: string; value: string }> = metadata.attributes;
     if (!Array.isArray(attributes)) return result;
 
     for (const attr of attributes) {
-      switch (attr.trait_type) {
+      const traitName = attr.trait_type ?? attr.trait;
+      switch (traitName) {
         case "Score":
           result.score = BigInt(attr.value);
           break;
         case "Game Over":
-          result.gameOver = attr.value === "true";
+          result.gameOver = attr.value.toLowerCase() === "true";
           break;
         case "Objectives Completed":
-          result.completedObjectives = attr.value === "true";
+          result.completedObjectives = attr.value.toLowerCase() === "true";
           break;
       }
     }
