@@ -5,7 +5,7 @@ import { cors } from "hono/cors";
 import { serve } from "@hono/node-server";
 import { createNodeWebSocket } from "@hono/node-ws";
 
-import { healthCheck, shutdown } from "./db/client.js";
+import { healthCheck, getLatestIndexedBlock, shutdown } from "./db/client.js";
 import { rateLimit, cleanupTimer } from "./middleware/rateLimit.js";
 import { createWSEvents } from "./ws/subscriptions.js";
 
@@ -27,8 +27,11 @@ app.use("*", rateLimit(300));
 
 // Health
 app.get("/health", async (c) => {
-  const dbOk = await healthCheck();
-  return c.json({ status: dbOk ? "ok" : "degraded", db: dbOk }, dbOk ? 200 : 503);
+  const [dbOk, latestBlock] = await Promise.all([
+    healthCheck(),
+    getLatestIndexedBlock(),
+  ]);
+  return c.json({ status: dbOk ? "ok" : "degraded", db: dbOk, latestBlock }, dbOk ? 200 : 503);
 });
 
 // Routes

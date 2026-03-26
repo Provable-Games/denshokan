@@ -25,6 +25,18 @@ export async function healthCheck(): Promise<boolean> {
   }
 }
 
+export async function getLatestIndexedBlock(): Promise<number | null> {
+  try {
+    const client = await pool.connect();
+    const result = await client.query("SELECT MAX(last_updated_block) AS latest_block FROM tokens");
+    client.release();
+    const val = result.rows[0]?.latest_block;
+    return val != null ? Number(val) : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function shutdown(): Promise<void> {
   await pool.end();
 }
