@@ -6,15 +6,11 @@
  *
  * Events indexed:
  * - Transfer: ERC721 mint/transfer for ownership tracking
- * - MetadataUpdate: Token URI changes — parsed to extract score, game_over, completed_objectives
- * - TokenPlayerNameUpdate: Player name assignments
- * - TokenClientUrlUpdate: Client URL assignments
+ * - MetadataUpdate: ERC-4906 — triggers token_uri re-fetch to extract score,
+ *   game_over, completed_objectives, player_name, context_name, context_id
  * - MinterRegistryUpdate: Minter registration/updates
- * - TokenContextUpdate: Token context data updates
  * - ObjectiveCreated: New game objective definitions
  * - SettingsCreated: New game settings definitions
- * - TokenRendererUpdate: Token renderer contract updates
- * - TokenSkillsUpdate: Token skills contract updates
  * - GameRegistryUpdate: Game registration from registry contract
  * - GameMetadataUpdate: Game metadata from registry contract
  * - GameRoyaltyUpdate: Game royalty changes from registry contract
@@ -25,8 +21,8 @@
  * - Uses high-level defineIndexer API for simplicity
  * - Token IDs are felt252 (not u256) with packed immutable data
  * - On mint (Transfer from 0x0), packed token ID is decoded for immutable fields
- * - Score, game_over, and completed_objectives are extracted from the token URI
- *   metadata on MetadataUpdate events (replaces former dedicated events)
+ * - All mutable token state (score, game_over, player_name, etc.) is derived
+ *   from the token URI via MetadataUpdate events (ERC-4906)
  * - Idempotent writes for safe re-indexing
  */
 
@@ -48,14 +44,9 @@ import * as schema from "../src/lib/schema.js";
 import {
   EVENT_SELECTORS,
   decodeTransfer,
-  decodeTokenPlayerNameUpdate,
-  decodeTokenClientUrlUpdate,
   decodeMinterRegistryUpdate,
-  decodeTokenContextUpdate,
   decodeObjectiveCreated,
   decodeSettingsCreated,
-  decodeTokenRendererUpdate,
-  decodeTokenSkillsUpdate,
   decodeMetadataUpdate,
   decodeGameRegistryUpdate,
   decodeGameMetadataUpdate,
@@ -223,6 +214,14 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
       lastUpdatedBlock: ctx.blockNumber,
       lastUpdatedAt: ctx.blockTimestamp,
     };
+
+    // Always write player name and context fields from URI
+    if (parsed.playerName !== null) {
+      tokenUpdate.playerName = parsed.playerName;
+    }
+    if (parsed.contextId !== null) {
+      tokenUpdate.contextId = parsed.contextId;
+    }
 
     const token = existing[0];
 
@@ -449,62 +448,6 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                   },
                 });
 
-                // Backfill mutable fields from events that fired before
-                // this mint (the contract emits TokenContextUpdate,
-                // TokenPlayerNameUpdate, TokenClientUrlUpdate, etc.
-                // before Transfer, so the earlier UPDATEs hit no row).
-                const preMintEvents = await db
-                  .select({
-                    eventType: schema.tokenEvents.eventType,
-                    eventData: schema.tokenEvents.eventData,
-                  })
-                  .from(schema.tokenEvents)
-                  .where(eq(schema.tokenEvents.tokenId, toId(decoded.tokenId)));
-
-                if (preMintEvents.length > 0) {
-                  const patch: Record<string, unknown> = {};
-                  for (const evt of preMintEvents) {
-                    try {
-                      const d = JSON.parse(evt.eventData as string);
-                      switch (evt.eventType) {
-                        case "context_update":
-                          patch.contextId = d.contextId ?? null;
-                          patch.contextData = d.data ?? null;
-                          break;
-                        case "player_name":
-                          patch.playerName = d.playerName ?? null;
-                          break;
-                        case "client_url":
-                          patch.clientUrl = d.clientUrl ?? null;
-                          break;
-                        case "renderer_update":
-                          patch.rendererAddress = d.renderer ?? d.rendererAddress ?? null;
-                          break;
-                        case "skills_update":
-                          patch.skillsAddress = d.skillsAddress ?? null;
-                          break;
-                        case "score_update":
-                          patch.currentScore = BigInt(d.score ?? 0);
-                          break;
-                        case "game_over":
-                          patch.gameOver = true;
-                          break;
-                        case "completed_objective":
-                          patch.completedAllObjectives = true;
-                          break;
-                      }
-                    } catch {
-                      // Best-effort: skip unparseable events
-                    }
-                  }
-                  if (Object.keys(patch).length > 0) {
-                    await db
-                      .update(schema.tokens)
-                      .set(patch)
-                      .where(eq(schema.tokens.tokenId, toId(decoded.tokenId)));
-                  }
-                }
-
                 // Queue async token_uri fetch (non-blocking)
                 queueUriFetch(decoded.tokenId);
 
@@ -573,72 +516,6 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
               break;
             }
 
-            case EVENT_SELECTORS.TokenPlayerNameUpdate: {
-              const decoded = decodeTokenPlayerNameUpdate(keys, data);
-              logger.info(
-                `${blk} TokenPlayerNameUpdate: id=${decoded.id}, name=${decoded.playerName}`
-              );
-
-              // Update player name on token
-              await db
-                .update(schema.tokens)
-                .set({
-                  playerName: decoded.playerName,
-                  lastUpdatedBlock: blockNumber,
-                  lastUpdatedAt: blockTimestamp,
-                })
-                .where(eq(schema.tokens.tokenId, toId(decoded.id)));
-
-              // Log event for audit trail
-              await db
-                .insert(schema.tokenEvents)
-                .values({
-                  tokenId: toId(decoded.id),
-                  eventType: "player_name",
-                  eventData: stringifyWithBigInt(decoded),
-                  blockNumber,
-                  blockTimestamp,
-                  transactionHash,
-                  eventIndex,
-                })
-                .onConflictDoNothing();
-
-              break;
-            }
-
-            case EVENT_SELECTORS.TokenClientUrlUpdate: {
-              const decoded = decodeTokenClientUrlUpdate(keys, data);
-              logger.info(
-                `${blk} TokenClientUrlUpdate: id=${decoded.id}, url=${decoded.clientUrl}`
-              );
-
-              // Update client URL on token
-              await db
-                .update(schema.tokens)
-                .set({
-                  clientUrl: decoded.clientUrl,
-                  lastUpdatedBlock: blockNumber,
-                  lastUpdatedAt: blockTimestamp,
-                })
-                .where(eq(schema.tokens.tokenId, toId(decoded.id)));
-
-              // Log event for audit trail
-              await db
-                .insert(schema.tokenEvents)
-                .values({
-                  tokenId: toId(decoded.id),
-                  eventType: "client_url",
-                  eventData: stringifyWithBigInt(decoded),
-                  blockNumber,
-                  blockTimestamp,
-                  transactionHash,
-                  eventIndex,
-                })
-                .onConflictDoNothing();
-
-              break;
-            }
-
             case EVENT_SELECTORS.MinterRegistryUpdate: {
               const decoded = decodeMinterRegistryUpdate(keys, data);
               logger.info(
@@ -656,36 +533,6 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                   blockNumber,
                 },
               });
-
-              break;
-            }
-
-            case EVENT_SELECTORS.TokenContextUpdate: {
-              const decoded = decodeTokenContextUpdate(keys, data);
-              logger.info(
-                `${blk} TokenContextUpdate: token_id=${decoded.tokenId}, context_id=${decoded.contextId}, name=${decoded.data.name}, context_pairs=${decoded.data.context.length}`
-              );
-
-              await db
-                .update(schema.tokens)
-                .set({
-                  contextData: decoded.data,
-                  contextId: decoded.contextId,
-                  lastUpdatedBlock: blockNumber,
-                  lastUpdatedAt: blockTimestamp,
-                })
-                .where(eq(schema.tokens.tokenId, toId(decoded.tokenId)));
-
-              // Log event for audit trail
-              await db.insert(schema.tokenEvents).values({
-                tokenId: toId(decoded.tokenId),
-                eventType: "context_update",
-                eventData: stringifyWithBigInt(decoded),
-                blockNumber,
-                blockTimestamp,
-                transactionHash,
-                eventIndex,
-              }).onConflictDoNothing();
 
               break;
             }
@@ -747,64 +594,6 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                   blockNumber,
                 },
               });
-
-              break;
-            }
-
-            case EVENT_SELECTORS.TokenRendererUpdate: {
-              const decoded = decodeTokenRendererUpdate(keys, data);
-              logger.info(
-                `${blk} TokenRendererUpdate: token_id=${decoded.tokenId}, renderer=${decoded.renderer}`
-              );
-
-              await db
-                .update(schema.tokens)
-                .set({
-                  rendererAddress: decoded.renderer,
-                  lastUpdatedBlock: blockNumber,
-                  lastUpdatedAt: blockTimestamp,
-                })
-                .where(eq(schema.tokens.tokenId, toId(decoded.tokenId)));
-
-              // Log event for audit trail
-              await db.insert(schema.tokenEvents).values({
-                tokenId: toId(decoded.tokenId),
-                eventType: "renderer_update",
-                eventData: stringifyWithBigInt(decoded),
-                blockNumber,
-                blockTimestamp,
-                transactionHash,
-                eventIndex,
-              }).onConflictDoNothing();
-
-              break;
-            }
-
-            case EVENT_SELECTORS.TokenSkillsUpdate: {
-              const decoded = decodeTokenSkillsUpdate(keys, data);
-              logger.info(
-                `${blk} TokenSkillsUpdate: token_id=${decoded.tokenId}, skills=${decoded.skillsAddress}`
-              );
-
-              await db
-                .update(schema.tokens)
-                .set({
-                  skillsAddress: decoded.skillsAddress,
-                  lastUpdatedBlock: blockNumber,
-                  lastUpdatedAt: blockTimestamp,
-                })
-                .where(eq(schema.tokens.tokenId, toId(decoded.tokenId)));
-
-              // Log event for audit trail
-              await db.insert(schema.tokenEvents).values({
-                tokenId: toId(decoded.tokenId),
-                eventType: "skills_update",
-                eventData: stringifyWithBigInt(decoded),
-                blockNumber,
-                blockTimestamp,
-                transactionHash,
-                eventIndex,
-              }).onConflictDoNothing();
 
               break;
             }
