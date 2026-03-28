@@ -36,19 +36,15 @@
  *
  * Events indexed:
  * - Transfer: ERC721 mint/transfer
- * - ScoreUpdate: Emitted when token score changes
- * - TokenPlayerNameUpdate: Emitted when player name is set
- * - TokenClientUrlUpdate: Emitted when client URL is set
- * - GameOver: Emitted when game ends for a token
- * - CompletedObjective: Emitted when token completes all objectives
+ * - MetadataUpdate: ERC-4906 — triggers token_uri re-fetch for score, game_over, player_name, etc.
  * - MinterRegistryUpdate: Emitted when minter is registered/updated
- * - TokenContextUpdate: Emitted when token context data is set
  * - ObjectiveCreated: Emitted when a game objective is created
  * - SettingsCreated: Emitted when game settings are created
- * - TokenRendererUpdate: Emitted when token renderer is updated
  * - GameRegistryUpdate: Emitted when a game is registered
  * - GameMetadataUpdate: Emitted when game metadata is updated
  * - GameRoyaltyUpdate: Emitted when game royalty fraction changes
+ * - GameFeeUpdate: Emitted when per-game license/fee changes
+ * - DefaultGameFeeUpdate: Emitted when default license/fee changes
  */
 
 import { hash } from "starknet";
@@ -68,14 +64,9 @@ export function stringifyWithBigInt(obj: unknown): string {
  */
 export const EVENT_SELECTORS = {
   Transfer: hash.getSelectorFromName("Transfer"),
-  TokenPlayerNameUpdate: hash.getSelectorFromName("TokenPlayerNameUpdate"),
-  TokenClientUrlUpdate: hash.getSelectorFromName("TokenClientUrlUpdate"),
   MinterRegistryUpdate: hash.getSelectorFromName("MinterRegistryUpdate"),
-  TokenContextUpdate: hash.getSelectorFromName("TokenContextUpdate"),
   ObjectiveCreated: hash.getSelectorFromName("ObjectiveCreated"),
   SettingsCreated: hash.getSelectorFromName("SettingsCreated"),
-  TokenRendererUpdate: hash.getSelectorFromName("TokenRendererUpdate"),
-  TokenSkillsUpdate: hash.getSelectorFromName("TokenSkillsUpdate"),
   GameRegistryUpdate: hash.getSelectorFromName("GameRegistryUpdate"),
   GameMetadataUpdate: hash.getSelectorFromName("GameMetadataUpdate"),
   GameRoyaltyUpdate: hash.getSelectorFromName("GameRoyaltyUpdate"),
@@ -268,26 +259,6 @@ export interface TransferEvent {
 }
 
 /**
- * TokenPlayerNameUpdate event
- * Keys: [selector, id]
- * Data: [player_name]
- */
-export interface TokenPlayerNameUpdateEvent {
-  id: bigint;
-  playerName: string;
-}
-
-/**
- * TokenClientUrlUpdate event
- * Keys: [selector, id]
- * Data: [client_url (ByteArray)]
- */
-export interface TokenClientUrlUpdateEvent {
-  id: bigint;
-  clientUrl: string;
-}
-
-/**
  * MinterRegistryUpdate event
  * Keys: [selector, minter_id(u64)]
  * Data: [minter_address]
@@ -295,22 +266,6 @@ export interface TokenClientUrlUpdateEvent {
 export interface MinterRegistryUpdateEvent {
   minterId: bigint;
   minterAddress: string;
-}
-
-/**
- * TokenContextUpdate event
- * Keys: [selector, token_id(u64)]
- * Data: [GameContextDetails { name: ByteArray, description: ByteArray, id: Option<u32>, context: Span<GameContext> }]
- */
-export interface TokenContextUpdateEvent {
-  tokenId: bigint;
-  /** Structured context data: name, description, and key-value pairs */
-  data: {
-    name: string;
-    description: string;
-    context: Array<{ name: string; value: string }>;
-  };
-  contextId: number | null;
 }
 
 /**
@@ -349,16 +304,6 @@ export interface SettingsCreatedEvent {
   settingsData: string;
 }
 
-/**
- * TokenRendererUpdate event
- * Keys: [selector, token_id(u64)]
- * Data: [renderer(ContractAddress)]
- */
-export interface TokenRendererUpdateEvent {
-  tokenId: bigint;
-  renderer: string;
-}
-
 // ============ Event Decoders ============
 
 /**
@@ -371,18 +316,6 @@ export function decodeTransfer(keys: readonly string[], data: readonly string[])
     from: feltToHex(keys[1]),
     to: feltToHex(keys[2]),
     tokenId: decodeU256(keys[3], keys[4]),
-  };
-}
-
-/**
- * Decode TokenPlayerNameUpdate event
- * Keys: [selector, id]
- * Data: [player_name]
- */
-export function decodeTokenPlayerNameUpdate(keys: readonly string[], data: readonly string[]): TokenPlayerNameUpdateEvent {
-  return {
-    id: hexToBigInt(keys[1]),
-    playerName: feltToString(data[0]),
   };
 }
 
@@ -428,19 +361,6 @@ export function decodeByteArray(data: readonly string[], startIndex: number): { 
 }
 
 /**
- * Decode TokenClientUrlUpdate event
- * Keys: [selector, id]
- * Data: [client_url (ByteArray)]
- */
-export function decodeTokenClientUrlUpdate(keys: readonly string[], data: readonly string[]): TokenClientUrlUpdateEvent {
-  const { value: clientUrl } = decodeByteArray(data, 0);
-  return {
-    id: hexToBigInt(keys[1]),
-    clientUrl,
-  };
-}
-
-/**
  * Decode MinterRegistryUpdate event
  * Keys: [selector, minter_id(u64)]
  * Data: [minter_address]
@@ -449,59 +369,6 @@ export function decodeMinterRegistryUpdate(keys: readonly string[], data: readon
   return {
     minterId: hexToBigInt(keys[1]),
     minterAddress: feltToHex(data[0]),
-  };
-}
-
-/**
- * Decode TokenContextUpdate event
- * Keys: [selector, token_id(u64)]
- * Data: [GameContextDetails { name: ByteArray, description: ByteArray, id: Option<u32>, context: Span<GameContext> }]
- *
- * Cairo Option<u32> serialization: variant felt (0=None, 1=Some), followed by value felt if Some.
- */
-export function decodeTokenContextUpdate(keys: readonly string[], data: readonly string[]): TokenContextUpdateEvent {
-  let idx = 0;
-
-  // Decode name (ByteArray)
-  const nameResult = decodeByteArray(data, idx);
-  idx += nameResult.consumed;
-
-  // Decode description (ByteArray)
-  const descriptionResult = decodeByteArray(data, idx);
-  idx += descriptionResult.consumed;
-
-  // Decode Option<u32> for id
-  // Cairo Serde: Option::Some = variant 0, Option::None = variant 1
-  let contextId: number | null = null;
-  const optionVariant = Number(hexToBigInt(data[idx]));
-  idx += 1;
-  if (optionVariant === 0) {
-    // Some variant — next felt is the u32 value
-    contextId = Number(hexToBigInt(data[idx]));
-    idx += 1;
-  }
-
-  // Decode context Span<GameContext> — array of { name: felt252, value: felt252 }
-  const contextPairs: Array<{ name: string; value: string }> = [];
-  if (idx < data.length) {
-    const spanLen = Number(hexToBigInt(data[idx]));
-    idx += 1;
-    for (let i = 0; i < spanLen && idx + 1 < data.length; i++) {
-      const name = feltToString(data[idx]);
-      const value = decodeFelt252AsString(data[idx + 1]);
-      contextPairs.push({ name, value });
-      idx += 2;
-    }
-  }
-
-  return {
-    tokenId: hexToBigInt(keys[1]),
-    data: {
-      name: nameResult.value,
-      description: descriptionResult.value,
-      context: contextPairs,
-    },
-    contextId,
   };
 }
 
@@ -606,40 +473,6 @@ export function decodeSettingsCreated(keys: readonly string[], data: readonly st
     description: descriptionResult.value,
     settings: settingsResult.value,
     settingsData: `${nameResult.value}: ${descriptionResult.value}`,
-  };
-}
-
-/**
- * Decode TokenRendererUpdate event
- * Keys: [selector, token_id(u64)]
- * Data: [renderer(ContractAddress)]
- */
-export function decodeTokenRendererUpdate(keys: readonly string[], data: readonly string[]): TokenRendererUpdateEvent {
-  return {
-    tokenId: hexToBigInt(keys[1]),
-    renderer: feltToHex(data[0]),
-  };
-}
-
-/**
- * TokenSkillsUpdate event
- * Keys: [selector, token_id(felt252)]
- * Data: [skills_address(ContractAddress)]
- */
-export interface TokenSkillsUpdateEvent {
-  tokenId: bigint;
-  skillsAddress: string;
-}
-
-/**
- * Decode TokenSkillsUpdate event
- * Keys: [selector, token_id(felt252)]
- * Data: [skills_address(ContractAddress)]
- */
-export function decodeTokenSkillsUpdate(keys: readonly string[], data: readonly string[]): TokenSkillsUpdateEvent {
-  return {
-    tokenId: hexToBigInt(keys[1]),
-    skillsAddress: feltToHex(data[0]),
   };
 }
 
@@ -830,24 +663,27 @@ export interface TokenUriAttributes {
   score: bigint | null;
   gameOver: boolean | null;
   completedObjectives: boolean | null;
+  playerName: string | null;
+  contextName: string | null;
+  contextId: number | null;
 }
 
 /**
- * Parse token URI to extract score, gameOver, and completedObjectives
- * from the NFT metadata attributes array.
+ * Parse token URI to extract mutable token attributes from the NFT metadata.
  *
  * Handles both data:application/json;base64,... URIs and plain JSON strings.
  *
- * Attributes format:
- *   { "trait_type": "Score", "value": "123" }
- *   { "trait_type": "Game Over", "value": "true" }
- *   { "trait_type": "Objectives Completed", "value": "true" }
+ * Attributes extracted:
+ *   Score, Game Over, Objectives Completed, Player Name, Context Name, Context ID
  */
 export function parseTokenUriAttributes(uri: string): TokenUriAttributes {
   const result: TokenUriAttributes = {
     score: null,
     gameOver: null,
     completedObjectives: null,
+    playerName: null,
+    contextName: null,
+    contextId: null,
   };
 
   try {
@@ -878,6 +714,15 @@ export function parseTokenUriAttributes(uri: string): TokenUriAttributes {
           break;
         case "Objectives Completed":
           result.completedObjectives = attr.value.toLowerCase() === "true";
+          break;
+        case "Player Name":
+          result.playerName = attr.value || null;
+          break;
+        case "Context Name":
+          result.contextName = attr.value || null;
+          break;
+        case "Context ID":
+          result.contextId = attr.value ? Number(attr.value) : null;
           break;
       }
     }
