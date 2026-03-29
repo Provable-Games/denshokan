@@ -414,11 +414,24 @@ pub mod Denshokan {
                 Span<GameDetail>,
             >(renderer_address, selector!("game_details"), token_calldata.span(), array![].span());
 
+            // Override game-level metadata with per-token values when set
+            let mut final_metadata = game_metadata;
+            if client_url.len() > 0 {
+                final_metadata.client_url = client_url;
+            }
+            if !renderer_address.is_zero() {
+                final_metadata.renderer_address = renderer_address;
+            }
+            let skills_address = self.core_token.skills_address(token_id_felt);
+            if !skills_address.is_zero() {
+                final_metadata.skills_address = skills_address;
+            }
+
             create_custom_metadata(
                 token_id_felt,
                 token_name,
                 token_description,
-                game_metadata,
+                final_metadata,
                 game_details_svg,
                 game_details,
                 settings_details,
