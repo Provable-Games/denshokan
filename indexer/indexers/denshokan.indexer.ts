@@ -362,12 +362,13 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
       "connect:after": async () => {
         console.log("[Denshokan Indexer] Connected to DNA stream.");
 
-        // Retry URI fetches for tokens that failed or were never fetched
+        // Re-fetch token URIs for all tokens on startup.
+        // This ensures tokens get updated after contract upgrades
+        // that change the token_uri output (e.g. new metadata traits).
         try {
           const unfetched = await database
             .select({ tokenId: schema.tokens.tokenId })
-            .from(schema.tokens)
-            .where(eq(schema.tokens.tokenUriFetched, false));
+            .from(schema.tokens);
 
           if (unfetched.length > 0) {
             console.log(`[URI Retry] Queuing ${unfetched.length} tokens with missing token_uri`);
