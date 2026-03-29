@@ -215,12 +215,21 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
       lastUpdatedAt: ctx.blockTimestamp,
     };
 
-    // Always write player name and context fields from URI
+    // Always write mutable fields from URI when present
     if (parsed.playerName !== null) {
       tokenUpdate.playerName = parsed.playerName;
     }
     if (parsed.contextId !== null) {
       tokenUpdate.contextId = parsed.contextId;
+    }
+    if (parsed.clientUrl !== null) {
+      tokenUpdate.clientUrl = parsed.clientUrl;
+    }
+    if (parsed.rendererAddress !== null) {
+      tokenUpdate.rendererAddress = parsed.rendererAddress;
+    }
+    if (parsed.skillsAddress !== null) {
+      tokenUpdate.skillsAddress = parsed.skillsAddress;
     }
 
     const token = existing[0];

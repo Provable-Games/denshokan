@@ -666,6 +666,9 @@ export interface TokenUriAttributes {
   playerName: string | null;
   contextName: string | null;
   contextId: number | null;
+  clientUrl: string | null;
+  rendererAddress: string | null;
+  skillsAddress: string | null;
 }
 
 /**
@@ -684,6 +687,9 @@ export function parseTokenUriAttributes(uri: string): TokenUriAttributes {
     playerName: null,
     contextName: null,
     contextId: null,
+    clientUrl: null,
+    rendererAddress: null,
+    skillsAddress: null,
   };
 
   try {
@@ -723,6 +729,15 @@ export function parseTokenUriAttributes(uri: string): TokenUriAttributes {
           break;
         case "Context ID":
           result.contextId = attr.value ? Number(attr.value) : null;
+          break;
+        case "Client URL":
+          result.clientUrl = attr.value || null;
+          break;
+        case "Renderer":
+          result.rendererAddress = attr.value || null;
+          break;
+        case "Skills":
+          result.skillsAddress = attr.value || null;
           break;
       }
     }
