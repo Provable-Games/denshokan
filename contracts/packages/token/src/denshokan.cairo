@@ -406,7 +406,7 @@ pub mod Denshokan {
                         settings_details.clone(),
                         objective_details,
                         context_details.clone(),
-                        client_url,
+                        client_url.clone(),
                     )
             };
 
