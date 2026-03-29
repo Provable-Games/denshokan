@@ -143,7 +143,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
   }
 
   async function fetchTokenUri(tokenId: bigint, blockContext?: BlockContext): Promise<void> {
-    const result = await denshokanContract.call("token_uri", [tokenId], { blockIdentifier: "pending" });
+    const result = await denshokanContract.call("token_uri", [tokenId]);
     const uri = result.toString();
 
     const ctx: BlockContext = blockContext ?? {
@@ -174,7 +174,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
     blockContext: BlockContext,
   ): Promise<void> {
     try {
-      const result = await denshokanContract.call("token_uri", [tokenId], { blockIdentifier: "pending" });
+      const result = await denshokanContract.call("token_uri", [tokenId]);
       const uri = result.toString();
       console.log(`[URI] Fetched token_uri for ${tokenId}: ${uri.substring(0, 80)}...`);
       await applyTokenUriChanges(db, tokenId, uri, blockContext);
@@ -316,7 +316,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
 
   return defineIndexer(StarknetStream)({
     streamUrl,
-    finality: "pending",
+    finality: "accepted",
     startingBlock,
     filter: {
       events: [
