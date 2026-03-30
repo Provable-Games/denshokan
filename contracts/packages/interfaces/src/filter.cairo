@@ -9,6 +9,17 @@ use game_components_embeddable_game_standard::minigame::extensions::settings::st
 pub use game_components_embeddable_game_standard::token::structs::TokenFullState;
 use starknet::ContractAddress;
 
+/// Extended token state including Denshokan-specific resolved fields
+/// Wraps TokenFullState with minter_address, renderer_address, skills_address, client_url
+#[derive(Drop, Serde)]
+pub struct DenshokanTokenState {
+    pub base: TokenFullState,
+    pub minter_address: ContractAddress,
+    pub renderer_address: ContractAddress,
+    pub skills_address: ContractAddress,
+    pub client_url: ByteArray,
+}
+
 /// Maximum number of tokens returned per filter call
 /// Prevents gas exhaustion on large queries
 pub const MAX_FILTER_LIMIT: u256 = 100;
@@ -305,6 +316,12 @@ pub trait IDenshokanFilter<TState> {
     /// Includes: owner, player_name, is_playable, game_address, game_over, completed_objective,
     /// lifecycle
     fn tokens_full_state_batch(self: @TState, token_ids: Array<felt252>) -> Array<TokenFullState>;
+
+    /// Returns enriched Denshokan state for multiple tokens in one call
+    /// Extends TokenFullState with minter_address, renderer_address, skills_address, client_url
+    fn denshokan_tokens_batch(
+        self: @TState, token_ids: Array<felt252>,
+    ) -> Array<DenshokanTokenState>;
 }
 
 #[derive(Drop, Serde)]

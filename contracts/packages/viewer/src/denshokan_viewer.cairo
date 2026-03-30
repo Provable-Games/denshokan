@@ -5,8 +5,8 @@
 
 use core::num::traits::Zero;
 use denshokan_interfaces::filter::{
-    FilterResult, IDenshokanFilter, IDenshokanSettingsObjectives, ObjectiveEntry, ObjectivesResult,
-    SettingsEntry, SettingsResult, TokenFullState,
+    DenshokanTokenState, FilterResult, IDenshokanFilter, IDenshokanSettingsObjectives,
+    ObjectiveEntry, ObjectivesResult, SettingsEntry, SettingsResult, TokenFullState,
 };
 use game_components_embeddable_game_standard::minigame::extensions::objectives::interface::{
     IMINIGAME_OBJECTIVES_ID, IMinigameObjectivesDetailsDispatcher,
@@ -167,6 +167,34 @@ pub mod DenshokanViewer {
         fn _supports_objectives(self: @ContractState, game_address: ContractAddress) -> bool {
             ISRC5Dispatcher { contract_address: game_address }
                 .supports_interface(IMINIGAME_OBJECTIVES_ID)
+        }
+
+        fn _resolve_minter_address_cached(
+            self: @ContractState,
+            token: @IMinigameTokenMixinDispatcher,
+            minter_id: u64,
+            ref cache: Array<(u64, ContractAddress)>,
+        ) -> ContractAddress {
+            // Check cache first
+            let mut j: u32 = 0;
+            loop {
+                if j >= cache.len() {
+                    break;
+                }
+                let (cached_id, cached_addr) = *cache.at(j);
+                if cached_id == minter_id {
+                    break;
+                }
+                j += 1;
+            }
+            if j < cache.len() {
+                let (_, addr) = *cache.at(j);
+                return addr;
+            }
+            // Cache miss — resolve via contract
+            let addr = (*token).get_minter_address(minter_id);
+            cache.append((minter_id, addr));
+            addr
         }
     }
 
@@ -787,6 +815,58 @@ pub mod DenshokanViewer {
             // Single dispatch: viewer → denshokan (component handles everything locally)
             let token = self._get_token();
             token.token_full_state_batch(token_ids.span())
+        }
+
+        fn denshokan_tokens_batch(
+            self: @ContractState, token_ids: Array<felt252>,
+        ) -> Array<DenshokanTokenState> {
+            let token = self._get_token();
+            let base_states = token.token_full_state_batch(token_ids.span());
+
+            // Cache minter_id -> minter_address to avoid redundant lookups
+            let mut minter_cache: Array<(u64, ContractAddress)> = array![];
+            let mut results: Array<DenshokanTokenState> = array![];
+
+            let mut i: u32 = 0;
+            loop {
+                if i >= base_states.len() {
+                    break;
+                }
+                let base = base_states.at(i);
+                let token_id = *base.token_id;
+                let minted_by = unpack_minted_by(token_id);
+
+                // Resolve minter_address with cache
+                let minter_address = self
+                    ._resolve_minter_address_cached(@token, minted_by, ref minter_cache);
+
+                let renderer_address = token.renderer_address(token_id);
+                let skills_address = token.skills_address(token_id);
+                let client_url = token.client_url(token_id);
+
+                results
+                    .append(
+                        DenshokanTokenState {
+                            base: TokenFullState {
+                                token_id,
+                                owner: *base.owner,
+                                player_name: *base.player_name,
+                                is_playable: *base.is_playable,
+                                game_address: *base.game_address,
+                                game_over: *base.game_over,
+                                completed_objective: *base.completed_objective,
+                                lifecycle: *base.lifecycle,
+                            },
+                            minter_address,
+                            renderer_address,
+                            skills_address,
+                            client_url,
+                        },
+                    );
+                i += 1;
+            }
+
+            results
         }
     }
 
