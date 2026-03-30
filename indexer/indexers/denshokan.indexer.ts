@@ -328,7 +328,6 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
     finality: "accepted",
     startingBlock,
     filter: {
-      header: "always",
       events: [
         {
           address: normalizedAddress as `0x${string}`,
