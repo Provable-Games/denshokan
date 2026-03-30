@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { eq, and, desc, asc, sql, countDistinct } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { tokens, minters } from "../db/schema.js";
+import { tokens, minters, games } from "../db/schema.js";
 import { parseAddress, parseGameId, parseNonNegativeInt } from "../utils/validation.js";
 
 // In-memory minter cache (minter_id -> contract_address)
@@ -20,6 +20,24 @@ async function resolveMinterAddress(mintedBy: string): Promise<string | null> {
   if (cached !== undefined) return cached;
   await loadMinterCache();
   return minterCache.get(mintedBy) ?? null;
+}
+
+// In-memory game cache (game_id -> contract_address)
+let gameCache = new Map<number, string>();
+let gameCacheReady = false;
+
+async function loadGameCache() {
+  const rows = await db.select({ gameId: games.gameId, contractAddress: games.contractAddress }).from(games);
+  gameCache = new Map(rows.map((r) => [r.gameId, r.contractAddress]));
+  gameCacheReady = true;
+}
+
+async function resolveGameAddress(gameId: number): Promise<string | null> {
+  if (!gameCacheReady) await loadGameCache();
+  const cached = gameCache.get(gameId);
+  if (cached !== undefined) return cached;
+  await loadGameCache();
+  return gameCache.get(gameId) ?? null;
 }
 
 const app = new Hono();
@@ -74,6 +92,7 @@ app.get("/:address/tokens", async (c) => {
     data: await Promise.all(results.map(async (t) => ({
       ...serializeToken(t),
       minterAddress: await resolveMinterAddress(t.mintedBy.toString()),
+      gameAddress: await resolveGameAddress(t.gameId),
     }))),
     total: countResult[0]?.count ?? 0,
     limit,

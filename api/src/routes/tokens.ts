@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { eq, desc, asc, and, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { tokens, scoreHistory, minters } from "../db/schema.js";
+import { tokens, scoreHistory, minters, games } from "../db/schema.js";
 import { parseTokenId, parseGameId, parseAddress, parseNonNegativeInt, parseOptionalNonNegativeInt } from "../utils/validation.js";
 
 const app = new Hono();
@@ -15,6 +15,24 @@ async function loadMinterCache() {
   const rows = await db.select({ minterId: minters.minterId, contractAddress: minters.contractAddress }).from(minters);
   minterCache = new Map(rows.map((r) => [r.minterId.toString(), r.contractAddress]));
   minterCacheReady = true;
+}
+
+// In-memory game cache (game_id -> contract_address)
+let gameCache = new Map<number, string>();
+let gameCacheReady = false;
+
+async function loadGameCache() {
+  const rows = await db.select({ gameId: games.gameId, contractAddress: games.contractAddress }).from(games);
+  gameCache = new Map(rows.map((r) => [r.gameId, r.contractAddress]));
+  gameCacheReady = true;
+}
+
+async function resolveGameAddress(gameId: number): Promise<string | null> {
+  if (!gameCacheReady) await loadGameCache();
+  const cached = gameCache.get(gameId);
+  if (cached !== undefined) return cached;
+  await loadGameCache();
+  return gameCache.get(gameId) ?? null;
 }
 
 async function resolveMinterAddress(mintedBy: string): Promise<string | null> {
@@ -101,6 +119,7 @@ app.get("/", async (c) => {
     data: await Promise.all(results.map(async (t) => ({
       ...serializeToken(t),
       minterAddress: await resolveMinterAddress(t.mintedBy.toString()),
+      gameAddress: await resolveGameAddress(t.gameId),
     }))),
     total: countResult[0]?.count ?? 0,
     limit,
@@ -129,6 +148,7 @@ app.get("/:id", async (c) => {
     data: {
       ...serializeToken(result[0]),
       minterAddress: await resolveMinterAddress(result[0].mintedBy.toString()),
+      gameAddress: await resolveGameAddress(result[0].gameId),
     },
   });
 });
