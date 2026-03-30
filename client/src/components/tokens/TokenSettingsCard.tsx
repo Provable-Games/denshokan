@@ -9,10 +9,10 @@ import {
   Box,
 } from "@mui/material";
 import SettingsIcon from "@mui/icons-material/Settings";
-import type { ClientSetting } from "../../hooks/useSettingsList";
+import type { GameSettingDetails } from "@provable-games/denshokan-sdk";
 
 interface Props {
-  setting: ClientSetting;
+  setting: GameSettingDetails;
 }
 
 export default function TokenSettingsCard({ setting }: Props) {
@@ -28,7 +28,7 @@ export default function TokenSettingsCard({ setting }: Props) {
           </Typography>
         </Box>
         <Typography variant="h6" sx={{ fontWeight: 600 }}>
-          {setting.name || `Settings #${setting.settingsId}`}
+          {setting.name || `Settings #${setting.id}`}
         </Typography>
         {setting.description && (
           <Typography

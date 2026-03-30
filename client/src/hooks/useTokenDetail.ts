@@ -3,9 +3,10 @@ import {
   useTokenScores,
   useTokenUri,
   useGame,
+  useSettings,
+  useObjectives,
 } from "@provable-games/denshokan-sdk/react";
-import { useSettingsList, type ClientSetting } from "./useSettingsList";
-import { useObjectivesList, type ClientObjective } from "./useObjectivesList";
+import type { GameSettingDetails, GameObjectiveDetails } from "@provable-games/denshokan-sdk";
 
 export interface ClientToken {
   tokenId: string;
@@ -26,14 +27,6 @@ export interface ClientToken {
   mintedBy: number;
   isPlayable: boolean;
   tokenUri?: string;
-}
-
-export interface ClientGame {
-  gameId: number;
-  name: string | null;
-  description: string | null;
-  imageUrl: string | null;
-  contractAddress: string;
 }
 
 export function useTokenDetail(tokenId: string) {
@@ -60,13 +53,15 @@ export function useTokenDetail(tokenId: string) {
   const { data: sdkGame, isLoading: gameLoading } = useGame(gameLookup);
 
   // Fetch settings and objectives for this game
-  const { settings, loading: settingsLoading } = useSettingsList(
+  const { data: settingsData, isLoading: settingsLoading } = useSettings(
     gameAddress ? { gameAddress } : undefined,
   );
+  const settings = settingsData?.data ?? [];
 
-  const { objectives, loading: objectivesLoading } = useObjectivesList(
+  const { data: objectivesData, isLoading: objectivesLoading } = useObjectives(
     gameAddress ? { gameAddress } : undefined,
   );
+  const objectives = objectivesData?.data ?? [];
 
   const token: ClientToken | null = sdkToken
     ? {
@@ -91,30 +86,17 @@ export function useTokenDetail(tokenId: string) {
       }
     : null;
 
-  const GAME_IMAGE_OVERRIDES: Record<string, string> = {
-    "Number Guess": "/number-guess.png",
-    "Tic Tac Toe": "/tic-tac-toe.png",
-  };
-
-  const game: ClientGame | null = sdkGame
-    ? {
-        gameId: sdkGame.gameId,
-        name: sdkGame.name || null,
-        description: sdkGame.description || null,
-        imageUrl: (sdkGame.name && GAME_IMAGE_OVERRIDES[sdkGame.name]) || (sdkGame.imageUrl ?? null),
-        contractAddress: sdkGame.contractAddress,
-      }
-    : null;
+  const game = sdkGame ?? null;
 
   // Find matching setting/objective for this token
-  const setting: ClientSetting | null =
+  const setting: GameSettingDetails | null =
     token && token.settingsId > 0
-      ? settings.find((s) => s.settingsId === token.settingsId) ?? null
+      ? settings.find((s) => s.id === token.settingsId) ?? null
       : null;
 
-  const objective: ClientObjective | null =
+  const objective: GameObjectiveDetails | null =
     token && token.objectiveId > 0
-      ? objectives.find((o) => o.objectiveId === token.objectiveId) ?? null
+      ? objectives.find((o) => o.id === token.objectiveId) ?? null
       : null;
 
   const refetch = () => {

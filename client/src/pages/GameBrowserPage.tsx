@@ -1,12 +1,13 @@
 import { Box, Typography } from "@mui/material";
 import { SportsEsports } from "@mui/icons-material";
-import { useGameList } from "../hooks/useGameList";
+import { useGames } from "@provable-games/denshokan-sdk/react";
 import GameGrid from "../components/games/GameGrid";
 import { GameCardSkeletonGrid } from "../components/common/SkeletonCard";
 import EmptyState from "../components/common/EmptyState";
 
 export default function GameBrowserPage() {
-  const { games, loading } = useGameList();
+  const { data: gamesData, isLoading: loading } = useGames();
+  const games = gamesData?.data ?? [];
 
   return (
     <Box>

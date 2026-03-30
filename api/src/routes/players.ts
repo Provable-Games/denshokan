@@ -1,8 +1,26 @@
 import { Hono } from "hono";
 import { eq, and, desc, asc, sql, countDistinct } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { tokens } from "../db/schema.js";
+import { tokens, minters } from "../db/schema.js";
 import { parseAddress, parseGameId, parseNonNegativeInt } from "../utils/validation.js";
+
+// In-memory minter cache (minter_id -> contract_address)
+let minterCache = new Map<string, string>();
+let minterCacheReady = false;
+
+async function loadMinterCache() {
+  const rows = await db.select({ minterId: minters.minterId, contractAddress: minters.contractAddress }).from(minters);
+  minterCache = new Map(rows.map((r) => [r.minterId.toString(), r.contractAddress]));
+  minterCacheReady = true;
+}
+
+async function resolveMinterAddress(mintedBy: string): Promise<string | null> {
+  if (!minterCacheReady) await loadMinterCache();
+  const cached = minterCache.get(mintedBy);
+  if (cached !== undefined) return cached;
+  await loadMinterCache();
+  return minterCache.get(mintedBy) ?? null;
+}
 
 const app = new Hono();
 
@@ -53,7 +71,10 @@ app.get("/:address/tokens", async (c) => {
   ]);
 
   return c.json({
-    data: results.map(serializeToken),
+    data: await Promise.all(results.map(async (t) => ({
+      ...serializeToken(t),
+      minterAddress: await resolveMinterAddress(t.mintedBy.toString()),
+    }))),
     total: countResult[0]?.count ?? 0,
     limit,
     offset: Math.max(offset, 0),

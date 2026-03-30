@@ -3,7 +3,7 @@ import { Card, CardContent, Typography, Chip, Box } from "@mui/material";
 interface Props {
   objective: {
     gameAddress: string;
-    objectiveId: number;
+    id: number;
     creatorAddress: string;
     name: string;
     description: string;
@@ -37,7 +37,7 @@ export default function ObjectiveCard({ objective, index }: Props) {
           Creator: {truncateAddress(objective.creatorAddress)}
         </Typography>
         <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 1 }}>
-          <Chip label={`ID: ${objective.objectiveId}`} size="small" variant="outlined" />
+          <Chip label={`ID: ${objective.id}`} size="small" variant="outlined" />
           <Chip label={`Block: ${objective.blockNumber}`} size="small" variant="outlined" />
         </Box>
         {Object.keys(objective.objectives).length > 0 && (

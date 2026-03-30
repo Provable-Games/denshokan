@@ -19,6 +19,10 @@ async function loadMinterCache() {
 
 async function resolveMinterAddress(mintedBy: string): Promise<string | null> {
   if (!minterCacheReady) await loadMinterCache();
+  const cached = minterCache.get(mintedBy);
+  if (cached !== undefined) return cached;
+  // Cache miss — refresh and retry once
+  await loadMinterCache();
   return minterCache.get(mintedBy) ?? null;
 }
 

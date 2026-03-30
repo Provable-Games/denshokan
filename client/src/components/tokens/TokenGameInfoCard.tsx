@@ -7,10 +7,10 @@ import {
 } from "@mui/material";
 import SportsEsportsIcon from "@mui/icons-material/SportsEsports";
 import { useNavigate } from "react-router-dom";
-import type { ClientGame } from "../../hooks/useTokenDetail";
+import type { Game } from "@provable-games/denshokan-sdk";
 
 interface Props {
-  game: ClientGame | null;
+  game: Game | null;
   gameId: number;
 }
 

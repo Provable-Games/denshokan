@@ -10,7 +10,7 @@ import {
   useConnectionStatus,
 } from "@provable-games/denshokan-sdk/react";
 import type { ScoreEvent, MintEvent, GameOverEvent } from "@provable-games/denshokan-sdk";
-import { useGameList } from "../hooks/useGameList";
+import { useGames } from "@provable-games/denshokan-sdk/react";
 import GameGrid from "../components/games/GameGrid";
 import { GameCardSkeletonGrid } from "../components/common/SkeletonCard";
 import LiveIndicator from "../components/common/LiveIndicator";
@@ -32,7 +32,8 @@ const eventConfig: Record<string, { icon: React.ReactNode; label: string; color:
 
 export default function HomePage() {
   const navigate = useNavigate();
-  const { games, loading } = useGameList();
+  const { data: gamesData, isLoading: loading } = useGames();
+  const games = gamesData?.data ?? [];
   const { data: activityData } = useActivity({ limit: 5 });
   const recentActivity = activityData?.data ?? [];
   const { isConnected } = useConnectionStatus();

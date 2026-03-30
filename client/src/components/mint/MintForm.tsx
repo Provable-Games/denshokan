@@ -19,10 +19,8 @@ import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
 import dayjs, { Dayjs } from "dayjs";
 import { motion, AnimatePresence } from "framer-motion";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import { useGameList } from "../../hooks/useGameList";
+import { useGames, useSettings, useObjectives } from "@provable-games/denshokan-sdk/react";
 import { useController } from "../../contexts/ControllerContext";
-import { useSettingsList } from "../../hooks/useSettingsList";
-import { useObjectivesList } from "../../hooks/useObjectivesList";
 
 export interface MintFormParams {
   gameAddress: string;
@@ -46,7 +44,8 @@ interface Props {
 const ADDRESS_REGEX = /^0x[0-9a-fA-F]{1,64}$/;
 
 export default function MintForm({ onMint, minting, error }: Props) {
-  const { games } = useGameList();
+  const { data: gamesData } = useGames();
+  const games = gamesData?.data ?? [];
   const { isConnected, address } = useController();
 
   const [selectedGame, setSelectedGame] = useState<string>("");
@@ -61,13 +60,16 @@ export default function MintForm({ onMint, minting, error }: Props) {
   const [recipientAddress, setRecipientAddress] = useState("");
   const [quantity, setQuantity] = useState(1);
 
+  console.log(games);
+
   // Fetch settings for selected game
-  const { settings, loading: isLoadingSettings } = useSettingsList(
+  const { data: settingsData, isLoading: isLoadingSettings } = useSettings(
     selectedGame ? { gameAddress: selectedGame } : undefined,
   );
+  const settings = settingsData?.data ?? [];
 
   // Fetch objectives for selected game, filtered by settings ID
-  const { objectives, loading: isLoadingObjectives } = useObjectivesList(
+  const { data: objectivesData, isLoading: isLoadingObjectives } = useObjectives(
     selectedGame
       ? {
           gameAddress: selectedGame,
@@ -75,6 +77,7 @@ export default function MintForm({ onMint, minting, error }: Props) {
         }
       : undefined,
   );
+  const objectives = objectivesData?.data ?? [];
 
   // Reset settings and objective when game changes
   useEffect(() => {
@@ -100,7 +103,8 @@ export default function MintForm({ onMint, minting, error }: Props) {
     if (endTime) params.end = endTime.unix();
     if (objectiveId) params.objectiveId = Number(objectiveId);
     if (clientUrl.trim()) params.clientUrl = clientUrl.trim();
-    if (recipientAddress.trim()) params.recipientAddress = recipientAddress.trim();
+    if (recipientAddress.trim())
+      params.recipientAddress = recipientAddress.trim();
     if (quantity > 1) params.quantity = quantity;
     onMint(params);
   };
@@ -203,9 +207,9 @@ export default function MintForm({ onMint, minting, error }: Props) {
             <em>Default</em>
           </MenuItem>
           {settings.map((s) => (
-            <MenuItem key={s.settingsId} value={String(s.settingsId)}>
+            <MenuItem key={s.id} value={String(s.id)}>
               <ListItemText
-                primary={s.name || `Settings #${s.settingsId}`}
+                primary={s.name || `Settings #${s.id}`}
                 secondary={s.description || undefined}
               />
             </MenuItem>
@@ -287,9 +291,9 @@ export default function MintForm({ onMint, minting, error }: Props) {
                     <em>None</em>
                   </MenuItem>
                   {objectives.map((o) => (
-                    <MenuItem key={o.objectiveId} value={String(o.objectiveId)}>
+                    <MenuItem key={o.id} value={String(o.id)}>
                       <ListItemText
-                        primary={o.name || `Objective #${o.objectiveId}`}
+                        primary={o.name || `Objective #${o.id}`}
                         secondary={o.description || undefined}
                       />
                     </MenuItem>
@@ -318,12 +322,18 @@ export default function MintForm({ onMint, minting, error }: Props) {
         variant="contained"
         size="large"
         fullWidth
-        disabled={isConnected ? (!selectedGame || minting || !recipientValid) : false}
-        onClick={isConnected ? handleSubmit : () => {
-          // Trigger wallet connect - uses first available connector
-          const event = new CustomEvent("open-wallet-connect");
-          window.dispatchEvent(event);
-        }}
+        disabled={
+          isConnected ? !selectedGame || minting || !recipientValid : false
+        }
+        onClick={
+          isConnected
+            ? handleSubmit
+            : () => {
+                // Trigger wallet connect - uses first available connector
+                const event = new CustomEvent("open-wallet-connect");
+                window.dispatchEvent(event);
+              }
+        }
         sx={{
           background: "linear-gradient(135deg, #7C4DFF, #3F1DCB)",
           boxShadow: "0 4px 20px rgba(124,77,255,0.3)",

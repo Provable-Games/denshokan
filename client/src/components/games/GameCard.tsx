@@ -2,26 +2,32 @@ import { Card, CardContent, CardActionArea, Typography, Chip, Box } from "@mui/m
 import { SportsEsports } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 
+const GAME_IMAGE_OVERRIDES: Record<string, string> = {
+  "Number Guess": "/number-guess.png",
+  "Tic Tac Toe": "/tic-tac-toe.png",
+};
+
 interface Props {
   game: {
     gameId: number;
-    name: string | null;
-    description: string | null;
-    imageUrl: string | null;
+    name?: string;
+    description?: string;
+    imageUrl?: string;
     contractAddress: string;
   };
 }
 
 export default function GameCard({ game }: Props) {
   const navigate = useNavigate();
+  const imageUrl = (game.name && GAME_IMAGE_OVERRIDES[game.name]) || game.imageUrl || null;
 
   return (
     <Card>
       <CardActionArea onClick={() => navigate(`/games/${game.gameId}`)}>
-        {game.imageUrl ? (
+        {imageUrl ? (
           <Box
             component="img"
-            src={game.imageUrl}
+            src={imageUrl}
             alt={game.name || "Game"}
             sx={{ width: "100%", height: 160, objectFit: "cover" }}
           />

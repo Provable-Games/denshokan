@@ -1,11 +1,12 @@
 import { Box, Typography } from "@mui/material";
-import { useMinterList } from "../hooks/useMinterList";
+import { useMinters } from "@provable-games/denshokan-sdk/react";
 import MinterGrid from "../components/minters/MinterGrid";
 import LoadingSpinner from "../components/common/LoadingSpinner";
 import EmptyState from "../components/common/EmptyState";
 
 export default function MintersPage() {
-  const { minters, loading } = useMinterList();
+  const { data: mintersData, isLoading: loading } = useMinters();
+  const minters = mintersData?.data ?? [];
 
   return (
     <Box>
