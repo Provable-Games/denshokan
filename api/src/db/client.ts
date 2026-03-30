@@ -28,7 +28,10 @@ export async function healthCheck(): Promise<boolean> {
 export async function getLatestIndexedBlock(): Promise<number | null> {
   try {
     const client = await pool.connect();
-    const result = await client.query("SELECT MAX(last_updated_block) AS latest_block FROM tokens");
+    // Read from Apibara's internal checkpoint (tracks latest processed block)
+    const result = await client.query(
+      "SELECT order_key AS latest_block FROM airfoil.checkpoints WHERE id LIKE 'indexer_denshokan%' LIMIT 1"
+    );
     client.release();
     const val = result.rows[0]?.latest_block;
     return val != null ? Number(val) : null;
