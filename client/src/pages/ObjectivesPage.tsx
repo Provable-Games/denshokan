@@ -1,11 +1,12 @@
 import { Box, Typography } from "@mui/material";
-import { useObjectivesList } from "../hooks/useObjectivesList";
+import { useObjectives } from "@provable-games/denshokan-sdk/react";
 import ObjectiveGrid from "../components/objectives/ObjectiveGrid";
 import LoadingSpinner from "../components/common/LoadingSpinner";
 import EmptyState from "../components/common/EmptyState";
 
 export default function ObjectivesPage() {
-  const { objectives, loading } = useObjectivesList();
+  const { data: objectivesData, isLoading: loading } = useObjectives();
+  const objectives = objectivesData?.data ?? [];
 
   return (
     <Box>

@@ -4,7 +4,7 @@ interface Props {
   minter: {
     id: string;
     name: string | null;
-    address: string;
+    contractAddress: string;
     minterId: string;
     blockNumber: string;
   };
@@ -23,7 +23,7 @@ export default function MinterCard({ minter }: Props) {
           {minter.name || `Minter #${minter.id}`}
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-          {truncateAddress(minter.address)}
+          {truncateAddress(minter.contractAddress)}
         </Typography>
         <Box sx={{ display: "flex", gap: 1 }}>
           <Chip label={`Minter: ${minter.minterId}`} size="small" variant="outlined" />

@@ -1,11 +1,12 @@
 import { Box, Typography } from "@mui/material";
-import { useSettingsList } from "../hooks/useSettingsList";
+import { useSettings } from "@provable-games/denshokan-sdk/react";
 import SettingGrid from "../components/settings/SettingGrid";
 import LoadingSpinner from "../components/common/LoadingSpinner";
 import EmptyState from "../components/common/EmptyState";
 
 export default function SettingsPage() {
-  const { settings, loading } = useSettingsList();
+  const { data: settingsData, isLoading: loading } = useSettings();
+  const settings = settingsData?.data ?? [];
 
   return (
     <Box>

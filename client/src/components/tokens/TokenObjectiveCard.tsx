@@ -9,10 +9,10 @@ import {
   Box,
 } from "@mui/material";
 import FlagIcon from "@mui/icons-material/Flag";
-import type { ClientObjective } from "../../hooks/useObjectivesList";
+import type { GameObjectiveDetails } from "@provable-games/denshokan-sdk";
 
 interface Props {
-  objective: ClientObjective;
+  objective: GameObjectiveDetails;
 }
 
 export default function TokenObjectiveCard({ objective }: Props) {
@@ -28,7 +28,7 @@ export default function TokenObjectiveCard({ objective }: Props) {
           </Typography>
         </Box>
         <Typography variant="h6" sx={{ fontWeight: 600 }}>
-          {objective.name || `Objective #${objective.objectiveId}`}
+          {objective.name || `Objective #${objective.id}`}
         </Typography>
         {objective.description && (
           <Typography

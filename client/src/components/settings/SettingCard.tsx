@@ -3,7 +3,7 @@ import { Card, CardContent, Typography, Chip, Box } from "@mui/material";
 interface Props {
   setting: {
     gameAddress: string;
-    settingsId: number;
+    id: number;
     creatorAddress: string;
     name: string;
     description: string;
@@ -37,7 +37,7 @@ export default function SettingCard({ setting, index }: Props) {
           Creator: {truncateAddress(setting.creatorAddress)}
         </Typography>
         <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 1 }}>
-          <Chip label={`ID: ${setting.settingsId}`} size="small" variant="outlined" />
+          <Chip label={`ID: ${setting.id}`} size="small" variant="outlined" />
           <Chip label={`Block: ${setting.blockNumber}`} size="small" variant="outlined" />
         </Box>
         {Object.keys(setting.settings).length > 0 && (
