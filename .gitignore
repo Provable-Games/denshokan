@@ -50,3 +50,8 @@ temp/
 
 # Deployments
 contracts/deployments/
+
+# Claude Code
+.agents/
+.claude/
+skills-lock.json
