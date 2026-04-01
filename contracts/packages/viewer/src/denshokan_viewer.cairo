@@ -1102,24 +1102,22 @@ pub mod DenshokanViewer {
             let registry = self._get_registry();
             let total = registry.game_count();
 
+            let mut entries: Array<GameEntry> = array![];
+
+            if offset >= total {
+                return GamesResult { entries, total };
+            }
+
             let effective_limit = if limit == 0 {
                 total
             } else {
                 limit
             };
-
-            let mut entries: Array<GameEntry> = array![];
-            let mut game_index: u64 = 1;
-            let mut skipped: u64 = 0;
+            let mut game_index: u64 = offset + 1;
 
             while game_index <= total {
                 if entries.len().into() >= effective_limit {
                     break;
-                }
-                if skipped < offset {
-                    skipped += 1;
-                    game_index += 1;
-                    continue;
                 }
                 let metadata = registry.game_metadata(game_index);
                 let fee_info = registry.game_fee_info(game_index);
@@ -1146,12 +1144,9 @@ pub mod DenshokanViewer {
             let mut game_index: u64 = 1;
 
             while game_index <= total_games {
-                if entries.len().into() >= effective_limit {
-                    break;
-                }
                 let metadata = registry.game_metadata(game_index);
                 if metadata.genre == genre {
-                    if matched >= offset {
+                    if matched >= offset && entries.len().into() < effective_limit {
                         let fee_info = registry.game_fee_info(game_index);
                         entries.append(GameEntry { game_id: game_index, metadata, fee_info });
                     }
@@ -1179,12 +1174,9 @@ pub mod DenshokanViewer {
             let mut game_index: u64 = 1;
 
             while game_index <= total_games {
-                if entries.len().into() >= effective_limit {
-                    break;
-                }
                 let metadata = registry.game_metadata(game_index);
                 if metadata.developer == developer {
-                    if matched >= offset {
+                    if matched >= offset && entries.len().into() < effective_limit {
                         let fee_info = registry.game_fee_info(game_index);
                         entries.append(GameEntry { game_id: game_index, metadata, fee_info });
                     }
@@ -1212,12 +1204,9 @@ pub mod DenshokanViewer {
             let mut game_index: u64 = 1;
 
             while game_index <= total_games {
-                if entries.len().into() >= effective_limit {
-                    break;
-                }
                 let metadata = registry.game_metadata(game_index);
                 if metadata.publisher == publisher {
-                    if matched >= offset {
+                    if matched >= offset && entries.len().into() < effective_limit {
                         let fee_info = registry.game_fee_info(game_index);
                         entries.append(GameEntry { game_id: game_index, metadata, fee_info });
                     }
