@@ -5,8 +5,9 @@
 
 use core::num::traits::Zero;
 use denshokan_interfaces::filter::{
-    DenshokanTokenState, FilterResult, IDenshokanFilter, IDenshokanSettingsObjectives,
-    ObjectiveEntry, ObjectivesResult, SettingsEntry, SettingsResult, TokenFullState,
+    DenshokanTokenState, FilterResult, GameEntry, GamesResult, IDenshokanFilter, IDenshokanGames,
+    IDenshokanSettingsObjectives, ObjectiveEntry, ObjectivesResult, SettingsEntry, SettingsResult,
+    TokenFullState,
 };
 use game_components_embeddable_game_standard::minigame::extensions::objectives::interface::{
     IMINIGAME_OBJECTIVES_ID, IMinigameObjectivesDetailsDispatcher,
@@ -1088,6 +1089,138 @@ pub mod DenshokanViewer {
 
                 total
             }
+        }
+    }
+
+    // ================================================================================================
+    // GAMES IMPLEMENTATION
+    // ================================================================================================
+
+    #[abi(embed_v0)]
+    impl DenshokanGamesImpl of IDenshokanGames<ContractState> {
+        fn all_games(self: @ContractState, offset: u64, limit: u64) -> GamesResult {
+            let registry = self._get_registry();
+            let total = registry.game_count();
+
+            let mut entries: Array<GameEntry> = array![];
+
+            if offset >= total {
+                return GamesResult { entries, total };
+            }
+
+            let effective_limit = if limit == 0 {
+                total
+            } else {
+                limit
+            };
+            let mut game_index: u64 = offset + 1;
+
+            while game_index <= total {
+                if entries.len().into() >= effective_limit {
+                    break;
+                }
+                let metadata = registry.game_metadata(game_index);
+                let fee_info = registry.game_fee_info(game_index);
+                entries.append(GameEntry { game_id: game_index, metadata, fee_info });
+                game_index += 1;
+            }
+
+            GamesResult { entries, total }
+        }
+
+        fn games_by_genre(
+            self: @ContractState, genre: ByteArray, offset: u64, limit: u64,
+        ) -> GamesResult {
+            let registry = self._get_registry();
+            let total_games = registry.game_count();
+            let effective_limit = if limit == 0 {
+                total_games
+            } else {
+                limit
+            };
+
+            let mut entries: Array<GameEntry> = array![];
+            let mut matched: u64 = 0;
+            let mut game_index: u64 = 1;
+
+            while game_index <= total_games {
+                let metadata = registry.game_metadata(game_index);
+                if metadata.genre == genre {
+                    if matched >= offset && entries.len().into() < effective_limit {
+                        let fee_info = registry.game_fee_info(game_index);
+                        entries.append(GameEntry { game_id: game_index, metadata, fee_info });
+                    }
+                    matched += 1;
+                }
+                game_index += 1;
+            }
+
+            GamesResult { entries, total: matched }
+        }
+
+        fn games_by_developer(
+            self: @ContractState, developer: ByteArray, offset: u64, limit: u64,
+        ) -> GamesResult {
+            let registry = self._get_registry();
+            let total_games = registry.game_count();
+            let effective_limit = if limit == 0 {
+                total_games
+            } else {
+                limit
+            };
+
+            let mut entries: Array<GameEntry> = array![];
+            let mut matched: u64 = 0;
+            let mut game_index: u64 = 1;
+
+            while game_index <= total_games {
+                let metadata = registry.game_metadata(game_index);
+                if metadata.developer == developer {
+                    if matched >= offset && entries.len().into() < effective_limit {
+                        let fee_info = registry.game_fee_info(game_index);
+                        entries.append(GameEntry { game_id: game_index, metadata, fee_info });
+                    }
+                    matched += 1;
+                }
+                game_index += 1;
+            }
+
+            GamesResult { entries, total: matched }
+        }
+
+        fn games_by_publisher(
+            self: @ContractState, publisher: ByteArray, offset: u64, limit: u64,
+        ) -> GamesResult {
+            let registry = self._get_registry();
+            let total_games = registry.game_count();
+            let effective_limit = if limit == 0 {
+                total_games
+            } else {
+                limit
+            };
+
+            let mut entries: Array<GameEntry> = array![];
+            let mut matched: u64 = 0;
+            let mut game_index: u64 = 1;
+
+            while game_index <= total_games {
+                let metadata = registry.game_metadata(game_index);
+                if metadata.publisher == publisher {
+                    if matched >= offset && entries.len().into() < effective_limit {
+                        let fee_info = registry.game_fee_info(game_index);
+                        entries.append(GameEntry { game_id: game_index, metadata, fee_info });
+                    }
+                    matched += 1;
+                }
+                game_index += 1;
+            }
+
+            GamesResult { entries, total: matched }
+        }
+
+        fn game_count(self: @ContractState) -> u64 {
+            let registry = self._get_registry();
+            registry.game_count()
         }
     }
 

@@ -4,6 +4,7 @@
 
 use game_components_embeddable_game_standard::minigame::extensions::objectives::structs::GameObjectiveDetails;
 use game_components_embeddable_game_standard::minigame::extensions::settings::structs::GameSettingDetails;
+pub use game_components_embeddable_game_standard::registry::interface::{GameFeeInfo, GameMetadata};
 
 // Re-export TokenFullState from game-components (canonical definition)
 pub use game_components_embeddable_game_standard::token::structs::TokenFullState;
@@ -365,4 +366,43 @@ pub trait IDenshokanSettingsObjectives<TState> {
     ) -> ObjectivesResult;
     fn count_settings(self: @TState, game_address: ContractAddress) -> u32;
     fn count_objectives(self: @TState, game_address: ContractAddress) -> u32;
+}
+
+/// Combined game metadata + fee info for efficient RPC batching
+#[derive(Drop, Serde)]
+pub struct GameEntry {
+    pub game_id: u64,
+    pub metadata: GameMetadata,
+    pub fee_info: GameFeeInfo,
+}
+
+#[derive(Drop, Serde)]
+pub struct GamesResult {
+    pub entries: Array<GameEntry>,
+    pub total: u64,
+}
+
+/// Game listing and filtering interface
+/// Provides paginated access to registered games via the MinigameRegistry
+#[starknet::interface]
+pub trait IDenshokanGames<TState> {
+    /// Returns all registered games (paginated)
+    /// Pass limit=0 to return all results
+    fn all_games(self: @TState, offset: u64, limit: u64) -> GamesResult;
+
+    /// Returns games filtered by genre (exact match, paginated)
+    fn games_by_genre(self: @TState, genre: ByteArray, offset: u64, limit: u64) -> GamesResult;
+
+    /// Returns games filtered by developer (exact match, paginated)
+    fn games_by_developer(
+        self: @TState, developer: ByteArray, offset: u64, limit: u64,
+    ) -> GamesResult;
+
+    /// Returns games filtered by publisher (exact match, paginated)
+    fn games_by_publisher(
+        self: @TState, publisher: ByteArray, offset: u64, limit: u64,
+    ) -> GamesResult;
+
+    /// Returns total number of registered games
+    fn game_count(self: @TState) -> u64;
 }
