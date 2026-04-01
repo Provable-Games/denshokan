@@ -9,7 +9,7 @@
 url = "http://127.0.0.1:5050/"
 account = "devnet"
 wait-params = { timeout = 300, retry-interval = 10 }
-block-explorer = "StarkScan"
+block-explorer = "Voyager"
 show-explorer-links = true
 
 # Sepolia testnet profile
@@ -17,7 +17,7 @@ show-explorer-links = true
 url = "https://api.cartridge.gg/x/starknet/sepolia"
 account = "deployer"
 wait-params = { timeout = 300, retry-interval = 10 }
-block-explorer = "StarkScan"
+block-explorer = "Voyager"
 show-explorer-links = true
 
 # Mainnet profile
@@ -25,5 +25,5 @@ show-explorer-links = true
 url = "https://api.cartridge.gg/x/starknet/mainnet"
 account = "deployer"
 wait-params = { timeout = 500, retry-interval = 10 }
-block-explorer = "StarkScan"
+block-explorer = "Voyager"
 show-explorer-links = true

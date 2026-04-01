@@ -98,7 +98,7 @@ update_env_var() {
         echo -e "  $key — ${YELLOW}would update${NC}: $old_value → $value"
     else
         # Use a delimiter that won't appear in hex addresses
-        sed -i "s|^${key}=.*|${key}=${value}|" "$file"
+        sed -i '' "s|^${key}=.*|${key}=${value}|" "$file"
         echo -e "  $key — ${GREEN}updated${NC}: $old_value → $value"
     fi
 }
