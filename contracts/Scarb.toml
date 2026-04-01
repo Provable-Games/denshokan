@@ -11,13 +11,13 @@ members = [
 
 [workspace.package]
 edition = "2024_07"
-cairo-version = "2.15.0"
+cairo-version = "2.16.1"
 authors = ["Provable Games"]
 license = "MIT"
 repository = "https://github.com/Provable-Games/denshokan"
 
 [workspace.dependencies]
-starknet = "2.15.1"
+starknet = "2.16.1"
 game_components_embeddable_game_standard = { git = "https://github.com/Provable-Games/game-components.git", branch = "main" }
 game_components_utilities = { git = "https://github.com/Provable-Games/game-components.git", branch = "main" }
 game_components_test_common = { git = "https://github.com/Provable-Games/game-components.git", branch = "main" }
@@ -28,7 +28,7 @@ openzeppelin_introspection = { git = "https://github.com/OpenZeppelin/cairo-cont
 openzeppelin_interfaces = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0" }
 openzeppelin_access = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0" }
 openzeppelin_upgrades = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0" }
-snforge_std = { git = "https://github.com/foundry-rs/starknet-foundry", tag = "v0.55.0" }
+snforge_std = { git = "https://github.com/foundry-rs/starknet-foundry", tag = "v0.58.1" }
 denshokan_interfaces = { path = "packages/interfaces" }
 denshokan_token = { path = "packages/token" }
 denshokan_viewer = { path = "packages/viewer" }
