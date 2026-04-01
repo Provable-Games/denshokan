@@ -39,12 +39,15 @@ async function resolveGameId(rawId: string): Promise<{ gameId: number; gameAddre
     : null;
 }
 
-// GET /games - List games (paginated)
+// GET /games - List games (paginated, with optional filters)
 app.get("/", async (c) => {
   const sortBy = c.req.query("sort_by");
   const sortOrder = c.req.query("sort_order") === "asc" ? "asc" : "desc";
   const limit = parseNonNegativeInt(c.req.query("limit"), 50);
   const offset = parseNonNegativeInt(c.req.query("offset"), 0);
+  const genre = c.req.query("genre");
+  const developer = c.req.query("developer");
+  const publisher = c.req.query("publisher");
 
   const sortFields: Record<string, any> = {
     name: games.name,
@@ -54,16 +57,24 @@ app.get("/", async (c) => {
   const sortColumn = sortFields[sortBy ?? ""] ?? games.createdAt;
   const orderBy = sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn);
 
+  const conditions = [];
+  if (genre) conditions.push(eq(games.genre, genre));
+  if (developer) conditions.push(eq(games.developer, developer));
+  if (publisher) conditions.push(eq(games.publisher, publisher));
+  const where = conditions.length > 0 ? and(...conditions) : undefined;
+
   const [results, countResult] = await Promise.all([
     db
       .select()
       .from(games)
+      .where(where)
       .orderBy(orderBy)
       .limit(Math.min(limit, 100))
       .offset(Math.max(offset, 0)),
     db
       .select({ count: sql<number>`count(*)::int` })
-      .from(games),
+      .from(games)
+      .where(where),
   ]);
 
   return c.json({
