@@ -83,13 +83,17 @@ fi
 # BUILD CONTRACTS
 # ============================
 
-print_info "Building contracts..."
+SCARB_PROFILE="release"
+ARTIFACT_DIR="target/release"
+
 cd "$CONTRACTS_DIR"
-scarb build
+
+print_info "Building contracts ($SCARB_PROFILE profile)..."
+scarb --profile "$SCARB_PROFILE" build --workspace
 
 # Verify contract artifact exists
-if [ ! -f "$CONTRACTS_DIR/target/dev/denshokan_viewer_DenshokanViewer.contract_class.json" ]; then
-    print_error "DenshokanViewer contract artifact not found"
+if [ ! -f "$CONTRACTS_DIR/$ARTIFACT_DIR/denshokan_viewer_DenshokanViewer.contract_class.json" ]; then
+    print_error "DenshokanViewer contract artifact not found at $ARTIFACT_DIR/denshokan_viewer_DenshokanViewer.contract_class.json"
     exit 1
 fi
 
