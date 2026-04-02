@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import {
   usePlayerStats,
-  usePlayerTokens,
+  useTokens,
 } from "@provable-games/denshokan-sdk/react";
 import { useController } from "../contexts/ControllerContext";
 
@@ -39,7 +39,7 @@ export function usePlayerPortfolio() {
     data: sdkTokens,
     isLoading: tokensLoading,
     refetch: refetchTokens,
-  } = usePlayerTokens(isConnected ? address : undefined, { includeUri: true });
+  } = useTokens(isConnected && address ? { owner: address, includeUri: true } : undefined);
 
   const stats: ClientPlayerStats | null = sdkStats
     ? {
