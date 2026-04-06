@@ -74,6 +74,7 @@ interface DenshokanConfig {
   startingBlock: string;
   databaseUrl: string;
   rpcUrl: string;
+  rpcApiKey: string;
 }
 
 export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
@@ -86,6 +87,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
     startingBlock: startBlockStr,
     databaseUrl,
     rpcUrl,
+    rpcApiKey,
   } = config;
   const startingBlock = BigInt(startBlockStr);
 
@@ -107,7 +109,12 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
   const database = drizzle({ schema, connectionString: databaseUrl });
 
   // Create Starknet RPC provider and contract for token_uri fetches
-  const starknetProvider = new RpcProvider({ nodeUrl: rpcUrl });
+  const starknetProvider = new RpcProvider({
+    nodeUrl: rpcUrl,
+    ...(rpcApiKey && {
+      headers: { Authorization: `Bearer ${rpcApiKey}` },
+    }),
+  });
   const denshokanContract = new Contract({ abi: DENSHOKAN_ABI, address: normalizedAddress, providerOrAccount: starknetProvider });
 
   // ============ Async URI Fetch Queue ============

@@ -9,8 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@cartridge/connector": "^0.12.1",
-    "@cartridge/controller": "^0.12.2",
+    "@cartridge/connector": "0.13.11",
+    "@cartridge/controller": "0.13.11",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
     "@mui/icons-material": "^7.0.2",

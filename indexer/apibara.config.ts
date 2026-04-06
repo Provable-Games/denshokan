@@ -16,6 +16,8 @@ export default defineConfig({
       databaseUrl: (process.env.DATABASE_URL ?? "postgres://postgres:postgres@localhost:5432/denshokan").trim(),
       // Starknet RPC URL for token_uri fetches
       rpcUrl: (process.env.RPC_URL ?? "https://api.cartridge.gg/x/starknet/mainnet").trim(),
+      // Cartridge RPC API key (Bearer token for Authorization header)
+      rpcApiKey: (process.env.RPC_API_KEY ?? "").trim(),
     },
   },
 });
