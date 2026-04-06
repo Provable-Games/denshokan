@@ -119,6 +119,8 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
 
   // ============ Async URI Fetch Queue ============
   const URI_FETCH_CONCURRENCY = 5;
+  const URI_FETCH_MAX_RETRIES = 3;
+  const URI_FETCH_BASE_DELAY_MS = 2000;
 
   interface BlockContext {
     blockNumber: bigint;
@@ -127,7 +129,13 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
     eventIndex: number;
   }
 
-  const uriFetchQueue: Array<{ tokenId: bigint; blockContext?: BlockContext }> = [];
+  interface UriFetchItem {
+    tokenId: bigint;
+    blockContext?: BlockContext;
+    retries: number;
+  }
+
+  const uriFetchQueue: UriFetchItem[] = [];
   let uriFetchRunning = false;
 
   async function processUriFetchQueue(): Promise<void> {
@@ -137,13 +145,29 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
     while (uriFetchQueue.length > 0) {
       const batch = uriFetchQueue.splice(0, URI_FETCH_CONCURRENCY);
       const results = await Promise.allSettled(
-        batch.map(({ tokenId, blockContext }) => fetchTokenUri(tokenId, blockContext))
+        batch.map((item) => fetchTokenUri(item.tokenId, item.blockContext))
       );
-      results.forEach((r, i) => {
-        if (r.status === "rejected") {
-          console.warn(`[URI Queue] Failed for token ${batch[i].tokenId}: ${r.reason}`);
+      for (let i = 0; i < results.length; i++) {
+        if (results[i].status === "rejected") {
+          const item = batch[i];
+          if (item.retries < URI_FETCH_MAX_RETRIES) {
+            const delay = URI_FETCH_BASE_DELAY_MS * 2 ** item.retries;
+            console.warn(
+              `[URI Queue] Failed for token ${item.tokenId} (attempt ${item.retries + 1}/${URI_FETCH_MAX_RETRIES}), retrying in ${delay}ms`
+            );
+            setTimeout(() => {
+              uriFetchQueue.push({ ...item, retries: item.retries + 1 });
+              processUriFetchQueue().catch((err) =>
+                console.error(`[URI Queue] Processing error: ${err}`)
+              );
+            }, delay);
+          } else {
+            console.error(
+              `[URI Queue] Failed for token ${item.tokenId} after ${URI_FETCH_MAX_RETRIES} attempts: ${(results[i] as PromiseRejectedResult).reason}`
+            );
+          }
         }
-      });
+      }
     }
 
     uriFetchRunning = false;
@@ -164,7 +188,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
   }
 
   function queueUriFetch(tokenId: bigint, blockContext?: BlockContext): void {
-    uriFetchQueue.push({ tokenId, blockContext });
+    uriFetchQueue.push({ tokenId, blockContext, retries: 0 });
     // Fire-and-forget — don't await
     processUriFetchQueue().catch((err) =>
       console.error(`[URI Queue] Processing error: ${err}`)
