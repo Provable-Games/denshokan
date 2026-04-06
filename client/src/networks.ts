@@ -2,11 +2,6 @@ import { type Chain, mainnet, sepolia } from "@starknet-react/chains";
 
 export type ChainId = "SN_MAIN" | "SN_SEPOLIA";
 
-export interface GameContractConfig {
-  address: string;
-  methods: { name: string; entrypoint: string }[];
-}
-
 export interface DenshokanChainConfig {
   chainId: ChainId;
   chain: Chain;
@@ -20,19 +15,7 @@ export interface DenshokanChainConfig {
   viewerAddress: string;
   numberGuessApiUrl: string;
   numberGuessWsUrl: string;
-  /** Game contracts that need Controller session policies */
-  gameContracts: GameContractConfig[];
 }
-
-/** Standard methods for minigame contracts */
-const MINIGAME_METHODS = [
-  { name: "mint_game", entrypoint: "mint_game" },
-  { name: "new_game", entrypoint: "new_game" },
-  { name: "guess", entrypoint: "guess" },
-  { name: "make_move", entrypoint: "make_move" },
-  { name: "create_settings", entrypoint: "create_settings" },
-  { name: "create_objective", entrypoint: "create_objective" },
-];
 
 export const CHAIN_ID_FELTS: Record<ChainId, string> = {
   SN_MAIN: "0x534e5f4d41494e",
@@ -52,12 +35,11 @@ const NETWORKS: Record<ChainId, DenshokanChainConfig> = {
       "https://denshokan-api-production.up.railway.app",
     wsUrl: import.meta.env.VITE_MAINNET_WS_URL || "",
     explorerUrl: "https://voyager.online",
-    denshokanAddress: "0x077cc1993e80f31770562a4e2ba73b18eae5696a3aa029cba0daea192149f9c0",
-    registryAddress: "0x04d99aab35ddd17c1a6dca70f1de249c9120af32c2f92cb735dfcbdaec76cc1b",
-    viewerAddress: "0x07412f3b2098e8b2b50df3859466784ecb0ea4d5b5a200347605568188bf5541",
+    denshokanAddress: "0x03b54a422e241957e105f41e992bdd5af349d68a87358e5f470a5c2880bc6253",
+    registryAddress: "0x01b529f24758f5862d4c614440aa0188a9e86d5adcfc55b39d28cd42e31daae1",
+    viewerAddress: "0x011e6c8ae5550ea53fa49c6badaf17cc3732795ecb0389275183362e1078392d",
     numberGuessApiUrl: import.meta.env.VITE_MAINNET_NUMBER_GUESS_API_URL || "",
     numberGuessWsUrl: import.meta.env.VITE_MAINNET_NUMBER_GUESS_WS_URL || "",
-    gameContracts: [],
   },
   SN_SEPOLIA: {
     chainId: "SN_SEPOLIA",
@@ -76,12 +58,6 @@ const NETWORKS: Record<ChainId, DenshokanChainConfig> = {
     viewerAddress: "0x000d3985164bf64dfe013c82441e0e0ceca657027214901c758c5d7ef9f559db",
     numberGuessApiUrl: import.meta.env.VITE_SEPOLIA_NUMBER_GUESS_API_URL || "",
     numberGuessWsUrl: import.meta.env.VITE_SEPOLIA_NUMBER_GUESS_WS_URL || "",
-    gameContracts: [
-      {
-        address: "0x068af1eb3f79fc23169bb583ac86bc1cd76c7241c1fec2c68b0c0d8a873da5a6",
-        methods: MINIGAME_METHODS,
-      },
-    ],
   },
 };
 
