@@ -1,9 +1,11 @@
 use game_components_embeddable_game_standard::registry::interface::IMinigameRegistryDispatcherTrait;
+use game_components_embeddable_game_standard::token::extensions::enumerable::interface::{
+    IENUMERABLE_OWNER_ID, IEnumerableOwnerDispatcher, IEnumerableOwnerDispatcherTrait,
+};
 use game_components_embeddable_game_standard::token::interface::IMinigameTokenMixinDispatcherTrait;
 use openzeppelin_interfaces::erc2981::{IERC2981DispatcherTrait, IERC2981_ID};
 use openzeppelin_interfaces::erc721::{
-    IERC721DispatcherTrait, IERC721EnumerableDispatcher, IERC721EnumerableDispatcherTrait,
-    IERC721MetadataDispatcher, IERC721MetadataDispatcherTrait, IERC721_ENUMERABLE_ID, IERC721_ID,
+    IERC721DispatcherTrait, IERC721MetadataDispatcher, IERC721MetadataDispatcherTrait, IERC721_ID,
 };
 use openzeppelin_interfaces::introspection::{ISRC5Dispatcher, ISRC5DispatcherTrait};
 use snforge_std::{CheatSpan, cheat_caller_address};
@@ -70,62 +72,14 @@ fn test_symbol_returns_dnsk() {
 // ================================================================================================
 
 #[test]
-fn test_total_supply_starts_at_zero() {
-    let tc = setup_with_registry();
-
-    let enumerable = IERC721EnumerableDispatcher { contract_address: tc.denshokan_address };
-    let total = enumerable.total_supply();
-
-    assert!(total == 0, "total_supply should be 0 before any mints");
-}
-
-#[test]
-fn test_total_supply_increases_after_mint() {
-    let tc = setup_with_registry();
-
-    let (game_id, _, _) = register_game(
-        tc.registry, tc.denshokan_address, GAME_CREATOR(), "TestGame", Option::None,
-    );
-
-    let enumerable = IERC721EnumerableDispatcher { contract_address: tc.denshokan_address };
-
-    // Mint one token
-    mint_token(@tc, game_id, ALICE());
-    assert!(enumerable.total_supply() == 1, "total_supply should be 1 after first mint");
-
-    // Register another game and mint a second token
-    let (game_id_2, _, _) = register_game(
-        tc.registry, tc.denshokan_address, GAME_CREATOR(), "TestGame2", Option::None,
-    );
-    mint_token(@tc, game_id_2, BOB());
-    assert!(enumerable.total_supply() == 2, "total_supply should be 2 after second mint");
-}
-
-#[test]
-fn test_token_by_index_returns_correct_token() {
-    let tc = setup_with_registry();
-
-    let (game_id, _, _) = register_game(
-        tc.registry, tc.denshokan_address, GAME_CREATOR(), "TestGame", Option::None,
-    );
-
-    let token_id = mint_token(@tc, game_id, ALICE());
-
-    let enumerable = IERC721EnumerableDispatcher { contract_address: tc.denshokan_address };
-    let indexed_token = enumerable.token_by_index(0);
-
-    assert!(indexed_token == token_id.into(), "token_by_index(0) should return the minted token");
-}
-
-#[test]
 #[should_panic]
-fn test_token_by_index_out_of_bounds_panics() {
+fn test_token_of_owner_by_index_out_of_bounds_with_no_tokens() {
     let tc = setup_with_registry();
 
-    let enumerable = IERC721EnumerableDispatcher { contract_address: tc.denshokan_address };
+    let enumerable = IEnumerableOwnerDispatcher { contract_address: tc.denshokan_address };
 
     // No tokens minted, index 0 should panic
-    enumerable.token_by_index(0);
+    enumerable.token_of_owner_by_index(ALICE(), 0);
 }
 
 #[test]
@@ -138,7 +92,7 @@ fn test_token_of_owner_by_index_returns_correct_token() {
 
     let token_id = mint_token(@tc, game_id, ALICE());
 
-    let enumerable = IERC721EnumerableDispatcher { contract_address: tc.denshokan_address };
+    let enumerable = IEnumerableOwnerDispatcher { contract_address: tc.denshokan_address };
     let owner_token = enumerable.token_of_owner_by_index(ALICE(), 0);
 
     assert!(
@@ -152,7 +106,7 @@ fn test_token_of_owner_by_index_returns_correct_token() {
 fn test_token_of_owner_by_index_out_of_bounds_panics() {
     let tc = setup_with_registry();
 
-    let enumerable = IERC721EnumerableDispatcher { contract_address: tc.denshokan_address };
+    let enumerable = IEnumerableOwnerDispatcher { contract_address: tc.denshokan_address };
 
     // ALICE has no tokens, index 0 should panic
     enumerable.token_of_owner_by_index(ALICE(), 0);
@@ -172,7 +126,7 @@ fn test_token_of_owner_by_index_with_multiple_owners() {
     let token_alice = mint_token(@tc, game_id_1, ALICE());
     let token_bob = mint_token(@tc, game_id_2, BOB());
 
-    let enumerable = IERC721EnumerableDispatcher { contract_address: tc.denshokan_address };
+    let enumerable = IEnumerableOwnerDispatcher { contract_address: tc.denshokan_address };
 
     // Each owner should have exactly 1 token at index 0
     let alice_token = enumerable.token_of_owner_by_index(ALICE(), 0);
@@ -180,9 +134,6 @@ fn test_token_of_owner_by_index_with_multiple_owners() {
 
     assert!(alice_token == token_alice.into(), "ALICE's token should match");
     assert!(bob_token == token_bob.into(), "BOB's token should match");
-
-    // Verify total supply
-    assert!(enumerable.total_supply() == 2, "total_supply should be 2");
 }
 
 #[test]
@@ -195,7 +146,7 @@ fn test_enumerable_updates_after_transfer() {
 
     let token_id = mint_token(@tc, game_id, ALICE());
 
-    let enumerable = IERC721EnumerableDispatcher { contract_address: tc.denshokan_address };
+    let enumerable = IEnumerableOwnerDispatcher { contract_address: tc.denshokan_address };
 
     // Before transfer: ALICE owns 1 token
     assert!(
@@ -210,9 +161,6 @@ fn test_enumerable_updates_after_transfer() {
     // After transfer: BOB should now own the token
     let bob_token = enumerable.token_of_owner_by_index(BOB(), 0);
     assert!(bob_token == token_id.into(), "BOB should own the token after transfer");
-
-    // Total supply should not change after a transfer
-    assert!(enumerable.total_supply() == 1, "total_supply should remain 1 after transfer");
 }
 
 // ================================================================================================
@@ -255,14 +203,14 @@ fn test_supports_interface_erc2981() {
 }
 
 #[test]
-fn test_supports_interface_erc721_enumerable() {
+fn test_supports_interface_enumerable_owner() {
     let tc = setup_with_registry();
 
     let src5 = ISRC5Dispatcher { contract_address: tc.denshokan_address };
 
-    let supports_enumerable = src5.supports_interface(IERC721_ENUMERABLE_ID);
+    let supports_enumerable = src5.supports_interface(IENUMERABLE_OWNER_ID);
 
-    assert!(supports_enumerable, "Contract should support IERC721Enumerable interface");
+    assert!(supports_enumerable, "Contract should support IEnumerableOwner interface");
 }
 
 #[test]
