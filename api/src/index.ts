@@ -3,11 +3,11 @@ import { createServer } from "node:https";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { serve } from "@hono/node-server";
-import { createNodeWebSocket } from "@hono/node-ws";
+import { WebSocketServer } from "ws";
 
 import { healthCheck, getLatestIndexedBlock, shutdown } from "./db/client.js";
 import { rateLimit, cleanupTimer } from "./middleware/rateLimit.js";
-import { createWSEvents } from "./ws/subscriptions.js";
+import { handleWSConnection } from "./ws/subscriptions.js";
 
 import tokensRouter from "./routes/tokens.js";
 import gamesRouter from "./routes/games.js";
@@ -18,7 +18,6 @@ import settingsRouter from "./routes/settings.js";
 import objectivesRouter from "./routes/objectives.js";
 
 const app = new Hono();
-const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app });
 
 // Middleware
 app.use("*", cors());
@@ -43,9 +42,6 @@ app.route("/minters", mintersRouter);
 app.route("/settings", settingsRouter);
 app.route("/objectives", objectivesRouter);
 
-// WebSocket
-app.get("/ws", upgradeWebSocket(() => createWSEvents()));
-
 // Server
 const port = parseInt(process.env.PORT ?? "3000", 10);
 const certPath = process.env.TLS_CERT ?? "localhost-cert.pem";
@@ -67,12 +63,27 @@ const server = serve(serverOptions, (info) => {
   console.log(`[Denshokan API] Listening on ${protocol}://localhost:${info.port}`);
 });
 
-injectWebSocket(server);
+// WebSocket — attach directly to the HTTP server for reliable proxy support
+const wss = new WebSocketServer({ noServer: true });
+
+server.on("upgrade", (req, socket, head) => {
+  const { pathname } = new URL(req.url ?? "/", `http://${req.headers.host}`);
+  if (pathname === "/ws") {
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      wss.emit("connection", ws, req);
+    });
+  } else {
+    socket.destroy();
+  }
+});
+
+wss.on("connection", handleWSConnection);
 
 // Graceful shutdown
 function handleShutdown() {
   console.log("[Denshokan API] Shutting down...");
   clearInterval(cleanupTimer);
+  wss.close();
   server.close(async () => {
     await shutdown();
     process.exit(0);

@@ -1,4 +1,4 @@
-import type { WSContext, WSEvents, WSMessageReceive } from "hono/ws";
+import type { WebSocket } from "ws";
 import pg from "pg";
 import { pool } from "../db/client.js";
 
@@ -42,7 +42,6 @@ for (const [friendly, pg] of Object.entries(CHANNEL_MAP)) {
   REVERSE_CHANNEL_MAP[pg] = friendly;
 }
 
-/** Resolve minter contract addresses to their minted_by (minter_id) integers */
 /** Normalize a hex address to unpadded lowercase (matches indexer storage format) */
 function normalizeAddress(addr: string): string {
   try {
@@ -52,9 +51,9 @@ function normalizeAddress(addr: string): string {
   }
 }
 
+/** Resolve minter contract addresses to their minted_by (minter_id) integers */
 async function resolveMinterAddresses(addresses: string[]): Promise<number[]> {
   try {
-    // Normalize to unpadded lowercase hex to match how the indexer stores addresses
     const normalized = addresses.map(normalizeAddress);
     const result = await pool.query<{ minter_id: string }>(
       `SELECT minter_id FROM minters WHERE contract_address = ANY($1)`,
@@ -67,7 +66,7 @@ async function resolveMinterAddresses(addresses: string[]): Promise<number[]> {
   }
 }
 
-const clients = new Map<WSContext, Subscription>();
+const clients = new Map<WebSocket, Subscription>();
 let pgClient: pg.PoolClient | null = null;
 let initialized = false;
 
@@ -104,9 +103,6 @@ function matchesFilters(sub: Subscription, data: Record<string, unknown>): boole
   }
   if (sub.contextIds.size > 0) {
     const contextId = data.context_id;
-    // If the payload lacks context_id, let it through (field may not be present
-    // in older trigger payloads). Only reject when the field is present but
-    // doesn't match the subscription filter.
     if (contextId != null && !sub.contextIds.has(Number(contextId))) return false;
   }
   if (sub.mintedByIds.size > 0) {
@@ -152,83 +148,76 @@ function broadcast(channel: string, payload: unknown) {
 }
 
 /**
- * Returns WSEvents handlers for use with Hono's upgradeWebSocket.
+ * Handles a new WebSocket connection (used with ws.WebSocketServer).
  */
-export function createWSEvents(): WSEvents {
-  return {
-    onOpen(_evt: Event, ws: WSContext) {
-      initPgListener();
+export function handleWSConnection(ws: WebSocket) {
+  initPgListener();
 
-      const sub: Subscription = {
-        channels: new Set(),
-        gameIds: new Set(),
-        contextIds: new Set(),
-        mintedByIds: new Set(),
-        owners: new Set(),
-        settingsIds: new Set(),
-        objectiveIds: new Set(),
-      };
-      clients.set(ws, sub);
-    },
-
-    async onMessage(evt: MessageEvent<WSMessageReceive>, ws: WSContext) {
-      try {
-        const msg = JSON.parse(String(evt.data)) as {
-          type: string;
-          channels?: string[];
-          gameIds?: string[];
-          contextIds?: number[];
-          minterAddresses?: string[];
-          owners?: string[];
-          settingsIds?: number[];
-          objectiveIds?: number[];
-        };
-
-        const sub = clients.get(ws);
-        if (!sub) return;
-
-        if (msg.type === "subscribe" && Array.isArray(msg.channels)) {
-          for (const ch of msg.channels) {
-            const pgChannel = CHANNEL_MAP[ch];
-            if (pgChannel) sub.channels.add(pgChannel);
-          }
-          if (Array.isArray(msg.gameIds)) {
-            for (const gid of msg.gameIds) sub.gameIds.add(String(gid));
-          }
-          if (Array.isArray(msg.contextIds)) {
-            for (const cid of msg.contextIds) sub.contextIds.add(Number(cid));
-          }
-          if (Array.isArray(msg.minterAddresses) && msg.minterAddresses.length > 0) {
-            const mintedByIds = await resolveMinterAddresses(msg.minterAddresses);
-            for (const id of mintedByIds) sub.mintedByIds.add(id);
-          }
-          if (Array.isArray(msg.owners)) {
-            for (const addr of msg.owners) sub.owners.add(normalizeAddress(String(addr)));
-          }
-          if (Array.isArray(msg.settingsIds)) {
-            for (const sid of msg.settingsIds) sub.settingsIds.add(Number(sid));
-          }
-          if (Array.isArray(msg.objectiveIds)) {
-            for (const oid of msg.objectiveIds) sub.objectiveIds.add(Number(oid));
-          }
-          ws.send(JSON.stringify({ type: "subscribed", channels: [...sub.channels] }));
-        }
-
-        if (msg.type === "unsubscribe" && Array.isArray(msg.channels)) {
-          for (const ch of msg.channels) {
-            const pgChannel = CHANNEL_MAP[ch];
-            if (pgChannel) sub.channels.delete(pgChannel);
-          }
-          ws.send(JSON.stringify({ type: "unsubscribed", channels: [...sub.channels] }));
-        }
-      } catch (e) {
-        console.error("[WebSocket] Error processing message:", e);
-        ws.send(JSON.stringify({ type: "error", message: "Invalid message format" }));
-      }
-    },
-
-    onClose(_evt: CloseEvent, ws: WSContext) {
-      clients.delete(ws);
-    },
+  const sub: Subscription = {
+    channels: new Set(),
+    gameIds: new Set(),
+    contextIds: new Set(),
+    mintedByIds: new Set(),
+    owners: new Set(),
+    settingsIds: new Set(),
+    objectiveIds: new Set(),
   };
+  clients.set(ws, sub);
+
+  ws.on("message", async (raw) => {
+    try {
+      const msg = JSON.parse(String(raw)) as {
+        type: string;
+        channels?: string[];
+        gameIds?: string[];
+        contextIds?: number[];
+        minterAddresses?: string[];
+        owners?: string[];
+        settingsIds?: number[];
+        objectiveIds?: number[];
+      };
+
+      if (msg.type === "subscribe" && Array.isArray(msg.channels)) {
+        for (const ch of msg.channels) {
+          const pgChannel = CHANNEL_MAP[ch];
+          if (pgChannel) sub.channels.add(pgChannel);
+        }
+        if (Array.isArray(msg.gameIds)) {
+          for (const gid of msg.gameIds) sub.gameIds.add(String(gid));
+        }
+        if (Array.isArray(msg.contextIds)) {
+          for (const cid of msg.contextIds) sub.contextIds.add(Number(cid));
+        }
+        if (Array.isArray(msg.minterAddresses) && msg.minterAddresses.length > 0) {
+          const mintedByIds = await resolveMinterAddresses(msg.minterAddresses);
+          for (const id of mintedByIds) sub.mintedByIds.add(id);
+        }
+        if (Array.isArray(msg.owners)) {
+          for (const addr of msg.owners) sub.owners.add(normalizeAddress(String(addr)));
+        }
+        if (Array.isArray(msg.settingsIds)) {
+          for (const sid of msg.settingsIds) sub.settingsIds.add(Number(sid));
+        }
+        if (Array.isArray(msg.objectiveIds)) {
+          for (const oid of msg.objectiveIds) sub.objectiveIds.add(Number(oid));
+        }
+        ws.send(JSON.stringify({ type: "subscribed", channels: [...sub.channels] }));
+      }
+
+      if (msg.type === "unsubscribe" && Array.isArray(msg.channels)) {
+        for (const ch of msg.channels) {
+          const pgChannel = CHANNEL_MAP[ch];
+          if (pgChannel) sub.channels.delete(pgChannel);
+        }
+        ws.send(JSON.stringify({ type: "unsubscribed", channels: [...sub.channels] }));
+      }
+    } catch (e) {
+      console.error("[WebSocket] Error processing message:", e);
+      ws.send(JSON.stringify({ type: "error", message: "Invalid message format" }));
+    }
+  });
+
+  ws.on("close", () => {
+    clients.delete(ws);
+  });
 }
