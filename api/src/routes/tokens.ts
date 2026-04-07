@@ -63,6 +63,7 @@ app.get("/", async (c) => {
   const owner = parseAddress(c.req.query("owner"));
   const gameOver = c.req.query("game_over");
   const contextId = parseOptionalNonNegativeInt(c.req.query("context_id"));
+  const hasContext = c.req.query("has_context");
   const contextName = c.req.query("context_name");
   const minterAddress = parseAddress(c.req.query("minter_address"));
   const sortBy = c.req.query("sort_by");
@@ -76,6 +77,8 @@ app.get("/", async (c) => {
   if (gameOver === "true") conditions.push(eq(tokens.gameOver, true));
   if (gameOver === "false") conditions.push(eq(tokens.gameOver, false));
   if (contextId !== null) conditions.push(eq(tokens.contextId, contextId));
+  if (hasContext === "true") conditions.push(eq(tokens.hasContext, true));
+  if (hasContext === "false") conditions.push(eq(tokens.hasContext, false));
   if (contextName) conditions.push(sql`${tokens.contextData}->>'name' = ${contextName}`);
   if (minterAddress) {
     const minterId = await resolveMinterId(minterAddress);
