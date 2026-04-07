@@ -68,17 +68,47 @@ async function resolveMinterAddresses(addresses: string[]): Promise<number[]> {
 
 const clients = new Map<WebSocket, Subscription>();
 let pgClient: pg.PoolClient | null = null;
-let initialized = false;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let reconnectDelay = 1000;
+const MAX_RECONNECT_DELAY = 30_000;
+
+// Ping/pong heartbeat — detect dead connections every 30s
+const HEARTBEAT_INTERVAL = 30_000;
+const aliveClients = new WeakSet<WebSocket>();
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+
+function startHeartbeat() {
+  if (heartbeatTimer) return;
+  heartbeatTimer = setInterval(() => {
+    for (const [ws] of clients) {
+      if (!aliveClients.has(ws)) {
+        clients.delete(ws);
+        ws.terminate();
+        continue;
+      }
+      aliveClients.delete(ws);
+      ws.ping();
+    }
+  }, HEARTBEAT_INTERVAL);
+}
+
+function stopHeartbeat() {
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
+  }
+}
 
 async function initPgListener() {
-  if (initialized) return;
-  initialized = true;
+  if (pgClient) return;
 
   try {
     pgClient = await pool.connect();
     for (const channel of VALID_CHANNELS) {
       await pgClient.query(`LISTEN ${channel}`);
     }
+    reconnectDelay = 1000;
+    console.log("[WebSocket] PG listener connected");
 
     pgClient.on("notification", (msg: pg.Notification) => {
       if (!msg.channel || !msg.payload) return;
@@ -86,14 +116,47 @@ async function initPgListener() {
       broadcast(msg.channel, payload);
     });
 
-    pgClient.on("error", () => {
-      pgClient = null;
-      initialized = false;
+    pgClient.on("error", (err) => {
+      console.error("[WebSocket] PG listener error:", err.message);
+      cleanupPgClient();
+      scheduleReconnect();
     });
-  } catch {
-    pgClient = null;
-    initialized = false;
+  } catch (err) {
+    console.error("[WebSocket] PG listener connect failed:", (err as Error).message);
+    cleanupPgClient();
+    scheduleReconnect();
   }
+}
+
+function cleanupPgClient() {
+  if (pgClient) {
+    try { pgClient.release(); } catch {}
+    pgClient = null;
+  }
+}
+
+function scheduleReconnect() {
+  if (reconnectTimer) return;
+  console.log(`[WebSocket] Reconnecting PG listener in ${reconnectDelay}ms`);
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    initPgListener();
+  }, reconnectDelay);
+  reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY);
+}
+
+/** Clean up all resources (call on server shutdown) */
+export function shutdownWS() {
+  stopHeartbeat();
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  cleanupPgClient();
+  for (const [ws] of clients) {
+    ws.close();
+  }
+  clients.clear();
 }
 
 function matchesFilters(sub: Subscription, data: Record<string, unknown>): boolean {
@@ -152,6 +215,7 @@ function broadcast(channel: string, payload: unknown) {
  */
 export function handleWSConnection(ws: WebSocket) {
   initPgListener();
+  startHeartbeat();
 
   const sub: Subscription = {
     channels: new Set(),
@@ -163,6 +227,11 @@ export function handleWSConnection(ws: WebSocket) {
     objectiveIds: new Set(),
   };
   clients.set(ws, sub);
+  aliveClients.add(ws);
+
+  ws.on("pong", () => {
+    aliveClients.add(ws);
+  });
 
   ws.on("message", async (raw) => {
     try {
@@ -202,6 +271,11 @@ export function handleWSConnection(ws: WebSocket) {
           for (const oid of msg.objectiveIds) sub.objectiveIds.add(Number(oid));
         }
         ws.send(JSON.stringify({ type: "subscribed", channels: [...sub.channels] }));
+      }
+
+      if (msg.type === "ping") {
+        ws.send(JSON.stringify({ type: "pong" }));
+        return;
       }
 
       if (msg.type === "unsubscribe" && Array.isArray(msg.channels)) {

@@ -7,7 +7,7 @@ import { WebSocketServer } from "ws";
 
 import { healthCheck, getLatestIndexedBlock, shutdown } from "./db/client.js";
 import { rateLimit, cleanupTimer } from "./middleware/rateLimit.js";
-import { handleWSConnection } from "./ws/subscriptions.js";
+import { handleWSConnection, shutdownWS } from "./ws/subscriptions.js";
 
 import tokensRouter from "./routes/tokens.js";
 import gamesRouter from "./routes/games.js";
@@ -83,6 +83,7 @@ wss.on("connection", handleWSConnection);
 function handleShutdown() {
   console.log("[Denshokan API] Shutting down...");
   clearInterval(cleanupTimer);
+  shutdownWS();
   wss.close();
   server.close(async () => {
     await shutdown();
