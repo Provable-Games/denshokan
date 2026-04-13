@@ -143,24 +143,39 @@ app.get("/:id/objectives/:objectiveId", async (c) => {
   });
 });
 
-// GET /games/:id/objectives - Objectives for a game
+// GET /games/:id/objectives - Objectives for a game (paginated)
 app.get("/:id/objectives", async (c) => {
   const resolved = await resolveGameId(c.req.param("id"));
   if (!resolved) {
     return c.json({ error: "Game not found" }, 404);
   }
 
-  const results = await db
-    .select()
-    .from(objectives)
-    .where(eq(objectives.gameAddress, resolved.gameAddress))
-    .orderBy(objectives.objectiveId);
+  const limit = parseNonNegativeInt(c.req.query("limit"), 50);
+  const offset = parseNonNegativeInt(c.req.query("offset"), 0);
+  const where = eq(objectives.gameAddress, resolved.gameAddress);
+
+  const [results, countResult] = await Promise.all([
+    db
+      .select()
+      .from(objectives)
+      .where(where)
+      .orderBy(objectives.objectiveId)
+      .limit(Math.min(limit, 100))
+      .offset(Math.max(offset, 0)),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(objectives)
+      .where(where),
+  ]);
 
   return c.json({
     data: results.map((r) => ({
       ...r,
       blockNumber: r.blockNumber.toString(),
     })),
+    total: countResult[0]?.count ?? 0,
+    limit,
+    offset: Math.max(offset, 0),
   });
 });
 
@@ -199,24 +214,39 @@ app.get("/:id/settings/:settingsId", async (c) => {
   });
 });
 
-// GET /games/:id/settings - Settings for a game
+// GET /games/:id/settings - Settings for a game (paginated)
 app.get("/:id/settings", async (c) => {
   const resolved = await resolveGameId(c.req.param("id"));
   if (!resolved) {
     return c.json({ error: "Game not found" }, 404);
   }
 
-  const results = await db
-    .select()
-    .from(settings)
-    .where(eq(settings.gameAddress, resolved.gameAddress))
-    .orderBy(settings.settingsId);
+  const limit = parseNonNegativeInt(c.req.query("limit"), 50);
+  const offset = parseNonNegativeInt(c.req.query("offset"), 0);
+  const where = eq(settings.gameAddress, resolved.gameAddress);
+
+  const [results, countResult] = await Promise.all([
+    db
+      .select()
+      .from(settings)
+      .where(where)
+      .orderBy(settings.settingsId)
+      .limit(Math.min(limit, 100))
+      .offset(Math.max(offset, 0)),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(settings)
+      .where(where),
+  ]);
 
   return c.json({
     data: results.map((r) => ({
       ...r,
       blockNumber: r.blockNumber.toString(),
     })),
+    total: countResult[0]?.count ?? 0,
+    limit,
+    offset: Math.max(offset, 0),
   });
 });
 
