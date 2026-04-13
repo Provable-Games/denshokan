@@ -150,7 +150,7 @@ app.get("/:id/objectives", async (c) => {
     return c.json({ error: "Game not found" }, 404);
   }
 
-  const limit = parseNonNegativeInt(c.req.query("limit"), 50);
+  const limit = Math.min(parseNonNegativeInt(c.req.query("limit"), 50), 100);
   const offset = parseNonNegativeInt(c.req.query("offset"), 0);
   const where = eq(objectives.gameAddress, resolved.gameAddress);
 
@@ -160,8 +160,8 @@ app.get("/:id/objectives", async (c) => {
       .from(objectives)
       .where(where)
       .orderBy(objectives.objectiveId)
-      .limit(Math.min(limit, 100))
-      .offset(Math.max(offset, 0)),
+      .limit(limit)
+      .offset(offset),
     db
       .select({ count: sql<number>`count(*)::int` })
       .from(objectives)
@@ -175,7 +175,7 @@ app.get("/:id/objectives", async (c) => {
     })),
     total: countResult[0]?.count ?? 0,
     limit,
-    offset: Math.max(offset, 0),
+    offset,
   });
 });
 
@@ -221,7 +221,7 @@ app.get("/:id/settings", async (c) => {
     return c.json({ error: "Game not found" }, 404);
   }
 
-  const limit = parseNonNegativeInt(c.req.query("limit"), 50);
+  const limit = Math.min(parseNonNegativeInt(c.req.query("limit"), 50), 100);
   const offset = parseNonNegativeInt(c.req.query("offset"), 0);
   const where = eq(settings.gameAddress, resolved.gameAddress);
 
@@ -231,8 +231,8 @@ app.get("/:id/settings", async (c) => {
       .from(settings)
       .where(where)
       .orderBy(settings.settingsId)
-      .limit(Math.min(limit, 100))
-      .offset(Math.max(offset, 0)),
+      .limit(limit)
+      .offset(offset),
     db
       .select({ count: sql<number>`count(*)::int` })
       .from(settings)
@@ -246,7 +246,7 @@ app.get("/:id/settings", async (c) => {
     })),
     total: countResult[0]?.count ?? 0,
     limit,
-    offset: Math.max(offset, 0),
+    offset,
   });
 });
 
