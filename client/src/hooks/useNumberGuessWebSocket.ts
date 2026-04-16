@@ -39,7 +39,7 @@ export function useNumberGuessWebSocket(
   const [isConnected, setIsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const retryCountRef = useRef(0);
-  const retryTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
 
   // Store all mutable values in refs so the effect doesn't need to re-run

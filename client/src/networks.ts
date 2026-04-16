@@ -1,4 +1,4 @@
-import { type Chain, mainnet, sepolia } from "@starknet-react/chains";
+import { type Chain, mainnet, sepolia } from "@starknet-start/chains";
 
 export type ChainId = "SN_MAIN" | "SN_SEPOLIA";
 

@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { useAccount, useContract, useSendTransaction } from "@starknet-react/core";
+import { useAccount, useContract, useSendTransaction } from "@starknet-start/react";
 import { CairoOption, CairoOptionVariant } from "starknet";
 import { MintSaltCounter } from "@provable-games/denshokan-sdk";
 import { useChainConfig } from "../contexts/NetworkContext";

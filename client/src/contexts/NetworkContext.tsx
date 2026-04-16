@@ -1,5 +1,5 @@
 import { createContext, useContext, ReactNode, useMemo } from "react";
-import { useNetwork } from "@starknet-react/core";
+import { useNetwork } from "@starknet-start/react";
 import {
   type ChainId,
   type DenshokanChainConfig,
