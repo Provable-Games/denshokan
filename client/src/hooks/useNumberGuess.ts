@@ -4,7 +4,7 @@ import {
   useContract,
   useSendTransaction,
   useReadContract,
-} from "@starknet-react/core";
+} from "@starknet-start/react";
 import { RpcProvider, TransactionFinalityStatus, hash } from "starknet";
 import { useChainConfig } from "../contexts/NetworkContext";
 import numberGuessAbi from "../abi/numberGuess.json";
