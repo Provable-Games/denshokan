@@ -40,7 +40,7 @@ export function StarknetProvider({ children }: { children: ReactNode }) {
   const extraWallets = useMemo(() => {
     const wallets: any[] = [];
     if (cartridgeConnector) {
-      wallets.push(cartridgeConnector);
+      wallets.push(cartridgeConnector.asWalletStandard());
     }
     return wallets;
   }, []);
