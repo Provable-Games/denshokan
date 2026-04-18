@@ -56,7 +56,6 @@ import {
   decodePackedTokenId,
   parseTokenUriAttributes,
   feltToHex,
-  stringifyWithBigInt,
 } from "../src/lib/decoder.js";
 
 /** Convert bigint token ID to string for numeric column storage */
@@ -216,7 +215,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
 
   /**
    * Parse token URI attributes, compare with current DB state, and apply
-   * changes to tokens, score_history, game_stats, and token_events tables.
+   * changes to tokens, score_history, and game_stats tables.
    */
   async function applyTokenUriChanges(
     db: ReturnType<typeof useDrizzleStorage>["db"] | ReturnType<typeof drizzle>,
@@ -281,20 +280,6 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
           eventIndex: ctx.eventIndex,
         })
         .onConflictDoNothing();
-
-      // Log event for audit trail
-      await db
-        .insert(schema.tokenEvents)
-        .values({
-          tokenId: toId(tokenId),
-          eventType: "score_update",
-          eventData: stringifyWithBigInt({ tokenId, score: parsed.score }),
-          blockNumber: ctx.blockNumber,
-          blockTimestamp: ctx.blockTimestamp,
-          transactionHash: ctx.transactionHash,
-          eventIndex: ctx.eventIndex,
-        })
-        .onConflictDoNothing();
     }
 
     // Game over change detection (false → true only)
@@ -312,39 +297,11 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
           })
           .where(eq(schema.gameStats.gameId, token.gameId));
       }
-
-      // Log event for audit trail
-      await db
-        .insert(schema.tokenEvents)
-        .values({
-          tokenId: toId(tokenId),
-          eventType: "game_over",
-          eventData: stringifyWithBigInt({ tokenId }),
-          blockNumber: ctx.blockNumber,
-          blockTimestamp: ctx.blockTimestamp,
-          transactionHash: ctx.transactionHash,
-          eventIndex: ctx.eventIndex,
-        })
-        .onConflictDoNothing();
     }
 
     // Completed objectives change detection (false → true only)
     if (parsed.completedObjectives === true && token && !token.completedAllObjectives) {
       tokenUpdate.completedAllObjectives = true;
-
-      // Log event for audit trail
-      await db
-        .insert(schema.tokenEvents)
-        .values({
-          tokenId: toId(tokenId),
-          eventType: "completed_objective",
-          eventData: stringifyWithBigInt({ tokenId }),
-          blockNumber: ctx.blockNumber,
-          blockTimestamp: ctx.blockTimestamp,
-          transactionHash: ctx.transactionHash,
-          eventIndex: ctx.eventIndex,
-        })
-        .onConflictDoNothing();
     }
 
     // Apply all token updates in a single statement
@@ -431,9 +388,6 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
           `${blk} Processing ${events.length} events`
         );
       }
-
-      // Batch collectors — flush once at end of block
-      const pendingTokenEvents: (typeof schema.tokenEvents.$inferInsert)[] = [];
 
       for (const event of events) {
         const keys = event.keys;
@@ -543,17 +497,6 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                   })
                   .where(eq(schema.tokens.tokenId, toId(decoded.tokenId)));
               }
-
-              // Batch audit event
-              pendingTokenEvents.push({
-                tokenId: toId(decoded.tokenId),
-                eventType: isMint ? "mint" : "transfer",
-                eventData: stringifyWithBigInt(decoded),
-                blockNumber,
-                blockTimestamp,
-                transactionHash,
-                eventIndex,
-              });
 
               break;
             }
@@ -798,13 +741,6 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
         }
       }
 
-      // Flush batched token events in a single INSERT
-      if (pendingTokenEvents.length > 0) {
-        await db
-          .insert(schema.tokenEvents)
-          .values(pendingTokenEvents)
-          .onConflictDoNothing();
-      }
     },
   });
 }

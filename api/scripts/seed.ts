@@ -4,7 +4,7 @@
  * Usage: npx tsx scripts/seed.ts [--count 10000] [--clean]
  *
  * Seeds tables in dependency order:
- *   games -> minters -> tokens -> score_history -> token_events -> game_stats
+ *   games -> minters -> tokens -> score_history -> game_stats
  */
 
 import { db, pool } from "../src/db/client.js";
@@ -13,9 +13,7 @@ import {
   minters,
   tokens,
   scoreHistory,
-  tokenEvents,
   gameStats,
-  gameLeaderboards,
   objectives,
   settings,
 } from "../src/db/schema.js";
@@ -91,16 +89,6 @@ async function batchInsert<T extends Record<string, unknown>>(
 const GAME_COUNT = 10;
 const MINTER_COUNT = 5;
 const OWNER_COUNT = 100;
-
-const EVENT_TYPES = [
-  "Transfer",
-  "ScoreUpdate",
-  "GameOver",
-  "TokenPlayerNameUpdate",
-  "TokenClientUrlUpdate",
-  "MinterRegistryUpdate",
-  "GameRegistryUpdate",
-];
 
 function generateGames() {
   const gameNames = [
@@ -212,28 +200,6 @@ function generateScoreHistory(tokenRows: TokenRow[]) {
   return rows;
 }
 
-function generateTokenEvents(tokenRows: TokenRow[]) {
-  const rows = [];
-  for (const t of tokenRows) {
-    const count = randomInt(3, 6);
-    for (let j = 0; j < count; j++) {
-      const ts = new Date(t.lastUpdatedAt.getTime() - j * randomInt(60000, 3600000));
-      const eventType =
-        j === 0 ? "Transfer" : randomPick(EVENT_TYPES);
-      rows.push({
-        tokenId: t.tokenId,
-        eventType,
-        eventData: JSON.stringify({ index: j }),
-        blockNumber: BigInt(randomInt(100000, 300000)),
-        blockTimestamp: ts,
-        transactionHash: randomHex(32),
-        eventIndex: j,
-      });
-    }
-  }
-  return rows;
-}
-
 function generateGameStats(
   gameIds: number[],
   tokenRows: TokenRow[],
@@ -263,9 +229,7 @@ async function main() {
   if (CLEAN) {
     console.log("Cleaning existing data...");
     // Truncate in reverse dependency order
-    await db.delete(gameLeaderboards);
     await db.delete(gameStats);
-    await db.delete(tokenEvents);
     await db.delete(scoreHistory);
     await db.delete(tokens);
     await db.delete(objectives);
@@ -298,12 +262,7 @@ async function main() {
   await batchInsert(scoreHistory, scoreRows, 1000);
   console.log(`  score_history: ${scoreRows.length}`);
 
-  // 5. Token events
-  const eventRows = generateTokenEvents(tokenRows);
-  await batchInsert(tokenEvents, eventRows, 1000);
-  console.log(`  token_events: ${eventRows.length}`);
-
-  // 6. Game stats
+  // 5. Game stats
   const statsRows = generateGameStats(gameIds, tokenRows);
   await db.insert(gameStats).values(statsRows);
   console.log(`  game_stats: ${statsRows.length}`);
