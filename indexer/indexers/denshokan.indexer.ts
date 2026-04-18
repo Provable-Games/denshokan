@@ -34,7 +34,7 @@ import {
   drizzleStorage,
   useDrizzleStorage,
 } from "@apibara/plugin-drizzle";
-import { eq, sql, and, ne } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { ApibaraRuntimeConfig } from "apibara/types";
 import { RpcProvider, Contract } from "starknet";
 import { readFileSync } from "fs";
@@ -415,6 +415,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
       const logger = useLogger();
       const { db } = useDrizzleStorage();
       const { events, header } = block;
+      const isLive = production === "live";
 
       if (!header) {
         logger.warn("No header in block, skipping");
@@ -430,6 +431,9 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
           `${blk} Processing ${events.length} events`
         );
       }
+
+      // Batch collectors — flush once at end of block
+      const pendingTokenEvents: (typeof schema.tokenEvents.$inferInsert)[] = [];
 
       for (const event of events) {
         const keys = event.keys;
@@ -488,23 +492,23 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                   },
                 });
 
-                // Queue async token_uri fetch (non-blocking)
-                queueUriFetch(decoded.tokenId);
+                // Only queue URI fetches when live — during reindex the
+                // connect:after hook handles backfilling unfetched URIs
+                if (isLive) {
+                  queueUriFetch(decoded.tokenId);
+                }
 
-                // Check if this is a new unique player for this game
-                const existingPlayerTokens = await db
-                  .select({ count: sql<number>`count(*)` })
-                  .from(schema.tokens)
-                  .where(
-                    and(
-                      eq(schema.tokens.gameId, packed.gameId),
-                      eq(schema.tokens.ownerAddress, decoded.to),
-                      ne(schema.tokens.tokenId, toId(decoded.tokenId))
-                    )
-                  );
-                const isNewPlayer = existingPlayerTokens[0].count === 0;
+                // Use SQL subquery to atomically check+increment unique players,
+                // avoiding a separate SELECT round-trip
+                const isNewPlayerSubquery = sql<number>`
+                  CASE WHEN NOT EXISTS (
+                    SELECT 1 FROM tokens
+                    WHERE game_id = ${packed.gameId}
+                      AND owner_address = ${decoded.to}
+                      AND token_id != ${toId(decoded.tokenId)}
+                  ) THEN 1 ELSE 0 END
+                `;
 
-                // Update game stats: increment totalTokens, activeGames, and uniquePlayers if new
                 await db
                   .insert(schema.gameStats)
                   .values({
@@ -512,7 +516,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                     totalTokens: 1,
                     activeGames: 1,
                     completedGames: 0,
-                    uniquePlayers: isNewPlayer ? 1 : 0,
+                    uniquePlayers: 1,
                     lastUpdated: blockTimestamp,
                   })
                   .onConflictDoUpdate({
@@ -520,9 +524,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                     set: {
                       totalTokens: sql`${schema.gameStats.totalTokens} + 1`,
                       activeGames: sql`${schema.gameStats.activeGames} + 1`,
-                      uniquePlayers: isNewPlayer
-                        ? sql`${schema.gameStats.uniquePlayers} + 1`
-                        : schema.gameStats.uniquePlayers,
+                      uniquePlayers: sql`${schema.gameStats.uniquePlayers} + (${isNewPlayerSubquery})`,
                       lastUpdated: blockTimestamp,
                     },
                   });
@@ -542,8 +544,8 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                   .where(eq(schema.tokens.tokenId, toId(decoded.tokenId)));
               }
 
-              // Log event for audit trail
-              await db.insert(schema.tokenEvents).values({
+              // Batch audit event
+              pendingTokenEvents.push({
                 tokenId: toId(decoded.tokenId),
                 eventType: isMint ? "mint" : "transfer",
                 eventData: stringifyWithBigInt(decoded),
@@ -551,7 +553,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                 blockTimestamp,
                 transactionHash,
                 eventIndex,
-              }).onConflictDoNothing();
+              });
 
               break;
             }
@@ -794,6 +796,14 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
           // Don't re-throw - let the indexer continue processing other events
           // Reorgs are handled automatically by the Drizzle plugin via message:invalidate hook
         }
+      }
+
+      // Flush batched token events in a single INSERT
+      if (pendingTokenEvents.length > 0) {
+        await db
+          .insert(schema.tokenEvents)
+          .values(pendingTokenEvents)
+          .onConflictDoNothing();
       }
     },
   });
