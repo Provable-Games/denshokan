@@ -2,10 +2,11 @@ FROM node:22-alpine
 
 WORKDIR /app
 
-# Copy package files
+# Copy package files and patches
 COPY package.json package-lock.json ./
+COPY patches/ ./patches/
 
-# Install dependencies
+# Install dependencies (postinstall applies patches)
 RUN npm ci
 
 # Copy source
