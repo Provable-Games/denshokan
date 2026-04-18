@@ -34,7 +34,7 @@ import {
   drizzleStorage,
   useDrizzleStorage,
 } from "@apibara/plugin-drizzle";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { ApibaraRuntimeConfig } from "apibara/types";
 import { RpcProvider, Contract } from "starknet";
 import { readFileSync } from "fs";
@@ -215,7 +215,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
 
   /**
    * Parse token URI attributes, compare with current DB state, and apply
-   * changes to tokens, score_history, and game_stats tables.
+   * changes to tokens and score_history tables.
    */
   async function applyTokenUriChanges(
     db: ReturnType<typeof useDrizzleStorage>["db"] | ReturnType<typeof drizzle>,
@@ -285,18 +285,6 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
     // Game over change detection (false → true only)
     if (parsed.gameOver === true && token && !token.gameOver) {
       tokenUpdate.gameOver = true;
-
-      // Update game stats: decrement activeGames, increment completedGames
-      if (token.gameId) {
-        await db
-          .update(schema.gameStats)
-          .set({
-            activeGames: sql`GREATEST(${schema.gameStats.activeGames} - 1, 0)`,
-            completedGames: sql`${schema.gameStats.completedGames} + 1`,
-            lastUpdated: ctx.blockTimestamp,
-          })
-          .where(eq(schema.gameStats.gameId, token.gameId));
-      }
     }
 
     // Completed objectives change detection (false → true only)
@@ -451,37 +439,6 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                 if (isLive) {
                   queueUriFetch(decoded.tokenId);
                 }
-
-                // Use SQL subquery to atomically check+increment unique players,
-                // avoiding a separate SELECT round-trip
-                const isNewPlayerSubquery = sql<number>`
-                  CASE WHEN NOT EXISTS (
-                    SELECT 1 FROM tokens
-                    WHERE game_id = ${packed.gameId}
-                      AND owner_address = ${decoded.to}
-                      AND token_id != ${toId(decoded.tokenId)}
-                  ) THEN 1 ELSE 0 END
-                `;
-
-                await db
-                  .insert(schema.gameStats)
-                  .values({
-                    gameId: packed.gameId,
-                    totalTokens: 1,
-                    activeGames: 1,
-                    completedGames: 0,
-                    uniquePlayers: 1,
-                    lastUpdated: blockTimestamp,
-                  })
-                  .onConflictDoUpdate({
-                    target: schema.gameStats.gameId,
-                    set: {
-                      totalTokens: sql`${schema.gameStats.totalTokens} + 1`,
-                      activeGames: sql`${schema.gameStats.activeGames} + 1`,
-                      uniquePlayers: sql`${schema.gameStats.uniquePlayers} + (${isNewPlayerSubquery})`,
-                      lastUpdated: blockTimestamp,
-                    },
-                  });
               } else {
                 // Regular transfer: update owner
                 logger.info(
@@ -602,16 +559,6 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                   lastUpdatedAt: blockTimestamp,
                 },
               });
-
-              // Ensure game_stats row exists so the API doesn't 404 before first mint
-              await db.insert(schema.gameStats).values({
-                gameId: decoded.gameId,
-                totalTokens: 0,
-                activeGames: 0,
-                completedGames: 0,
-                uniquePlayers: 0,
-                lastUpdated: blockTimestamp,
-              }).onConflictDoNothing();
 
               break;
             }

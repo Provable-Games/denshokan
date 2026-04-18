@@ -4,7 +4,7 @@
  * Usage: npx tsx scripts/seed.ts [--count 10000] [--clean]
  *
  * Seeds tables in dependency order:
- *   games -> minters -> tokens -> score_history -> game_stats
+ *   games -> minters -> tokens -> score_history
  */
 
 import { db, pool } from "../src/db/client.js";
@@ -13,7 +13,6 @@ import {
   minters,
   tokens,
   scoreHistory,
-  gameStats,
   objectives,
   settings,
 } from "../src/db/schema.js";
@@ -200,24 +199,6 @@ function generateScoreHistory(tokenRows: TokenRow[]) {
   return rows;
 }
 
-function generateGameStats(
-  gameIds: number[],
-  tokenRows: TokenRow[],
-) {
-  return gameIds.map((gid) => {
-    const gameTokens = tokenRows.filter((t) => t.gameId === gid);
-    const completed = gameTokens.filter((t) => t.gameOver).length;
-    const uniqueOwners = new Set(gameTokens.map((t) => t.ownerAddress)).size;
-    return {
-      gameId: gid,
-      totalTokens: gameTokens.length,
-      completedGames: completed,
-      activeGames: gameTokens.length - completed,
-      uniquePlayers: uniqueOwners,
-    };
-  });
-}
-
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -229,7 +210,6 @@ async function main() {
   if (CLEAN) {
     console.log("Cleaning existing data...");
     // Truncate in reverse dependency order
-    await db.delete(gameStats);
     await db.delete(scoreHistory);
     await db.delete(tokens);
     await db.delete(objectives);
@@ -261,11 +241,6 @@ async function main() {
   const scoreRows = generateScoreHistory(tokenRows);
   await batchInsert(scoreHistory, scoreRows, 1000);
   console.log(`  score_history: ${scoreRows.length}`);
-
-  // 5. Game stats
-  const statsRows = generateGameStats(gameIds, tokenRows);
-  await db.insert(gameStats).values(statsRows);
-  console.log(`  game_stats: ${statsRows.length}`);
 
   const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
   console.log(`\nSeeding complete in ${elapsed}s.`);

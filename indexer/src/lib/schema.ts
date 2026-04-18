@@ -11,9 +11,8 @@
  * 2. score_history - historical score snapshots for charts/analytics
  * 3. games - game registry cache
  * 4. minters - minter registry cache
- * 5. game_stats - aggregated per-game statistics
- * 6. objectives - game objective definitions
- * 7. settings - game settings definitions
+ * 5. objectives - game objective definitions
+ * 6. settings - game settings definitions
  */
 
 import {
@@ -201,24 +200,6 @@ export const minters = pgTable(
 );
 
 /**
- * Game Statistics table
- *
- * Aggregated statistics per game, refreshed periodically.
- */
-export const gameStats = pgTable(
-  "game_stats",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    gameId: integer("game_id").notNull().unique(),
-    totalTokens: integer("total_tokens").notNull().default(0),
-    completedGames: integer("completed_games").notNull().default(0),
-    activeGames: integer("active_games").notNull().default(0),
-    uniquePlayers: integer("unique_players").notNull().default(0),
-    lastUpdated: timestamp("last_updated").defaultNow(),
-  }
-);
-
-/**
  * Objectives table - game objective definitions
  *
  * Stores objective definitions created via ObjectiveCreated events.
@@ -273,7 +254,6 @@ export const schema = {
   scoreHistory,
   games,
   minters,
-  gameStats,
   objectives,
   settings,
 };

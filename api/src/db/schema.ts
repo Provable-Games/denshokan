@@ -4,7 +4,6 @@ export {
   scoreHistory,
   games,
   minters,
-  gameStats,
   objectives,
   settings,
 } from "@denshokan/schema";
