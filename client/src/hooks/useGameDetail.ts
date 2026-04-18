@@ -9,7 +9,6 @@ export function useGameDetail(gameId: number) {
 
   return {
     game,
-    stats: null,
     isLoading,
     error,
     refetch,
