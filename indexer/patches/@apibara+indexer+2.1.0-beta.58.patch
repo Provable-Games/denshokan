@@ -1,0 +1,26 @@
+diff --git a/node_modules/@apibara/indexer/dist/index.cjs b/node_modules/@apibara/indexer/dist/index.cjs
+index 05b094e..b8a7eaa 100644
+--- a/node_modules/@apibara/indexer/dist/index.cjs
++++ b/node_modules/@apibara/indexer/dist/index.cjs
+@@ -137,7 +137,7 @@ async function runWithReconnect(client, indexer, options = {}) {
+         return;
+       if (error instanceof protocol.ClientError || error instanceof protocol.ServerError) {
+         const isServerError = error instanceof protocol.ServerError;
+-        if (error.code === protocol.Status.INTERNAL) {
++        if ([protocol.Status.INTERNAL, protocol.Status.UNAVAILABLE, protocol.Status.DEADLINE_EXCEEDED, protocol.Status.RESOURCE_EXHAUSTED].includes(error.code)) {
+           if (retryCount < maxRetries) {
+             consola__default.error(
+               `Internal ${isServerError ? "server" : "client"} error: ${error.message}`
+diff --git a/node_modules/@apibara/indexer/dist/index.mjs b/node_modules/@apibara/indexer/dist/index.mjs
+index f4f1a5b..904e5b6 100644
+--- a/node_modules/@apibara/indexer/dist/index.mjs
++++ b/node_modules/@apibara/indexer/dist/index.mjs
+@@ -130,7 +130,7 @@ async function runWithReconnect(client, indexer, options = {}) {
+         return;
+       if (error instanceof ClientError || error instanceof ServerError) {
+         const isServerError = error instanceof ServerError;
+-        if (error.code === Status.INTERNAL) {
++        if ([Status.INTERNAL, Status.UNAVAILABLE, Status.DEADLINE_EXCEEDED, Status.RESOURCE_EXHAUSTED].includes(error.code)) {
+           if (retryCount < maxRetries) {
+             consola.error(
+               `Internal ${isServerError ? "server" : "client"} error: ${error.message}`
