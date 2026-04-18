@@ -11,7 +11,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
-    "postinstall": "npx patch-package"
+    "postinstall": "test -d node_modules/@apibara/indexer && npx patch-package || true"
   },
   "keywords": [
     "starknet",
