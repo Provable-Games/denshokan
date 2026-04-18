@@ -34,7 +34,7 @@ import {
   drizzleStorage,
   useDrizzleStorage,
 } from "@apibara/plugin-drizzle";
-import { eq, sql, and, ne } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { ApibaraRuntimeConfig } from "apibara/types";
 import { RpcProvider, Contract } from "starknet";
 import { readFileSync } from "fs";
@@ -56,7 +56,6 @@ import {
   decodePackedTokenId,
   parseTokenUriAttributes,
   feltToHex,
-  stringifyWithBigInt,
 } from "../src/lib/decoder.js";
 
 /** Convert bigint token ID to string for numeric column storage */
@@ -216,7 +215,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
 
   /**
    * Parse token URI attributes, compare with current DB state, and apply
-   * changes to tokens, score_history, game_stats, and token_events tables.
+   * changes to tokens and score_history tables.
    */
   async function applyTokenUriChanges(
     db: ReturnType<typeof useDrizzleStorage>["db"] | ReturnType<typeof drizzle>,
@@ -281,70 +280,16 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
           eventIndex: ctx.eventIndex,
         })
         .onConflictDoNothing();
-
-      // Log event for audit trail
-      await db
-        .insert(schema.tokenEvents)
-        .values({
-          tokenId: toId(tokenId),
-          eventType: "score_update",
-          eventData: stringifyWithBigInt({ tokenId, score: parsed.score }),
-          blockNumber: ctx.blockNumber,
-          blockTimestamp: ctx.blockTimestamp,
-          transactionHash: ctx.transactionHash,
-          eventIndex: ctx.eventIndex,
-        })
-        .onConflictDoNothing();
     }
 
     // Game over change detection (false → true only)
     if (parsed.gameOver === true && token && !token.gameOver) {
       tokenUpdate.gameOver = true;
-
-      // Update game stats: decrement activeGames, increment completedGames
-      if (token.gameId) {
-        await db
-          .update(schema.gameStats)
-          .set({
-            activeGames: sql`GREATEST(${schema.gameStats.activeGames} - 1, 0)`,
-            completedGames: sql`${schema.gameStats.completedGames} + 1`,
-            lastUpdated: ctx.blockTimestamp,
-          })
-          .where(eq(schema.gameStats.gameId, token.gameId));
-      }
-
-      // Log event for audit trail
-      await db
-        .insert(schema.tokenEvents)
-        .values({
-          tokenId: toId(tokenId),
-          eventType: "game_over",
-          eventData: stringifyWithBigInt({ tokenId }),
-          blockNumber: ctx.blockNumber,
-          blockTimestamp: ctx.blockTimestamp,
-          transactionHash: ctx.transactionHash,
-          eventIndex: ctx.eventIndex,
-        })
-        .onConflictDoNothing();
     }
 
     // Completed objectives change detection (false → true only)
     if (parsed.completedObjectives === true && token && !token.completedAllObjectives) {
       tokenUpdate.completedAllObjectives = true;
-
-      // Log event for audit trail
-      await db
-        .insert(schema.tokenEvents)
-        .values({
-          tokenId: toId(tokenId),
-          eventType: "completed_objective",
-          eventData: stringifyWithBigInt({ tokenId }),
-          blockNumber: ctx.blockNumber,
-          blockTimestamp: ctx.blockTimestamp,
-          transactionHash: ctx.transactionHash,
-          eventIndex: ctx.eventIndex,
-        })
-        .onConflictDoNothing();
     }
 
     // Apply all token updates in a single statement
@@ -415,6 +360,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
       const logger = useLogger();
       const { db } = useDrizzleStorage();
       const { events, header } = block;
+      const isLive = production === "live";
 
       if (!header) {
         logger.warn("No header in block, skipping");
@@ -488,44 +434,11 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                   },
                 });
 
-                // Queue async token_uri fetch (non-blocking)
-                queueUriFetch(decoded.tokenId);
-
-                // Check if this is a new unique player for this game
-                const existingPlayerTokens = await db
-                  .select({ count: sql<number>`count(*)` })
-                  .from(schema.tokens)
-                  .where(
-                    and(
-                      eq(schema.tokens.gameId, packed.gameId),
-                      eq(schema.tokens.ownerAddress, decoded.to),
-                      ne(schema.tokens.tokenId, toId(decoded.tokenId))
-                    )
-                  );
-                const isNewPlayer = existingPlayerTokens[0].count === 0;
-
-                // Update game stats: increment totalTokens, activeGames, and uniquePlayers if new
-                await db
-                  .insert(schema.gameStats)
-                  .values({
-                    gameId: packed.gameId,
-                    totalTokens: 1,
-                    activeGames: 1,
-                    completedGames: 0,
-                    uniquePlayers: isNewPlayer ? 1 : 0,
-                    lastUpdated: blockTimestamp,
-                  })
-                  .onConflictDoUpdate({
-                    target: schema.gameStats.gameId,
-                    set: {
-                      totalTokens: sql`${schema.gameStats.totalTokens} + 1`,
-                      activeGames: sql`${schema.gameStats.activeGames} + 1`,
-                      uniquePlayers: isNewPlayer
-                        ? sql`${schema.gameStats.uniquePlayers} + 1`
-                        : schema.gameStats.uniquePlayers,
-                      lastUpdated: blockTimestamp,
-                    },
-                  });
+                // Only queue URI fetches when live — during reindex the
+                // connect:after hook handles backfilling unfetched URIs
+                if (isLive) {
+                  queueUriFetch(decoded.tokenId);
+                }
               } else {
                 // Regular transfer: update owner
                 logger.info(
@@ -541,17 +454,6 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                   })
                   .where(eq(schema.tokens.tokenId, toId(decoded.tokenId)));
               }
-
-              // Log event for audit trail
-              await db.insert(schema.tokenEvents).values({
-                tokenId: toId(decoded.tokenId),
-                eventType: isMint ? "mint" : "transfer",
-                eventData: stringifyWithBigInt(decoded),
-                blockNumber,
-                blockTimestamp,
-                transactionHash,
-                eventIndex,
-              }).onConflictDoNothing();
 
               break;
             }
@@ -657,16 +559,6 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                   lastUpdatedAt: blockTimestamp,
                 },
               });
-
-              // Ensure game_stats row exists so the API doesn't 404 before first mint
-              await db.insert(schema.gameStats).values({
-                gameId: decoded.gameId,
-                totalTokens: 0,
-                activeGames: 0,
-                completedGames: 0,
-                uniquePlayers: 0,
-                lastUpdated: blockTimestamp,
-              }).onConflictDoNothing();
 
               break;
             }
@@ -795,6 +687,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
           // Reorgs are handled automatically by the Drizzle plugin via message:invalidate hook
         }
       }
+
     },
   });
 }

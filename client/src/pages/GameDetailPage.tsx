@@ -3,16 +3,12 @@ import { useParams, useNavigate } from "react-router-dom";
 import {
   Box,
   Typography,
-  Grid,
-  Card,
-  CardContent,
   Button,
   Stack,
   Link,
   Collapse,
 } from "@mui/material";
-import { Token, PlayArrow, CheckCircle, People, ExpandMore } from "@mui/icons-material";
-import { motion } from "framer-motion";
+import { ExpandMore } from "@mui/icons-material";
 import {
   useScoreUpdates,
   useMintEvents,
@@ -26,14 +22,12 @@ import { StatCardSkeletonGrid } from "../components/common/SkeletonCard";
 import LiveIndicator from "../components/common/LiveIndicator";
 import { useState } from "react";
 
-const statColors = ["#7C4DFF", "#FF9E40", "#66BB6A", "#42A5F5"];
-const statIcons = [<Token key="t" />, <PlayArrow key="p" />, <CheckCircle key="c" />, <People key="pe" />];
 
 export default function GameDetailPage() {
   const { gameId } = useParams<{ gameId: string }>();
   const navigate = useNavigate();
   const id = parseInt(gameId || "0");
-  const { game, stats, isLoading, error, refetch } = useGameDetail(id);
+  const { game, isLoading, error, refetch } = useGameDetail(id);
   const { chainConfig } = useChainConfig();
   const { isConnected } = useConnectionStatus();
   const [configOpen, setConfigOpen] = useState(false);
@@ -95,15 +89,6 @@ export default function GameDetailPage() {
     );
   }
 
-  const statEntries = stats
-    ? [
-        { label: "Total Tokens", value: stats.totalTokens },
-        { label: "Active Games", value: stats.activeGames },
-        { label: "Completed", value: stats.completedGames },
-        { label: "Players", value: stats.uniquePlayers },
-      ]
-    : [];
-
   return (
     <Box>
       <Typography variant="h3" gutterBottom>
@@ -151,41 +136,6 @@ export default function GameDetailPage() {
         </Button>
       </Stack>
 
-      {stats && (
-        <>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
-            <Typography variant="h5">Stats</Typography>
-            {isConnected && <LiveIndicator />}
-          </Box>
-          <Grid container spacing={2} sx={{ mb: 4 }}>
-            {statEntries.map(({ label, value }, i) => (
-              <Grid size={{ xs: 6, sm: 3 }} key={label}>
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.08 }}
-                >
-                  <Card
-                    variant="outlined"
-                    sx={{
-                      borderTop: `3px solid ${statColors[i]}`,
-                      background: `linear-gradient(180deg, ${statColors[i]}08, transparent)`,
-                    }}
-                  >
-                    <CardContent sx={{ textAlign: "center" }}>
-                      <Box sx={{ color: statColors[i], mb: 0.5, "& .MuiSvgIcon-root": { fontSize: 28 } }}>
-                        {statIcons[i]}
-                      </Box>
-                      <Typography variant="h4">{value}</Typography>
-                      <Typography color="text.secondary">{label}</Typography>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              </Grid>
-            ))}
-          </Grid>
-        </>
-      )}
 
       {/* Game Configuration Section — collapsible */}
       {game.contractAddress && (

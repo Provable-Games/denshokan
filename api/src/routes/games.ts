@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { eq, desc, asc, sql, and } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { games, gameStats, objectives, settings } from "../db/schema.js";
+import { games, objectives, settings } from "../db/schema.js";
 import { parseGameId, parseNonNegativeInt } from "../utils/validation.js";
 
 const app = new Hono();
@@ -86,26 +86,6 @@ app.get("/", async (c) => {
     limit,
     offset: Math.max(offset, 0),
   });
-});
-
-// GET /games/:id/stats - Game statistics
-app.get("/:id/stats", async (c) => {
-  const resolved = await resolveGameId(c.req.param("id"));
-  if (!resolved) {
-    return c.json({ error: "Game not found" }, 404);
-  }
-
-  const result = await db
-    .select()
-    .from(gameStats)
-    .where(eq(gameStats.gameId, resolved.gameId))
-    .limit(1);
-
-  if (result.length === 0) {
-    return c.json({ error: "Game stats not found" }, 404);
-  }
-
-  return c.json({ data: result[0] });
 });
 
 // GET /games/:id/objectives/:objectiveId - Single objective

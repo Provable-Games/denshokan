@@ -11,11 +11,8 @@
  * 2. score_history - historical score snapshots for charts/analytics
  * 3. games - game registry cache
  * 4. minters - minter registry cache
- * 5. token_events - raw event audit log
- * 6. game_leaderboards - pre-computed leaderboard data
- * 7. game_stats - aggregated per-game statistics
- * 8. objectives - game objective definitions
- * 9. settings - game settings definitions
+ * 5. objectives - game objective definitions
+ * 6. settings - game settings definitions
  */
 
 import {
@@ -203,87 +200,6 @@ export const minters = pgTable(
 );
 
 /**
- * Token Events table - raw event log for debugging and audit
- *
- * Stores all processed events with decoded data.
- * Useful for debugging and historical analysis.
- */
-export const tokenEvents = pgTable(
-  "token_events",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    tokenId: numeric("token_id").notNull(),
-    eventType: text("event_type").notNull(),
-    eventData: text("event_data").notNull(), // JSON encoded event data
-    blockNumber: bigint("block_number", { mode: "bigint" }).notNull(),
-    blockTimestamp: timestamp("block_timestamp").notNull(),
-    transactionHash: text("transaction_hash").notNull(),
-    eventIndex: integer("event_index").notNull(),
-  },
-  (table) => [
-    // Unique constraint for idempotent re-indexing
-    uniqueIndex("token_events_block_tx_event_idx").on(
-      table.blockNumber,
-      table.transactionHash,
-      table.eventIndex
-    ),
-    // Token event history
-    index("token_events_token_idx").on(table.tokenId),
-    index("token_events_token_time_idx").on(table.tokenId, table.blockTimestamp),
-    // Filter by event type, sorted by time (covers GET /activity?type=X)
-    index("token_events_type_time_idx").on(table.eventType, table.blockTimestamp),
-    // Recent events (unfiltered GET /activity)
-    index("token_events_time_idx").on(table.blockTimestamp),
-  ]
-);
-
-/**
- * Game Leaderboards materialized view support table
- *
- * Pre-computed leaderboard data that can be refreshed periodically.
- * More efficient than computing ranks on every query.
- */
-export const gameLeaderboards = pgTable(
-  "game_leaderboards",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    gameId: integer("game_id").notNull(),
-    tokenId: numeric("token_id").notNull(),
-    ownerAddress: text("owner_address").notNull(),
-    playerName: text("player_name"),
-    score: bigint("score", { mode: "bigint" }).notNull(),
-    rank: integer("rank").notNull(),
-    lastUpdated: timestamp("last_updated").defaultNow(),
-  },
-  (table) => [
-    // Unique constraint on game + rank
-    uniqueIndex("game_leaderboards_game_rank_idx").on(table.gameId, table.rank),
-    // Token lookup
-    index("game_leaderboards_token_idx").on(table.tokenId),
-    // Game leaderboard query
-    index("game_leaderboards_game_score_idx").on(table.gameId, table.score),
-  ]
-);
-
-/**
- * Game Statistics table
- *
- * Aggregated statistics per game, refreshed periodically.
- */
-export const gameStats = pgTable(
-  "game_stats",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    gameId: integer("game_id").notNull().unique(),
-    totalTokens: integer("total_tokens").notNull().default(0),
-    completedGames: integer("completed_games").notNull().default(0),
-    activeGames: integer("active_games").notNull().default(0),
-    uniquePlayers: integer("unique_players").notNull().default(0),
-    lastUpdated: timestamp("last_updated").defaultNow(),
-  }
-);
-
-/**
  * Objectives table - game objective definitions
  *
  * Stores objective definitions created via ObjectiveCreated events.
@@ -338,9 +254,6 @@ export const schema = {
   scoreHistory,
   games,
   minters,
-  tokenEvents,
-  gameLeaderboards,
-  gameStats,
   objectives,
   settings,
 };
