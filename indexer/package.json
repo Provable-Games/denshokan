@@ -24,10 +24,10 @@
   "license": "MIT",
   "description": "Game Components (Denshokan) token event indexer using Apibara with PostgreSQL persistence",
   "dependencies": {
-    "apibara": "next",
-    "@apibara/indexer": "next",
-    "@apibara/starknet": "next",
-    "@apibara/plugin-drizzle": "next",
+    "apibara": "2.1.0-beta.57",
+    "@apibara/indexer": "2.1.0-beta.58",
+    "@apibara/starknet": "2.1.0-beta.58",
+    "@apibara/plugin-drizzle": "2.1.0-beta.57",
     "drizzle-orm": "^0.38.0",
     "pg": "^8.13.0",
     "starknet": "^9.2.1"
