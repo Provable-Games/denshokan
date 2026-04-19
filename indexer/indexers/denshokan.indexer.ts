@@ -116,88 +116,16 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
   });
   const denshokanContract = new Contract({ abi: DENSHOKAN_ABI, address: normalizedAddress, providerOrAccount: starknetProvider });
 
-  // ============ Async URI Fetch Queue ============
-  const URI_FETCH_CONCURRENCY = 2;
-  const URI_FETCH_MAX_RETRIES = 3;
-  const URI_FETCH_BASE_DELAY_MS = 2000;
-  const URI_FETCH_BATCH_DELAY_MS = 1000; // pause between batches to avoid saturating the event loop
+  // ============ URI Fetch Helpers ============
+  // Bulk URI backfill runs as a separate process (scripts/fetch-token-uris.ts)
+  // to avoid saturating the indexer's event loop and dropping the gRPC stream.
+  // Only live MetadataUpdate events fetch URIs inline (single call, infrequent).
 
   interface BlockContext {
     blockNumber: bigint;
     blockTimestamp: Date;
     transactionHash: string;
     eventIndex: number;
-  }
-
-  interface UriFetchItem {
-    tokenId: bigint;
-    blockContext?: BlockContext;
-    retries: number;
-  }
-
-  const uriFetchQueue: UriFetchItem[] = [];
-  let uriFetchRunning = false;
-
-  async function processUriFetchQueue(): Promise<void> {
-    if (uriFetchRunning || uriFetchQueue.length === 0) return;
-    uriFetchRunning = true;
-
-    while (uriFetchQueue.length > 0) {
-      const batch = uriFetchQueue.splice(0, URI_FETCH_CONCURRENCY);
-      const results = await Promise.allSettled(
-        batch.map((item) => fetchTokenUri(item.tokenId, item.blockContext))
-      );
-      for (let i = 0; i < results.length; i++) {
-        if (results[i].status === "rejected") {
-          const item = batch[i];
-          if (item.retries < URI_FETCH_MAX_RETRIES) {
-            const delay = URI_FETCH_BASE_DELAY_MS * 2 ** item.retries;
-            console.warn(
-              `[URI Queue] Failed for token ${item.tokenId} (attempt ${item.retries + 1}/${URI_FETCH_MAX_RETRIES}), retrying in ${delay}ms`
-            );
-            setTimeout(() => {
-              uriFetchQueue.push({ ...item, retries: item.retries + 1 });
-              processUriFetchQueue().catch((err) =>
-                console.error(`[URI Queue] Processing error: ${err}`)
-              );
-            }, delay);
-          } else {
-            console.error(
-              `[URI Queue] Failed for token ${item.tokenId} after ${URI_FETCH_MAX_RETRIES} attempts: ${(results[i] as PromiseRejectedResult).reason}`
-            );
-          }
-        }
-      }
-
-      // Pause between batches so the gRPC stream can process heartbeats
-      if (uriFetchQueue.length > 0) {
-        await new Promise((r) => setTimeout(r, URI_FETCH_BATCH_DELAY_MS));
-      }
-    }
-
-    uriFetchRunning = false;
-  }
-
-  async function fetchTokenUri(tokenId: bigint, blockContext?: BlockContext): Promise<void> {
-    const result = await denshokanContract.call("token_uri", [tokenId]);
-    const uri = result.toString();
-
-    const ctx: BlockContext = blockContext ?? {
-      blockNumber: 0n,
-      blockTimestamp: new Date(),
-      transactionHash: "backfill",
-      eventIndex: 0,
-    };
-
-    await applyTokenUriChanges(database, tokenId, uri, ctx);
-  }
-
-  function queueUriFetch(tokenId: bigint, blockContext?: BlockContext): void {
-    uriFetchQueue.push({ tokenId, blockContext, retries: 0 });
-    // Fire-and-forget — don't await
-    processUriFetchQueue().catch((err) =>
-      console.error(`[URI Queue] Processing error: ${err}`)
-    );
   }
 
   /**
@@ -341,33 +269,14 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
         // Keep connection alive with periodic heartbeats (30 seconds)
         request.heartbeatInterval = { seconds: 30n, nanos: 0 };
       },
-      "connect:after": async () => {
+      "connect:after": () => {
         console.log("[Denshokan Indexer] Connected to DNA stream.");
-
-        // Retry URI fetches for tokens that failed or were never fetched
-        try {
-          const unfetched = await database
-            .select({ tokenId: schema.tokens.tokenId })
-            .from(schema.tokens)
-            .where(eq(schema.tokens.tokenUriFetched, false));
-
-          if (unfetched.length > 0) {
-            console.log(`[URI Retry] Queuing ${unfetched.length} tokens with missing token_uri`);
-            for (const row of unfetched) {
-              queueUriFetch(BigInt(row.tokenId));
-            }
-          }
-        } catch (err) {
-          console.warn(`[URI Retry] Failed to query unfetched tokens: ${err}`);
-        }
       },
     },
     async transform({ block, production }) {
       const logger = useLogger();
       const { db } = useDrizzleStorage();
       const { events, header } = block;
-      const isLive = production === "live";
-
       if (!header) {
         logger.warn("No header in block, skipping");
         return;
@@ -440,11 +349,6 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                   },
                 });
 
-                // Only queue URI fetches when live — during reindex the
-                // connect:after hook handles backfilling unfetched URIs
-                if (isLive) {
-                  queueUriFetch(decoded.tokenId);
-                }
               } else {
                 // Regular transfer: update owner
                 logger.info(
