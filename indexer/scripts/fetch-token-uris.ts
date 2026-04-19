@@ -30,14 +30,14 @@ import { parseTokenUriAttributes } from "../src/lib/decoder.js";
 
 const args = process.argv.slice(2);
 const WATCH = args.includes("--watch");
-const CONCURRENCY = parseInt(
-  args[args.indexOf("--concurrency") + 1] || "5",
-  10,
-);
-const POLL_INTERVAL_MS = parseInt(
-  args[args.indexOf("--interval") + 1] || "30000",
-  10,
-);
+
+function getArgValue(name: string, defaultVal: string): string {
+  const idx = args.indexOf(name);
+  return idx !== -1 && args[idx + 1] ? args[idx + 1] : defaultVal;
+}
+
+const CONCURRENCY = parseInt(getArgValue("--concurrency", "5"), 10);
+const POLL_INTERVAL_MS = parseInt(getArgValue("--interval", "30000"), 10);
 const MAX_RETRIES = 3;
 const RETRY_BASE_DELAY_MS = 2000;
 const BATCH_DELAY_MS = 500;
