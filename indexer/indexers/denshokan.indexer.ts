@@ -117,9 +117,10 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
   const denshokanContract = new Contract({ abi: DENSHOKAN_ABI, address: normalizedAddress, providerOrAccount: starknetProvider });
 
   // ============ Async URI Fetch Queue ============
-  const URI_FETCH_CONCURRENCY = 5;
+  const URI_FETCH_CONCURRENCY = 2;
   const URI_FETCH_MAX_RETRIES = 3;
   const URI_FETCH_BASE_DELAY_MS = 2000;
+  const URI_FETCH_BATCH_DELAY_MS = 1000; // pause between batches to avoid saturating the event loop
 
   interface BlockContext {
     blockNumber: bigint;
@@ -166,6 +167,11 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
             );
           }
         }
+      }
+
+      // Pause between batches so the gRPC stream can process heartbeats
+      if (uriFetchQueue.length > 0) {
+        await new Promise((r) => setTimeout(r, URI_FETCH_BATCH_DELAY_MS));
       }
     }
 
