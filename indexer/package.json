@@ -7,6 +7,8 @@
     "build": "apibara build",
     "start": "npm run db:migrate && tsx scripts/start-with-retry.ts",
     "check-dna": "tsx scripts/check-dna-status.ts",
+    "fetch-uris": "tsx scripts/fetch-token-uris.ts --watch",
+    "fetch-uris:once": "tsx scripts/fetch-token-uris.ts",
     "db:cleanup": "tsx scripts/cleanup-triggers.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
