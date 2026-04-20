@@ -282,6 +282,9 @@ type Token {
   "Whether all objectives were completed"
   completedAllObjectives: Boolean!
 
+  "Unix timestamp when objectives were completed (0 or null if not completed)"
+  completedAt: Int
+
   "Whether the token is non-transferable"
   soulbound: Boolean!
 
@@ -815,6 +818,7 @@ enum TokenOrderField {
   MINTED_AT
   CURRENT_SCORE
   LAST_UPDATED_AT
+  COMPLETED_AT
 }
 
 enum OrderDirection {

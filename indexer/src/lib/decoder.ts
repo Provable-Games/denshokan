@@ -663,6 +663,7 @@ export interface TokenUriAttributes {
   score: bigint | null;
   gameOver: boolean | null;
   completedObjectives: boolean | null;
+  completedAt: number | null;
   playerName: string | null;
   contextName: string | null;
   contextId: number | null;
@@ -684,6 +685,7 @@ export function parseTokenUriAttributes(uri: string): TokenUriAttributes {
     score: null,
     gameOver: null,
     completedObjectives: null,
+    completedAt: null,
     playerName: null,
     contextName: null,
     contextId: null,
@@ -720,6 +722,9 @@ export function parseTokenUriAttributes(uri: string): TokenUriAttributes {
           break;
         case "Objectives Completed":
           result.completedObjectives = attr.value.toLowerCase() === "true";
+          break;
+        case "Completed At":
+          result.completedAt = attr.value ? Number(attr.value) : null;
           break;
         case "Player Name":
           result.playerName = attr.value || null;

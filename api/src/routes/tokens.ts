@@ -79,7 +79,7 @@ app.get("/", async (c) => {
   if (contextId !== null) conditions.push(eq(tokens.contextId, contextId));
   if (hasContext === "true") conditions.push(eq(tokens.hasContext, true));
   if (hasContext === "false") conditions.push(eq(tokens.hasContext, false));
-  if (contextName) conditions.push(sql`${tokens.contextData}->>'name' = ${contextName}`);
+  if (contextName) conditions.push(eq(tokens.contextName, contextName));
   if (minterAddress) {
     const minterId = await resolveMinterId(minterAddress);
     if (minterId !== null) {

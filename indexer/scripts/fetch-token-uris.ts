@@ -98,6 +98,7 @@ async function fetchAndStore(tokenId: bigint): Promise<boolean> {
 
     if (parsed.playerName !== null) tokenUpdate.playerName = parsed.playerName;
     if (parsed.contextId !== null) tokenUpdate.contextId = parsed.contextId;
+    if (parsed.contextName !== null) tokenUpdate.contextName = parsed.contextName;
     if (parsed.clientUrl !== null) tokenUpdate.clientUrl = parsed.clientUrl;
     if (parsed.rendererAddress !== null)
       tokenUpdate.rendererAddress = parsed.rendererAddress;
@@ -107,6 +108,8 @@ async function fetchAndStore(tokenId: bigint): Promise<boolean> {
     if (parsed.gameOver !== null) tokenUpdate.gameOver = parsed.gameOver;
     if (parsed.completedObjectives !== null)
       tokenUpdate.completedAllObjectives = parsed.completedObjectives;
+    if (parsed.completedAt !== null)
+      tokenUpdate.completedAt = parsed.completedAt;
 
     await db
       .update(schema.tokens)

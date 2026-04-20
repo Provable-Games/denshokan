@@ -64,19 +64,15 @@ export const tokens = pgTable(
     // Mutable fields (from events)
     gameOver: boolean("game_over").notNull().default(false),
     completedAllObjectives: boolean("completed_all_objectives").notNull().default(false),
+    completedAt: integer("completed_at"),
 
     // From Transfer events and player actions
     ownerAddress: text("owner_address").notNull(),
     playerName: text("player_name"),
     clientUrl: text("client_url"),
 
-    // From TokenContextUpdate — structured context { name, description, context: [{name, value}] }
-    contextData: jsonb("context_data").$type<{
-      name: string;
-      description: string;
-      context: Array<{ name: string; value: string }>;
-    }>(),
     contextId: integer("context_id"),
+    contextName: text("context_name"),
     // From TokenRendererUpdate
     rendererAddress: text("renderer_address"),
     // From TokenSkillsUpdate
@@ -110,6 +106,8 @@ export const tokens = pgTable(
     index("tokens_settings_idx").on(table.settingsId),
     // Context ID queries
     index("tokens_context_id_idx").on(table.contextId),
+    // Completion timestamp queries
+    index("tokens_completed_at_idx").on(table.completedAt),
   ]
 );
 

@@ -223,7 +223,7 @@ paths:
           description: Field to sort by
           schema:
             type: string
-            enum: [mintedAt, currentScore, lastUpdatedAt]
+            enum: [mintedAt, currentScore, lastUpdatedAt, completedAt]
             default: mintedAt
         - name: orderDir
           in: query
@@ -419,7 +419,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [mintedAt, currentScore, lastUpdatedAt]
+            enum: [mintedAt, currentScore, lastUpdatedAt, completedAt]
             default: lastUpdatedAt
         - name: orderDir
           in: query
@@ -658,6 +658,10 @@ components:
         completedAllObjectives:
           type: boolean
           description: Whether all objectives were completed
+        completedAt:
+          type: integer
+          nullable: true
+          description: Unix timestamp when objectives were completed
         soulbound:
           type: boolean
           description: Whether the token is non-transferable
