@@ -18,7 +18,7 @@
 import { execSync, spawn } from "node:child_process";
 
 const MAX_TRIGGER_RETRIES = 5;
-const INITIAL_DELAY_MS = 3_000;
+const INITIAL_DELAY_MS = 1_000;
 const MAX_DELAY_MS = 60_000;
 const EARLY_FAILURE_WINDOW_MS = 30_000; // treat crash within 30s as trigger-related
 const STABLE_RUN_MS = 5 * 60_000; // 5 minutes = "was running fine, reset backoff"

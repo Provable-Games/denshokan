@@ -64,6 +64,13 @@
       "when": 1774425600000,
       "tag": "0008_fix_ws_numeric_precision",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1776192000000,
+      "tag": "0009_drop_token_events_and_leaderboards",
+      "breakpoints": true
     }
   ]
 }

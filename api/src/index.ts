@@ -11,7 +11,6 @@ import { handleWSConnection, shutdownWS } from "./ws/subscriptions.js";
 
 import tokensRouter from "./routes/tokens.js";
 import gamesRouter from "./routes/games.js";
-import activityRouter from "./routes/activity.js";
 import playersRouter from "./routes/players.js";
 import mintersRouter from "./routes/minters.js";
 import settingsRouter from "./routes/settings.js";
@@ -22,7 +21,6 @@ const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app });
 
 // Middleware
 app.use("*", cors());
-app.use("/activity/stats", rateLimit(60));
 app.use("*", rateLimit(300));
 
 // Health
@@ -37,7 +35,6 @@ app.get("/health", async (c) => {
 // Routes
 app.route("/tokens", tokensRouter);
 app.route("/games", gamesRouter);
-app.route("/activity", activityRouter);
 app.route("/players", playersRouter);
 app.route("/minters", mintersRouter);
 app.route("/settings", settingsRouter);

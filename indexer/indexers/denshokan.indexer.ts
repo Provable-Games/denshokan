@@ -6,8 +6,7 @@
  *
  * Events indexed:
  * - Transfer: ERC721 mint/transfer for ownership tracking
- * - MetadataUpdate: ERC-4906 — triggers token_uri re-fetch to extract score,
- *   game_over, completed_objectives, player_name, context_name, context_id
+ * - MetadataUpdate: ERC-4906 — marks token for URI re-fetch by standalone fetcher
  * - MinterRegistryUpdate: Minter registration/updates
  * - ObjectiveCreated: New game objective definitions
  * - SettingsCreated: New game settings definitions
@@ -21,8 +20,8 @@
  * - Uses high-level defineIndexer API for simplicity
  * - Token IDs are felt252 (not u256) with packed immutable data
  * - On mint (Transfer from 0x0), packed token ID is decoded for immutable fields
- * - All mutable token state (score, game_over, player_name, etc.) is derived
- *   from the token URI via MetadataUpdate events (ERC-4906)
+ * - Mutable token state (score, game_over, player_name, etc.) is fetched by
+ *   the standalone URI fetcher process (scripts/fetch-token-uris.ts)
  * - Idempotent writes for safe re-indexing
  */
 
@@ -34,12 +33,8 @@ import {
   drizzleStorage,
   useDrizzleStorage,
 } from "@apibara/plugin-drizzle";
-import { eq, sql, and, ne } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { ApibaraRuntimeConfig } from "apibara/types";
-import { RpcProvider, Contract } from "starknet";
-import { readFileSync } from "fs";
-import { resolve } from "path";
-
 import * as schema from "../src/lib/schema.js";
 import {
   EVENT_SELECTORS,
@@ -54,18 +49,11 @@ import {
   decodeGameFeeUpdate,
   decodeDefaultGameFeeUpdate,
   decodePackedTokenId,
-  parseTokenUriAttributes,
   feltToHex,
-  stringifyWithBigInt,
 } from "../src/lib/decoder.js";
 
 /** Convert bigint token ID to string for numeric column storage */
 const toId = (id: bigint) => id.toString();
-
-/** Full ABI needed for starknet.js to properly decode ByteArray return types */
-const DENSHOKAN_ABI = JSON.parse(
-  readFileSync(resolve(process.cwd(), "src/lib/abi/denshokan.json"), "utf-8")
-);
 
 interface DenshokanConfig {
   contractAddress: string;
@@ -73,12 +61,9 @@ interface DenshokanConfig {
   streamUrl: string;
   startingBlock: string;
   databaseUrl: string;
-  rpcUrl: string;
-  rpcApiKey: string;
 }
 
 export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
-  // Get configuration from runtime config
   const config = runtimeConfig.denshokan as DenshokanConfig;
   const {
     contractAddress,
@@ -86,273 +71,25 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
     streamUrl,
     startingBlock: startBlockStr,
     databaseUrl,
-    rpcUrl,
-    rpcApiKey,
   } = config;
   const startingBlock = BigInt(startBlockStr);
 
-  // Normalize contract addresses: lowercase hex with no leading-zero padding
   const normalizeAddress = (addr: string) =>
     `0x${BigInt(addr).toString(16)}`;
 
   const normalizedAddress = normalizeAddress(contractAddress);
   const normalizedRegistryAddress = normalizeAddress(registryAddress);
 
-  // Log configuration on startup
   console.log("[Denshokan Indexer] Contract:", contractAddress);
   console.log("[Denshokan Indexer] Registry:", registryAddress);
   console.log("[Denshokan Indexer] Stream:", streamUrl);
   console.log("[Denshokan Indexer] Starting Block:", startingBlock.toString());
-  console.log("[Denshokan Indexer] RPC URL:", rpcUrl);
 
-  // Create Drizzle database instance
   const database = drizzle({ schema, connectionString: databaseUrl });
 
-  // Create Starknet RPC provider and contract for token_uri fetches
-  const starknetProvider = new RpcProvider({
-    nodeUrl: rpcUrl,
-    ...(rpcApiKey && {
-      headers: { Authorization: `Bearer ${rpcApiKey}` },
-    }),
-  });
-  const denshokanContract = new Contract({ abi: DENSHOKAN_ABI, address: normalizedAddress, providerOrAccount: starknetProvider });
-
-  // ============ Async URI Fetch Queue ============
-  const URI_FETCH_CONCURRENCY = 5;
-  const URI_FETCH_MAX_RETRIES = 3;
-  const URI_FETCH_BASE_DELAY_MS = 2000;
-
-  interface BlockContext {
-    blockNumber: bigint;
-    blockTimestamp: Date;
-    transactionHash: string;
-    eventIndex: number;
-  }
-
-  interface UriFetchItem {
-    tokenId: bigint;
-    blockContext?: BlockContext;
-    retries: number;
-  }
-
-  const uriFetchQueue: UriFetchItem[] = [];
-  let uriFetchRunning = false;
-
-  async function processUriFetchQueue(): Promise<void> {
-    if (uriFetchRunning || uriFetchQueue.length === 0) return;
-    uriFetchRunning = true;
-
-    while (uriFetchQueue.length > 0) {
-      const batch = uriFetchQueue.splice(0, URI_FETCH_CONCURRENCY);
-      const results = await Promise.allSettled(
-        batch.map((item) => fetchTokenUri(item.tokenId, item.blockContext))
-      );
-      for (let i = 0; i < results.length; i++) {
-        if (results[i].status === "rejected") {
-          const item = batch[i];
-          if (item.retries < URI_FETCH_MAX_RETRIES) {
-            const delay = URI_FETCH_BASE_DELAY_MS * 2 ** item.retries;
-            console.warn(
-              `[URI Queue] Failed for token ${item.tokenId} (attempt ${item.retries + 1}/${URI_FETCH_MAX_RETRIES}), retrying in ${delay}ms`
-            );
-            setTimeout(() => {
-              uriFetchQueue.push({ ...item, retries: item.retries + 1 });
-              processUriFetchQueue().catch((err) =>
-                console.error(`[URI Queue] Processing error: ${err}`)
-              );
-            }, delay);
-          } else {
-            console.error(
-              `[URI Queue] Failed for token ${item.tokenId} after ${URI_FETCH_MAX_RETRIES} attempts: ${(results[i] as PromiseRejectedResult).reason}`
-            );
-          }
-        }
-      }
-    }
-
-    uriFetchRunning = false;
-  }
-
-  async function fetchTokenUri(tokenId: bigint, blockContext?: BlockContext): Promise<void> {
-    const result = await denshokanContract.call("token_uri", [tokenId]);
-    const uri = result.toString();
-
-    const ctx: BlockContext = blockContext ?? {
-      blockNumber: 0n,
-      blockTimestamp: new Date(),
-      transactionHash: "backfill",
-      eventIndex: 0,
-    };
-
-    await applyTokenUriChanges(database, tokenId, uri, ctx);
-  }
-
-  function queueUriFetch(tokenId: bigint, blockContext?: BlockContext): void {
-    uriFetchQueue.push({ tokenId, blockContext, retries: 0 });
-    // Fire-and-forget — don't await
-    processUriFetchQueue().catch((err) =>
-      console.error(`[URI Queue] Processing error: ${err}`)
-    );
-  }
-
-  /**
-   * Fetch token_uri, parse attributes, detect changes, and update DB.
-   * Used synchronously for live MetadataUpdate events.
-   */
-  async function fetchAndStoreTokenUri(
-    db: ReturnType<typeof useDrizzleStorage>["db"] | ReturnType<typeof drizzle>,
-    tokenId: bigint,
-    blockContext: BlockContext,
-  ): Promise<void> {
-    try {
-      const result = await denshokanContract.call("token_uri", [tokenId]);
-      const uri = result.toString();
-      console.log(`[URI] Fetched token_uri for ${tokenId}: ${uri.substring(0, 80)}...`);
-      await applyTokenUriChanges(db, tokenId, uri, blockContext);
-    } catch (error) {
-      console.warn(`[URI] Failed to fetch token_uri for ${tokenId}: ${error}`);
-    }
-  }
-
-  /**
-   * Parse token URI attributes, compare with current DB state, and apply
-   * changes to tokens, score_history, game_stats, and token_events tables.
-   */
-  async function applyTokenUriChanges(
-    db: ReturnType<typeof useDrizzleStorage>["db"] | ReturnType<typeof drizzle>,
-    tokenId: bigint,
-    uri: string,
-    ctx: BlockContext,
-  ): Promise<void> {
-    const parsed = parseTokenUriAttributes(uri);
-
-    // Read current token state for change detection
-    const existing = await db
-      .select({
-        currentScore: schema.tokens.currentScore,
-        gameOver: schema.tokens.gameOver,
-        completedAllObjectives: schema.tokens.completedAllObjectives,
-        gameId: schema.tokens.gameId,
-      })
-      .from(schema.tokens)
-      .where(eq(schema.tokens.tokenId, toId(tokenId)))
-      .limit(1);
-
-    // Build update set — always store raw URI
-    const tokenUpdate: Record<string, unknown> = {
-      tokenUri: uri,
-      tokenUriFetched: true,
-      lastUpdatedBlock: ctx.blockNumber,
-      lastUpdatedAt: ctx.blockTimestamp,
-    };
-
-    // Always write mutable fields from URI when present
-    if (parsed.playerName !== null) {
-      tokenUpdate.playerName = parsed.playerName;
-    }
-    if (parsed.contextId !== null) {
-      tokenUpdate.contextId = parsed.contextId;
-    }
-    if (parsed.clientUrl !== null) {
-      tokenUpdate.clientUrl = parsed.clientUrl;
-    }
-    if (parsed.rendererAddress !== null) {
-      tokenUpdate.rendererAddress = parsed.rendererAddress;
-    }
-    if (parsed.skillsAddress !== null) {
-      tokenUpdate.skillsAddress = parsed.skillsAddress;
-    }
-
-    const token = existing[0];
-
-    // Score change detection
-    if (parsed.score !== null && token && parsed.score !== token.currentScore) {
-      tokenUpdate.currentScore = parsed.score;
-
-      // Insert score history record
-      await db
-        .insert(schema.scoreHistory)
-        .values({
-          tokenId: toId(tokenId),
-          score: parsed.score,
-          blockNumber: ctx.blockNumber,
-          blockTimestamp: ctx.blockTimestamp,
-          transactionHash: ctx.transactionHash,
-          eventIndex: ctx.eventIndex,
-        })
-        .onConflictDoNothing();
-
-      // Log event for audit trail
-      await db
-        .insert(schema.tokenEvents)
-        .values({
-          tokenId: toId(tokenId),
-          eventType: "score_update",
-          eventData: stringifyWithBigInt({ tokenId, score: parsed.score }),
-          blockNumber: ctx.blockNumber,
-          blockTimestamp: ctx.blockTimestamp,
-          transactionHash: ctx.transactionHash,
-          eventIndex: ctx.eventIndex,
-        })
-        .onConflictDoNothing();
-    }
-
-    // Game over change detection (false → true only)
-    if (parsed.gameOver === true && token && !token.gameOver) {
-      tokenUpdate.gameOver = true;
-
-      // Update game stats: decrement activeGames, increment completedGames
-      if (token.gameId) {
-        await db
-          .update(schema.gameStats)
-          .set({
-            activeGames: sql`GREATEST(${schema.gameStats.activeGames} - 1, 0)`,
-            completedGames: sql`${schema.gameStats.completedGames} + 1`,
-            lastUpdated: ctx.blockTimestamp,
-          })
-          .where(eq(schema.gameStats.gameId, token.gameId));
-      }
-
-      // Log event for audit trail
-      await db
-        .insert(schema.tokenEvents)
-        .values({
-          tokenId: toId(tokenId),
-          eventType: "game_over",
-          eventData: stringifyWithBigInt({ tokenId }),
-          blockNumber: ctx.blockNumber,
-          blockTimestamp: ctx.blockTimestamp,
-          transactionHash: ctx.transactionHash,
-          eventIndex: ctx.eventIndex,
-        })
-        .onConflictDoNothing();
-    }
-
-    // Completed objectives change detection (false → true only)
-    if (parsed.completedObjectives === true && token && !token.completedAllObjectives) {
-      tokenUpdate.completedAllObjectives = true;
-
-      // Log event for audit trail
-      await db
-        .insert(schema.tokenEvents)
-        .values({
-          tokenId: toId(tokenId),
-          eventType: "completed_objective",
-          eventData: stringifyWithBigInt({ tokenId }),
-          blockNumber: ctx.blockNumber,
-          blockTimestamp: ctx.blockTimestamp,
-          transactionHash: ctx.transactionHash,
-          eventIndex: ctx.eventIndex,
-        })
-        .onConflictDoNothing();
-    }
-
-    // Apply all token updates in a single statement
-    await db
-      .update(schema.tokens)
-      .set(tokenUpdate)
-      .where(eq(schema.tokens.tokenId, toId(tokenId)));
-  }
+  // Token URI fetching runs as a separate process (scripts/fetch-token-uris.ts).
+  // The indexer makes zero RPC calls — it only marks tokens as needing a refetch
+  // on MetadataUpdate events.
 
   return defineIndexer(StarknetStream)({
     streamUrl,
@@ -390,32 +127,14 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
         // Keep connection alive with periodic heartbeats (30 seconds)
         request.heartbeatInterval = { seconds: 30n, nanos: 0 };
       },
-      "connect:after": async () => {
+      "connect:after": () => {
         console.log("[Denshokan Indexer] Connected to DNA stream.");
-
-        // Retry URI fetches for tokens that failed or were never fetched
-        try {
-          const unfetched = await database
-            .select({ tokenId: schema.tokens.tokenId })
-            .from(schema.tokens)
-            .where(eq(schema.tokens.tokenUriFetched, false));
-
-          if (unfetched.length > 0) {
-            console.log(`[URI Retry] Queuing ${unfetched.length} tokens with missing token_uri`);
-            for (const row of unfetched) {
-              queueUriFetch(BigInt(row.tokenId));
-            }
-          }
-        } catch (err) {
-          console.warn(`[URI Retry] Failed to query unfetched tokens: ${err}`);
-        }
       },
     },
-    async transform({ block, production }) {
+    async transform({ block }) {
       const logger = useLogger();
       const { db } = useDrizzleStorage();
       const { events, header } = block;
-
       if (!header) {
         logger.warn("No header in block, skipping");
         return;
@@ -488,44 +207,6 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                   },
                 });
 
-                // Queue async token_uri fetch (non-blocking)
-                queueUriFetch(decoded.tokenId);
-
-                // Check if this is a new unique player for this game
-                const existingPlayerTokens = await db
-                  .select({ count: sql<number>`count(*)` })
-                  .from(schema.tokens)
-                  .where(
-                    and(
-                      eq(schema.tokens.gameId, packed.gameId),
-                      eq(schema.tokens.ownerAddress, decoded.to),
-                      ne(schema.tokens.tokenId, toId(decoded.tokenId))
-                    )
-                  );
-                const isNewPlayer = existingPlayerTokens[0].count === 0;
-
-                // Update game stats: increment totalTokens, activeGames, and uniquePlayers if new
-                await db
-                  .insert(schema.gameStats)
-                  .values({
-                    gameId: packed.gameId,
-                    totalTokens: 1,
-                    activeGames: 1,
-                    completedGames: 0,
-                    uniquePlayers: isNewPlayer ? 1 : 0,
-                    lastUpdated: blockTimestamp,
-                  })
-                  .onConflictDoUpdate({
-                    target: schema.gameStats.gameId,
-                    set: {
-                      totalTokens: sql`${schema.gameStats.totalTokens} + 1`,
-                      activeGames: sql`${schema.gameStats.activeGames} + 1`,
-                      uniquePlayers: isNewPlayer
-                        ? sql`${schema.gameStats.uniquePlayers} + 1`
-                        : schema.gameStats.uniquePlayers,
-                      lastUpdated: blockTimestamp,
-                    },
-                  });
               } else {
                 // Regular transfer: update owner
                 logger.info(
@@ -541,17 +222,6 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                   })
                   .where(eq(schema.tokens.tokenId, toId(decoded.tokenId)));
               }
-
-              // Log event for audit trail
-              await db.insert(schema.tokenEvents).values({
-                tokenId: toId(decoded.tokenId),
-                eventType: isMint ? "mint" : "transfer",
-                eventData: stringifyWithBigInt(decoded),
-                blockNumber,
-                blockTimestamp,
-                transactionHash,
-                eventIndex,
-              }).onConflictDoNothing();
 
               break;
             }
@@ -658,16 +328,6 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                 },
               });
 
-              // Ensure game_stats row exists so the API doesn't 404 before first mint
-              await db.insert(schema.gameStats).values({
-                gameId: decoded.gameId,
-                totalTokens: 0,
-                activeGames: 0,
-                completedGames: 0,
-                uniquePlayers: 0,
-                lastUpdated: blockTimestamp,
-              }).onConflictDoNothing();
-
               break;
             }
 
@@ -767,15 +427,16 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
 
             case EVENT_SELECTORS.MetadataUpdate: {
               if (eventAddress && eventAddress !== normalizedAddress) break;
-              if (production !== "live") break; // Only process at head
 
               const decoded = decodeMetadataUpdate(keys);
               logger.info(`${blk} MetadataUpdate: token_id=${decoded.tokenId}`);
 
-              const blockCtx: BlockContext = { blockNumber, blockTimestamp, transactionHash, eventIndex };
-
-              // Synchronous fetch — at head, we want immediate URI updates
-              await fetchAndStoreTokenUri(db, decoded.tokenId, blockCtx);
+              // Mark token for URI refetch — the standalone fetcher process
+              // picks it up within its poll interval (default 30s)
+              await db
+                .update(schema.tokens)
+                .set({ tokenUriFetched: false })
+                .where(eq(schema.tokens.tokenId, toId(decoded.tokenId)));
               break;
             }
 
@@ -795,6 +456,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
           // Reorgs are handled automatically by the Drizzle plugin via message:invalidate hook
         }
       }
+
     },
   });
 }

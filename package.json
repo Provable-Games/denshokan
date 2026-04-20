@@ -33,7 +33,8 @@
     "stress-test": "cd api && npm run stress-test",
     "test": "npm run test:contracts",
     "build": "npm run build:contracts && npm run build:indexer && npm run build:api",
-    "fmt": "npm run fmt:contracts"
+    "fmt": "npm run fmt:contracts",
+    "postinstall": "npx patch-package --patch-dir indexer/patches || true"
   },
   "workspaces": [
     "indexer",

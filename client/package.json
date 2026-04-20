@@ -16,7 +16,7 @@
     "@mui/icons-material": "^7.0.2",
     "@mui/material": "^7.0.2",
     "@mui/x-date-pickers": "^8.27.2",
-    "@provable-games/denshokan-sdk": "0.1.27",
+    "@provable-games/denshokan-sdk": "0.1.29",
     "@starknet-io/get-starknet-core": "^5.0.0",
     "@starknet-io/get-starknet-modal": "^5.0.0",
     "@starknet-io/get-starknet-wallet-standard": "^5.0.0-beta.0",

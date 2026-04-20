@@ -3,7 +3,6 @@ import { Box, Typography, Grid, Card, CardContent, Button, Chip } from "@mui/mat
 import { TrendingUp, Add, Flag } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import {
-  useActivity,
   useScoreUpdates,
   useMintEvents,
   useGameOverEvents,
@@ -34,8 +33,6 @@ export default function HomePage() {
   const navigate = useNavigate();
   const { data: gamesData, isLoading: loading } = useGames();
   const games = gamesData?.data ?? [];
-  const { data: activityData } = useActivity({ limit: 5 });
-  const recentActivity = activityData?.data ?? [];
   const { isConnected } = useConnectionStatus();
 
   const [liveEvents, setLiveEvents] = useState<LiveEvent[]>([]);
@@ -158,7 +155,7 @@ export default function HomePage() {
         </Box>
       )}
 
-      {(recentActivity.length > 0 || liveEvents.length > 0) && (
+      {liveEvents.length > 0 && (
         <Box sx={{ mt: 6 }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
             <Typography variant="h4">Recent Activity</Typography>
@@ -177,21 +174,6 @@ export default function HomePage() {
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
                         {formatRelativeTime(evt.timestamp)}
-                      </Typography>
-                    </CardContent>
-                  </Card>
-                </Grid>
-              );
-            })}
-            {recentActivity.map((evt, i) => {
-              const config = eventConfig[evt.type] || eventConfig.score;
-              return (
-                <Grid size={{ xs: 12, md: 6 }} key={`static-${i}`}>
-                  <Card variant="outlined">
-                    <CardContent sx={{ display: "flex", alignItems: "center", gap: 1.5, py: 1.5, "&:last-child": { pb: 1.5 } }}>
-                      <Chip icon={config.icon as React.ReactElement} label={config.label} size="small" color={config.color} variant="outlined" />
-                      <Typography variant="body2" sx={{ flex: 1 }}>
-                        Token #{String(evt.tokenId).slice(0, 12)}...
                       </Typography>
                     </CardContent>
                   </Card>
