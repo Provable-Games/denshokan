@@ -64,6 +64,7 @@ export const tokens = pgTable(
     // Mutable fields (from events)
     gameOver: boolean("game_over").notNull().default(false),
     completedAllObjectives: boolean("completed_all_objectives").notNull().default(false),
+    completedAt: integer("completed_at"),
 
     // From Transfer events and player actions
     ownerAddress: text("owner_address").notNull(),
@@ -110,6 +111,8 @@ export const tokens = pgTable(
     index("tokens_settings_idx").on(table.settingsId),
     // Context ID queries
     index("tokens_context_id_idx").on(table.contextId),
+    // Completion timestamp queries
+    index("tokens_completed_at_idx").on(table.completedAt),
   ]
 );
 

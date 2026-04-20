@@ -107,6 +107,8 @@ async function fetchAndStore(tokenId: bigint): Promise<boolean> {
     if (parsed.gameOver !== null) tokenUpdate.gameOver = parsed.gameOver;
     if (parsed.completedObjectives !== null)
       tokenUpdate.completedAllObjectives = parsed.completedObjectives;
+    if (parsed.completedAt !== null)
+      tokenUpdate.completedAt = parsed.completedAt;
 
     await db
       .update(schema.tokens)
