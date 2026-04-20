@@ -16,7 +16,7 @@
     "@mui/icons-material": "^7.0.2",
     "@mui/material": "^7.0.2",
     "@mui/x-date-pickers": "^8.27.2",
-    "@provable-games/denshokan-sdk": "0.1.27",
+    "@provable-games/denshokan-sdk": "0.1.29",
     "@starknet-react/chains": "^5.0.3",
     "@starknet-react/core": "^5.0.3",
     "dayjs": "^1.11.19",

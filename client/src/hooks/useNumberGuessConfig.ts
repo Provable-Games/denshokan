@@ -7,8 +7,6 @@ import {
 import {
   useSettings,
   useObjectives,
-  useSettingsCount,
-  useObjectivesCount,
 } from "@provable-games/denshokan-sdk/react";
 import numberGuessAbi from "../abi/numberGuess.json";
 
@@ -84,12 +82,6 @@ export function useNumberGuessConfig(
   const { sendAsync } = useSendTransaction({});
 
   // Use SDK hooks for fetching settings and objectives
-  const { data: settingsCountData, refetch: refetchSettingsCount } =
-    useSettingsCount(gameAddress || undefined);
-
-  const { data: objectivesCountData, refetch: refetchObjectivesCount } =
-    useObjectivesCount(gameAddress || undefined);
-
   const {
     data: settingsData,
     isLoading: isLoadingSettings,
@@ -103,16 +95,9 @@ export function useNumberGuessConfig(
   } = useObjectives(gameAddress ? { gameAddress } : undefined);
 
   const refetch = useCallback(() => {
-    refetchSettingsCount();
-    refetchObjectivesCount();
     refetchSettings();
     refetchObjectives();
-  }, [
-    refetchSettingsCount,
-    refetchObjectivesCount,
-    refetchSettings,
-    refetchObjectives,
-  ]);
+  }, [refetchSettings, refetchObjectives]);
 
   // Transform SDK data to client format
   const settings: SettingsItem[] = (settingsData?.data ?? []).map((s) => {
@@ -172,7 +157,7 @@ export function useNumberGuessConfig(
         }, 1000);
 
         // The new settings ID will be the previous count + 1
-        const currentCount = settingsCountData ?? 0;
+        const currentCount = settingsData?.total ?? 0;
         return currentCount + 1;
       } catch (e: any) {
         setError(e.message || "Failed to create settings");
@@ -181,7 +166,7 @@ export function useNumberGuessConfig(
         setIsCreatingSettings(false);
       }
     },
-    [address, contract, sendAsync, refetch, settingsCountData],
+    [address, contract, sendAsync, refetch, settingsData],
   );
 
   const createObjective = useCallback(
@@ -214,7 +199,7 @@ export function useNumberGuessConfig(
         }, 1000);
 
         // The new objective ID will be the previous count + 1
-        const currentCount = objectivesCountData ?? 0;
+        const currentCount = objectivesData?.total ?? 0;
         return currentCount + 1;
       } catch (e: any) {
         setError(e.message || "Failed to create objective");
@@ -223,11 +208,11 @@ export function useNumberGuessConfig(
         setIsCreatingObjective(false);
       }
     },
-    [address, contract, sendAsync, refetch, objectivesCountData],
+    [address, contract, sendAsync, refetch, objectivesData],
   );
 
-  const settingsCount = settingsCountData ?? 0;
-  const objectiveCount = objectivesCountData ?? 0;
+  const settingsCount = settingsData?.total ?? 0;
+  const objectiveCount = objectivesData?.total ?? 0;
 
   return {
     createSettings,
