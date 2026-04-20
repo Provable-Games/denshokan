@@ -71,6 +71,13 @@
       "when": 1776192000000,
       "tag": "0009_drop_token_events_and_leaderboards",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1776278400000,
+      "tag": "0010_completed_at",
+      "breakpoints": true
     }
   ]
 }
