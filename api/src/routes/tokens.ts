@@ -97,6 +97,7 @@ app.get("/", async (c) => {
     score: tokens.currentScore,
     minted: tokens.mintedAt,
     updated: tokens.lastUpdatedAt,
+    completedAt: tokens.completedAt,
     start: tokens.startDelay,
     end: tokens.endDelay,
     name: tokens.playerName,
