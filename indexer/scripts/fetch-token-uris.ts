@@ -98,6 +98,7 @@ async function fetchAndStore(tokenId: bigint): Promise<boolean> {
 
     if (parsed.playerName !== null) tokenUpdate.playerName = parsed.playerName;
     if (parsed.contextId !== null) tokenUpdate.contextId = parsed.contextId;
+    if (parsed.contextName !== null) tokenUpdate.contextName = parsed.contextName;
     if (parsed.clientUrl !== null) tokenUpdate.clientUrl = parsed.clientUrl;
     if (parsed.rendererAddress !== null)
       tokenUpdate.rendererAddress = parsed.rendererAddress;
