@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { eq, desc, asc, and, sql } from "drizzle-orm";
+import { eq, desc, asc, and, sql, or, gt, lt } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { tokens, scoreHistory, minters, games } from "../db/schema.js";
 import { parseTokenId, parseGameId, parseAddress, parseNonNegativeInt, parseOptionalNonNegativeInt } from "../utils/validation.js";
@@ -153,6 +153,105 @@ app.get("/:id", async (c) => {
       ...serializeToken(result[0]),
       minterAddress: await resolveMinterAddress(result[0].mintedBy.toString()),
       gameAddress: await resolveGameAddress(result[0].gameId),
+    },
+  });
+});
+
+// GET /tokens/:id/rank - Rank of a token within an optional scope
+app.get("/:id/rank", async (c) => {
+  const tokenId = parseTokenId(c.req.param("id"));
+  if (tokenId === null) {
+    return c.json({ error: "Invalid token ID" }, 400);
+  }
+
+  // Parse scope filters
+  const gameId = parseGameId(c.req.query("game_id"));
+  const settingsId = parseOptionalNonNegativeInt(c.req.query("settings_id"));
+  const objectiveId = parseOptionalNonNegativeInt(c.req.query("objective_id"));
+  const contextId = parseOptionalNonNegativeInt(c.req.query("context_id"));
+  const contextName = c.req.query("context_name");
+  const gameOver = c.req.query("game_over");
+  const owner = parseAddress(c.req.query("owner"));
+  const minterAddress = parseAddress(c.req.query("minter_address"));
+  const minScoreRaw = c.req.query("min_score");
+  const maxScoreRaw = c.req.query("max_score");
+
+  // Parse score bounds as bigint (currentScore is stored as bigint)
+  let minScore: bigint | null = null;
+  let maxScore: bigint | null = null;
+  try {
+    if (minScoreRaw !== undefined) minScore = BigInt(minScoreRaw);
+    if (maxScoreRaw !== undefined) maxScore = BigInt(maxScoreRaw);
+  } catch {
+    return c.json({ error: "Invalid score bounds" }, 400);
+  }
+
+  // Build shared scope conditions
+  const scopeConditions = [];
+  if (gameId !== null) scopeConditions.push(eq(tokens.gameId, gameId));
+  if (settingsId !== null) scopeConditions.push(eq(tokens.settingsId, settingsId));
+  if (objectiveId !== null) scopeConditions.push(eq(tokens.objectiveId, objectiveId));
+  if (contextId !== null) scopeConditions.push(eq(tokens.contextId, contextId));
+  if (contextName) scopeConditions.push(eq(tokens.contextName, contextName));
+  if (gameOver === "true") scopeConditions.push(eq(tokens.gameOver, true));
+  if (gameOver === "false") scopeConditions.push(eq(tokens.gameOver, false));
+  if (owner) scopeConditions.push(eq(tokens.ownerAddress, owner));
+  if (minScore !== null) scopeConditions.push(sql`${tokens.currentScore} >= ${minScore}`);
+  if (maxScore !== null) scopeConditions.push(sql`${tokens.currentScore} <= ${maxScore}`);
+  if (minterAddress) {
+    const minterId = await resolveMinterId(minterAddress);
+    if (minterId === null) {
+      return c.json({ error: "Minter not found" }, 404);
+    }
+    scopeConditions.push(eq(tokens.mintedBy, minterId));
+  }
+
+  // Fetch target token (must exist and match scope)
+  const targetConditions = [eq(tokens.tokenId, tokenId), ...scopeConditions];
+  const [target] = await db
+    .select({ score: tokens.currentScore, mintedAt: tokens.mintedAt })
+    .from(tokens)
+    .where(and(...targetConditions))
+    .limit(1);
+
+  if (!target) {
+    return c.json({ error: "Token not found in scope" }, 404);
+  }
+
+  // Count tokens that outrank the target: strictly higher score, or equal
+  // score with earlier mintedAt (tie-breaker matches the intended leaderboard
+  // ordering — see useLiveLeaderboard's secondary sort).
+  const betterConditions = [
+    ...scopeConditions,
+    or(
+      gt(tokens.currentScore, target.score),
+      and(
+        eq(tokens.currentScore, target.score),
+        lt(tokens.mintedAt, target.mintedAt),
+      ),
+    ),
+  ];
+
+  const [betterResult, totalResult] = await Promise.all([
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(tokens)
+      .where(and(...betterConditions)),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(tokens)
+      .where(scopeConditions.length > 0 ? and(...scopeConditions) : undefined),
+  ]);
+
+  const better = betterResult[0]?.count ?? 0;
+  const total = totalResult[0]?.count ?? 0;
+
+  return c.json({
+    data: {
+      tokenId,
+      rank: better + 1,
+      total,
+      score: target.score.toString(),
     },
   });
 });
