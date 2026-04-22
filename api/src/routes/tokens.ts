@@ -111,7 +111,7 @@ app.get("/", async (c) => {
       .select()
       .from(tokens)
       .where(where)
-      .orderBy(orderBy, asc(tokens.tokenId))
+      .orderBy(orderBy, asc(tokens.mintedAt))
       .limit(Math.min(limit, 100))
       .offset(Math.max(offset, 0)),
     db

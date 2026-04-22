@@ -80,7 +80,7 @@ app.get("/:address/tokens", async (c) => {
       .select()
       .from(tokens)
       .where(where)
-      .orderBy(orderBy)
+      .orderBy(orderBy, asc(tokens.mintedAt))
       .limit(Math.min(limit, 100))
       .offset(Math.max(offset, 0)),
     db
