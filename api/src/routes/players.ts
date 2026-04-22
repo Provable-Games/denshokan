@@ -3,6 +3,7 @@ import { eq, and, desc, asc, sql, countDistinct } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { tokens, minters, games } from "../db/schema.js";
 import { parseAddress, parseGameId, parseNonNegativeInt } from "../utils/validation.js";
+import { parseRankScope, computeRank } from "../utils/rank.js";
 
 // In-memory minter cache (minter_id -> contract_address)
 let minterCache = new Map<string, string>();
@@ -97,6 +98,51 @@ app.get("/:address/tokens", async (c) => {
     total: countResult[0]?.count ?? 0,
     limit,
     offset: Math.max(offset, 0),
+  });
+});
+
+// GET /players/:address/rank - Best-ranked token held by an address within scope
+app.get("/:address/rank", async (c) => {
+  const address = parseAddress(c.req.param("address"));
+  if (address === null) {
+    return c.json({ error: "Invalid address" }, 400);
+  }
+
+  // Scope applies to the leaderboard universe, not the player's holdings.
+  // Owner is set via the path param and wired into the "best token" lookup
+  // below, not into the global scope used for ranking comparisons.
+  const scope = await parseRankScope(c, { includeOwner: false });
+  if (scope.error) return c.json(scope.error.body, scope.error.status);
+
+  // Find the player's top-ranked token in scope: highest score, earliest
+  // mintedAt tie-break (matches computeRank's ordering).
+  const [best] = await db
+    .select({
+      tokenId: tokens.tokenId,
+      score: tokens.currentScore,
+      mintedAt: tokens.mintedAt,
+    })
+    .from(tokens)
+    .where(and(eq(tokens.ownerAddress, address), ...scope.conditions))
+    .orderBy(desc(tokens.currentScore), asc(tokens.mintedAt))
+    .limit(1);
+
+  if (!best) {
+    return c.json({ error: "No tokens found for player in scope" }, 404);
+  }
+
+  const { rank, total } = await computeRank(scope.conditions, {
+    score: best.score,
+    mintedAt: best.mintedAt,
+  });
+
+  return c.json({
+    data: {
+      tokenId: best.tokenId.toString(),
+      rank,
+      total,
+      score: best.score.toString(),
+    },
   });
 });
 
