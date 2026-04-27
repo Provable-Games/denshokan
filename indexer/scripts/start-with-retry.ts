@@ -8,6 +8,12 @@
  *   3. If it fails with a retryable error (trigger conflict or gRPC disconnect),
  *      re-run cleanup and retry with backoff.
  *
+ * Exit 0 from apibara is also treated as retryable: it means the DNA gRPC
+ * stream was closed cleanly by the server (the SDK's loop saw `done: true`),
+ * which for a long-running indexer is a transient network event, not a
+ * desired terminal state. Real shutdowns (Railway redeploy / manual stop)
+ * arrive as SIGTERM/SIGINT, which we forward to the child and then exit 0.
+ *
  * Connection drops (gRPC UNAVAILABLE) retry indefinitely — the indexer is a
  * long-running service and transient network failures are expected.
  * Trigger conflicts retry up to MAX_TRIGGER_RETRIES times (rolling deploy).
@@ -15,7 +21,7 @@
  * If the indexer runs for STABLE_RUN_MS before failing, the backoff resets.
  */
 
-import { execSync, spawn } from "node:child_process";
+import { execSync, spawn, type ChildProcess } from "node:child_process";
 
 const MAX_TRIGGER_RETRIES = 5;
 const INITIAL_DELAY_MS = 1_000;
@@ -31,6 +37,23 @@ const RETRYABLE_ERRORS = [
   "INTERNAL",               // transient gRPC server error
   "RESOURCE_EXHAUSTED",     // gRPC rate limiting / overload
 ];
+
+// Track real shutdown signals (Railway redeploy / manual stop) so we can
+// distinguish them from apibara exiting 0 on its own (server-closed stream).
+let currentChild: ChildProcess | null = null;
+let receivedShutdownSignal = false;
+
+for (const sig of ["SIGTERM", "SIGINT"] as const) {
+  process.on(sig, () => {
+    receivedShutdownSignal = true;
+    if (currentChild && !currentChild.killed) {
+      currentChild.kill(sig);
+    } else {
+      // No child running (e.g., during backoff delay) — exit immediately.
+      process.exit(0);
+    }
+  });
+}
 
 function runCleanup(): void {
   console.log("[start] Running trigger cleanup...");
@@ -59,6 +82,7 @@ function startIndexer(): Promise<IndexerResult> {
       stdio: ["inherit", "inherit", "pipe"],
       env: process.env,
     });
+    currentChild = child;
 
     let stderrBuffer = "";
 
@@ -74,9 +98,29 @@ function startIndexer(): Promise<IndexerResult> {
 
     child.on("close", (code) => {
       const elapsed = Date.now() - startTime;
+      currentChild = null;
 
-      if (code === 0) {
+      // We initiated the shutdown (Railway redeploy / manual stop) — propagate
+      // the clean exit so the platform doesn't restart-loop on a real stop.
+      if (receivedShutdownSignal) {
         process.exit(0);
+      }
+
+      // Apibara exited 0 on its own. For a long-running indexer this is never
+      // a desired terminal state — it means the DNA gRPC stream was closed by
+      // the server (the SDK's loop saw `done: true` and called `run:after`).
+      // Treat it as a connection drop and restart in-process.
+      if (code === 0) {
+        console.warn(
+          "[start] Indexer exited 0 unexpectedly (DNA stream closed by server). Restarting...",
+        );
+        resolve({
+          code: 0,
+          elapsed,
+          isTriggerConflict: false,
+          isConnectionDrop: true,
+        });
+        return;
       }
 
       const isRetryable = RETRYABLE_ERRORS.some((err) =>
