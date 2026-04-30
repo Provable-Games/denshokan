@@ -3,7 +3,14 @@ import { eq, desc, asc, and, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { tokens, scoreHistory, minters, games } from "../db/schema.js";
 import { parseTokenId, parseGameId, parseAddress, parseNonNegativeInt, parseOptionalNonNegativeInt } from "../utils/validation.js";
-import { parseRankScope, computeRank } from "../utils/rank.js";
+import {
+  parseRankScope,
+  parseRankScopeFromGetter,
+  computeRank,
+  computeRanksBulk,
+} from "../utils/rank.js";
+
+const MAX_BULK_RANK_TOKENS = 500;
 
 const app = new Hono();
 
@@ -155,6 +162,85 @@ app.get("/:id", async (c) => {
       minterAddress: await resolveMinterAddress(result[0].mintedBy.toString()),
       gameAddress: await resolveGameAddress(result[0].gameId),
     },
+  });
+});
+
+// POST /tokens/rank - Bulk rank lookup
+//
+// Body: { tokenIds: string[], ...scope }
+// Scope keys mirror the GET /:id/rank query params (gameId, settingsId,
+// objectiveId, contextId, contextName, owner, minterAddress, gameOver,
+// minScore, maxScore).
+//
+// Returns ranks for the requested tokenIds that exist in scope; ids missing
+// from scope are echoed in `notFound`. Capped at MAX_BULK_RANK_TOKENS.
+//
+// POST instead of GET because the tokenIds list can be hundreds of felt252
+// values; URL-length limits in proxies/CDNs would bite for typical
+// Budokan-scale player profiles.
+app.post("/rank", async (c) => {
+  type Body = {
+    tokenIds?: unknown;
+    gameId?: unknown;
+    settingsId?: unknown;
+    objectiveId?: unknown;
+    contextId?: unknown;
+    contextName?: unknown;
+    owner?: unknown;
+    minterAddress?: unknown;
+    gameOver?: unknown;
+    minScore?: unknown;
+    maxScore?: unknown;
+  };
+
+  let body: Body;
+  try {
+    body = await c.req.json<Body>();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+
+  if (!Array.isArray(body.tokenIds)) {
+    return c.json({ error: "tokenIds must be an array" }, 400);
+  }
+  if (body.tokenIds.length === 0) {
+    return c.json({ data: [], notFound: [] });
+  }
+  if (body.tokenIds.length > MAX_BULK_RANK_TOKENS) {
+    return c.json(
+      { error: `Too many tokenIds (max ${MAX_BULK_RANK_TOKENS})` },
+      400,
+    );
+  }
+
+  const requested: string[] = [];
+  for (const raw of body.tokenIds) {
+    const id = parseTokenId(typeof raw === "string" ? raw : String(raw));
+    if (id === null) {
+      return c.json({ error: `Invalid tokenId: ${raw}` }, 400);
+    }
+    requested.push(id);
+  }
+
+  // Body uses camelCase (matches our SDK types); parseRankScopeFromGetter
+  // expects snake_case keys (matches the GET query-string convention). The
+  // tiny adapter keeps both endpoints sharing a single scope-parsing impl.
+  const get = (key: string): string | undefined => {
+    const camel = key.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+    const v = (body as Record<string, unknown>)[camel];
+    if (v === undefined || v === null) return undefined;
+    return String(v);
+  };
+  const scope = await parseRankScopeFromGetter(get, { includeOwner: true });
+  if (scope.error) return c.json(scope.error.body, scope.error.status);
+
+  const ranks = await computeRanksBulk(scope.conditions, requested);
+  const foundIds = new Set(ranks.map((r) => r.tokenId));
+  const notFound = requested.filter((id) => !foundIds.has(id));
+
+  return c.json({
+    data: ranks,
+    notFound,
   });
 });
 
