@@ -49,16 +49,31 @@ export async function parseRankScope(
   c: Context,
   opts: { includeOwner: boolean },
 ): Promise<RankScope> {
-  const gameId = parseGameId(c.req.query("game_id"));
-  const settingsId = parseOptionalNonNegativeInt(c.req.query("settings_id"));
-  const objectiveId = parseOptionalNonNegativeInt(c.req.query("objective_id"));
-  const contextId = parseOptionalNonNegativeInt(c.req.query("context_id"));
-  const contextName = c.req.query("context_name");
-  const gameOver = c.req.query("game_over");
-  const minterAddress = parseAddress(c.req.query("minter_address"));
-  const owner = opts.includeOwner ? parseAddress(c.req.query("owner")) : null;
-  const minScoreRaw = c.req.query("min_score");
-  const maxScoreRaw = c.req.query("max_score");
+  return parseRankScopeFromGetter(
+    (key) => c.req.query(key),
+    opts,
+  );
+}
+
+/**
+ * Same as `parseRankScope` but reads scope filters via an arbitrary getter.
+ * Used by the bulk-rank POST route, where the filters arrive in the JSON
+ * body rather than the query string.
+ */
+export async function parseRankScopeFromGetter(
+  get: (key: string) => string | undefined,
+  opts: { includeOwner: boolean },
+): Promise<RankScope> {
+  const gameId = parseGameId(get("game_id"));
+  const settingsId = parseOptionalNonNegativeInt(get("settings_id"));
+  const objectiveId = parseOptionalNonNegativeInt(get("objective_id"));
+  const contextId = parseOptionalNonNegativeInt(get("context_id"));
+  const contextName = get("context_name");
+  const gameOver = get("game_over");
+  const minterAddress = parseAddress(get("minter_address"));
+  const owner = opts.includeOwner ? parseAddress(get("owner")) : null;
+  const minScoreRaw = get("min_score");
+  const maxScoreRaw = get("max_score");
 
   let minScore: bigint | null = null;
   let maxScore: bigint | null = null;
@@ -126,4 +141,66 @@ export async function computeRank(
     rank: (betterResult[0]?.count ?? 0) + 1,
     total: totalResult[0]?.count ?? 0,
   };
+}
+
+export interface BulkRankEntry {
+  tokenId: string;
+  rank: number;
+  total: number;
+  score: string;
+}
+
+/**
+ * Bulk-compute ranks for many tokens within the same scope. Single SQL pass
+ * using a window function — server-side cost is roughly the same as one
+ * single-token call regardless of how many tokenIds you ask for, because the
+ * scope query is the dominant cost.
+ *
+ * Tie-break (`ORDER BY current_score DESC, minted_at ASC`) matches
+ * `computeRank` exactly, so single-rank and bulk-rank return identical numbers
+ * for the same (token, scope) pair.
+ *
+ * Returns an entry per requested tokenId that exists in scope. tokenIds not
+ * found in scope are excluded — callers can compute the diff to surface them.
+ */
+export async function computeRanksBulk(
+  scopeConditions: SQL[],
+  tokenIds: string[],
+): Promise<BulkRankEntry[]> {
+  if (tokenIds.length === 0) return [];
+
+  const scopeWhere =
+    scopeConditions.length > 0 ? sql`WHERE ${and(...scopeConditions)}` : sql``;
+
+  // We materialize ranks for every row in scope, then filter to the requested
+  // ids. For typical Budokan tournament sizes (hundreds to low thousands of
+  // entries) this is a single index scan + sort and stays well under 100ms.
+  const result = await db.execute<{
+    token_id: string;
+    rank: number;
+    total: number;
+    score: string;
+  }>(sql`
+    WITH ranked AS (
+      SELECT
+        ${tokens.tokenId}        AS token_id,
+        ${tokens.currentScore}   AS score,
+        ROW_NUMBER() OVER (
+          ORDER BY ${tokens.currentScore} DESC, ${tokens.mintedAt} ASC
+        )                        AS rank,
+        COUNT(*) OVER ()         AS total
+      FROM ${tokens}
+      ${scopeWhere}
+    )
+    SELECT token_id, rank::int AS rank, total::int AS total, score::text AS score
+    FROM ranked
+    WHERE token_id = ANY(${tokenIds})
+  `);
+
+  return result.rows.map((r) => ({
+    tokenId: r.token_id,
+    rank: r.rank,
+    total: r.total,
+    score: r.score,
+  }));
 }
