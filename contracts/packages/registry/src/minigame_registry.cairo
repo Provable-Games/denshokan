@@ -105,6 +105,7 @@ pub mod MinigameRegistry {
         ref self: ContractState, name: ByteArray, symbol: ByteArray, base_uri: ByteArray,
     ) {
         self.erc721.initializer(name, symbol, base_uri);
-        self.minigame_registry.initializer();
+        // 500 = 5% in basis points (denominator 10000)
+        self.minigame_registry.initializer(500);
     }
 }
