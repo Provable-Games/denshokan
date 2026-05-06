@@ -77,6 +77,10 @@ app.get("/", async (c) => {
   const sortBy = c.req.query("sort_by");
   const sortOrder = c.req.query("sort_order") === "asc" ? "asc" : "desc";
   const limit = parseNonNegativeInt(c.req.query("limit"), 50);
+  // Cap matches budokan-api's `/tournaments/:id/registrations` cap so callers
+  // that pair the two (e.g. budokan's claim-prizes dialog grouping refunds by
+  // current token owner) get a consistent page size from both sides.
+  const cappedLimit = Math.min(limit, 1000);
   const offset = parseNonNegativeInt(c.req.query("offset"), 0);
 
   const conditions = [];
@@ -119,7 +123,7 @@ app.get("/", async (c) => {
       .from(tokens)
       .where(where)
       .orderBy(orderBy, asc(tokens.mintedAt))
-      .limit(Math.min(limit, 100))
+      .limit(cappedLimit)
       .offset(Math.max(offset, 0)),
     db
       .select({ count: sql<number>`count(*)::int` })
