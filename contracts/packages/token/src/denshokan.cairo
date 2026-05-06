@@ -3,6 +3,7 @@
 // a full token implementation using the modular component system.
 
 use core::num::traits::Zero;
+use denshokan_interfaces::score::IDenshokanScores;
 use denshokan_renderer::default_renderer::{
     IDefaultRendererDispatcher, IDefaultRendererDispatcherTrait,
 };
@@ -485,6 +486,51 @@ pub mod Denshokan {
             };
 
             (receiver, royalty_amount)
+        }
+    }
+
+    // ================================================================================================
+    // SCORE BATCH QUERY
+    // ================================================================================================
+
+    // Batch score lookup. Resolves each token's game via the registry,
+    // caches game_id -> GameMetadata across the batch (so N tokens from
+    // the same game costs one registry call, not N), and calls `score`
+    // on the game contract for each token. A failed game lookup or
+    // missing `score` selector resolves to 0 for that slot — callers
+    // can't distinguish "score is 0" from "lookup failed."
+    #[abi(embed_v0)]
+    impl DenshokanScoresImpl of IDenshokanScores<ContractState> {
+        fn get_scores(self: @ContractState, token_ids: Span<felt252>) -> Array<u64> {
+            let registry_address = self.core_token.game_registry_address();
+            let registry = IMinigameRegistryDispatcher { contract_address: registry_address };
+
+            let mut game_id_keys: Array<u64> = array![];
+            let mut game_metadata_values: Array<GameMetadata> = array![];
+
+            let mut scores: Array<u64> = array![];
+            let mut i: u32 = 0;
+            while i < token_ids.len() {
+                let token_id = *token_ids.at(i);
+                let token_metadata = self.core_token.token_metadata(token_id);
+                let game_id = token_metadata.game_id;
+
+                let score = if game_id == 0 {
+                    0
+                } else {
+                    let game_metadata = _lookup_or_fetch_game_metadata(
+                        ref game_id_keys, ref game_metadata_values, registry, game_id,
+                    );
+                    let mut calldata = array![];
+                    calldata.append(token_id);
+                    try_call_and_deserialize::<
+                        u64,
+                    >(game_metadata.contract_address, selector!("score"), calldata.span(), 0)
+                };
+                scores.append(score);
+                i += 1;
+            }
+            scores
         }
     }
 
