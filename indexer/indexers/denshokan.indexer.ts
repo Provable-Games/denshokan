@@ -28,12 +28,9 @@
 import { defineIndexer } from "apibara/indexer";
 import { useLogger } from "apibara/plugins";
 import { StarknetStream } from "@apibara/starknet";
-import {
-  drizzle,
-  drizzleStorage,
-  useDrizzleStorage,
-} from "@apibara/plugin-drizzle";
-import { eq } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { eq, gt } from "drizzle-orm";
+import { Pool } from "pg";
 import type { ApibaraRuntimeConfig } from "apibara/types";
 import * as schema from "../src/lib/schema.js";
 import {
@@ -54,6 +51,12 @@ import {
 
 /** Convert bigint token ID to string for numeric column storage */
 const toId = (id: bigint) => id.toString();
+
+// Identifier for our row in the indexer_cursor table. Replaces the
+// "indexer_denshokan_denshokan" id that @apibara/plugin-drizzle generated
+// from indexerName + identifier. The migration seeds the existing cursor
+// under this shorter id.
+const CURSOR_ID = "denshokan";
 
 interface DenshokanConfig {
   contractAddress: string;
@@ -85,7 +88,8 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
   console.log("[Denshokan Indexer] Stream:", streamUrl);
   console.log("[Denshokan Indexer] Starting Block:", startingBlock.toString());
 
-  const database = drizzle({ schema, connectionString: databaseUrl });
+  const pool = new Pool({ connectionString: databaseUrl });
+  const database = drizzle(pool, { schema });
 
   // Token URI fetching runs as a separate process (scripts/fetch-token-uris.ts).
   // The indexer makes zero RPC calls — it only marks tokens as needing a refetch
@@ -105,17 +109,6 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
         },
       ],
     },
-    plugins: [
-      drizzleStorage({
-        db: database,
-        persistState: true,
-        indexerName: "denshokan",
-        idColumn: "id",
-        migrate: {
-          migrationsFolder: "./migrations",
-        },
-      }),
-    ],
     hooks: {
       "run:before": () => {
         console.log("[Denshokan Indexer] Starting indexer...");
@@ -123,17 +116,66 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
       "run:after": async () => {
         console.log("[Denshokan Indexer] Indexer stopped.");
       },
-      "connect:before": ({ request }) => {
-        // Keep connection alive with periodic heartbeats (30 seconds)
+      // Keep connection alive with periodic heartbeats (30 seconds), and
+      // resume from the persisted cursor. Replaces airfoil.checkpoints
+      // lookup from @apibara/plugin-drizzle.
+      "connect:before": async ({ request }) => {
         request.heartbeatInterval = { seconds: 30n, nanos: 0 };
+        const [row] = await database
+          .select()
+          .from(schema.indexerCursor)
+          .where(eq(schema.indexerCursor.id, CURSOR_ID))
+          .limit(1);
+        if (row) {
+          request.startingCursor = {
+            orderKey: row.orderKey,
+            uniqueKey: (row.uniqueKey ?? undefined) as `0x${string}` | undefined,
+          };
+        }
       },
       "connect:after": () => {
         console.log("[Denshokan Indexer] Connected to DNA stream.");
       },
+      // Reorg handling: on invalidate, undo the rows that came from blocks
+      // past the new cursor. score_history is the only append-only table —
+      // delete its rows directly. tokens / games / minters / objectives /
+      // settings are upserted with createdAtBlock or blockNumber stamps; we
+      // delete entries that were FIRST written past the cursor (any updates
+      // to older entries will be re-applied on replay since events are
+      // idempotent).
+      "message:invalidate": async ({ message }) => {
+        const cursor = message.cursor;
+        if (!cursor) return;
+        const cursorOrderKey = cursor.orderKey;
+        await database.transaction(async (db) => {
+          await db
+            .delete(schema.scoreHistory)
+            .where(gt(schema.scoreHistory.blockNumber, cursorOrderKey));
+          await db
+            .delete(schema.tokens)
+            .where(gt(schema.tokens.createdAtBlock, cursorOrderKey));
+          await db
+            .delete(schema.minters)
+            .where(gt(schema.minters.blockNumber, cursorOrderKey));
+          await db
+            .delete(schema.objectives)
+            .where(gt(schema.objectives.blockNumber, cursorOrderKey));
+          await db
+            .delete(schema.settings)
+            .where(gt(schema.settings.blockNumber, cursorOrderKey));
+          await db
+            .update(schema.indexerCursor)
+            .set({
+              orderKey: cursor.orderKey,
+              uniqueKey: cursor.uniqueKey ?? null,
+            })
+            .where(eq(schema.indexerCursor.id, CURSOR_ID));
+        });
+      },
     },
-    async transform({ block }) {
+    async transform({ block, endCursor }) {
       const logger = useLogger();
-      const { db } = useDrizzleStorage();
+      const db = database;
       const { events, header } = block;
       if (!header) {
         logger.warn("No header in block, skipping");
@@ -452,11 +494,32 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
           logger.error(`Event selector: ${selector}`);
           logger.error(`Keys: ${JSON.stringify(keys)}`);
           logger.error(`Data: ${JSON.stringify(data)}`);
-          // Don't re-throw - let the indexer continue processing other events
-          // Reorgs are handled automatically by the Drizzle plugin via message:invalidate hook
+          // Don't re-throw - let the indexer continue processing other events.
+          // Reorgs are handled by the message:invalidate hook below.
         }
       }
 
+      // Persist cursor at the end of transform so resume picks up from the
+      // next block. This is non-transactional with the event writes above
+      // (matching pre-migration behavior where individual event failures
+      // didn't roll back the block); each event's upsert is idempotent so
+      // re-processing on crash recovery is safe.
+      if (endCursor) {
+        await db
+          .insert(schema.indexerCursor)
+          .values({
+            id: CURSOR_ID,
+            orderKey: endCursor.orderKey,
+            uniqueKey: endCursor.uniqueKey ?? null,
+          })
+          .onConflictDoUpdate({
+            target: schema.indexerCursor.id,
+            set: {
+              orderKey: endCursor.orderKey,
+              uniqueKey: endCursor.uniqueKey ?? null,
+            },
+          });
+      }
     },
   });
 }
