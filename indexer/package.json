@@ -3,13 +3,12 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "npm run db:cleanup && apibara dev",
+    "dev": "apibara dev",
     "build": "apibara build",
     "start": "npm run db:migrate && tsx scripts/start-with-retry.ts",
     "check-dna": "tsx scripts/check-dna-status.ts",
     "fetch-uris": "tsx scripts/fetch-token-uris.ts --watch",
     "fetch-uris:once": "tsx scripts/fetch-token-uris.ts",
-    "db:cleanup": "tsx scripts/cleanup-triggers.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
@@ -30,7 +29,6 @@
     "apibara": "2.1.0-beta.57",
     "@apibara/indexer": "2.1.0-beta.58",
     "@apibara/starknet": "2.1.0-beta.58",
-    "@apibara/plugin-drizzle": "2.1.0-beta.57",
     "drizzle-orm": "^0.38.0",
     "pg": "^8.13.0",
     "starknet": "^9.2.1"

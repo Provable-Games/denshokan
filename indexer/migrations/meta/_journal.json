@@ -78,6 +78,13 @@
       "when": 1776278400000,
       "tag": "0010_completed_at",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1778276400000,
+      "tag": "0011_remove_drizzle_storage_plugin",
+      "breakpoints": true
     }
   ]
 }

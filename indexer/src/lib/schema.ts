@@ -246,6 +246,19 @@ export const settings = pgTable(
   ]
 );
 
+/**
+ * Indexer cursor - tracks indexing progress for resume.
+ *
+ * Replaces airfoil.checkpoints from @apibara/plugin-drizzle. Read in
+ * connect:before, written at the end of each transform so cursor and data
+ * advance together.
+ */
+export const indexerCursor = pgTable("indexer_cursor", {
+  id: text("id").primaryKey(),
+  orderKey: bigint("order_key", { mode: "bigint" }).notNull(),
+  uniqueKey: text("unique_key"),
+});
+
 // Export all schema tables for Drizzle
 export const schema = {
   tokens,
@@ -254,4 +267,5 @@ export const schema = {
   minters,
   objectives,
   settings,
+  indexerCursor,
 };
