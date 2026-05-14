@@ -32,6 +32,14 @@ version = "0.9.0"
 source = "git+https://github.com/keep-starknet-strange/alexandria.git?tag=v0.9.0#2b04d3ff2a302b40d092ad68b2920f28792582eb"
 
 [[package]]
+name = "alexandria_merkle_tree"
+version = "0.9.0"
+source = "git+https://github.com/keep-starknet-strange/alexandria.git?tag=v0.9.0#2b04d3ff2a302b40d092ad68b2920f28792582eb"
+dependencies = [
+ "alexandria_math",
+]
+
+[[package]]
 name = "alexandria_numeric"
 version = "0.9.0"
 source = "git+https://github.com/keep-starknet-strange/alexandria.git?tag=v0.9.0#2b04d3ff2a302b40d092ad68b2920f28792582eb"
@@ -153,8 +161,8 @@ source = "git+https://github.com/EkuboProtocol/starknet-contracts.git?tag=v4.0.1
 
 [[package]]
 name = "game_components_embeddable_game_standard"
-version = "1.1.8"
-source = "git+https://github.com/Provable-Games/game-components.git?tag=v1.1.8#ccef5f4cc51f2f7c2df4e05ffbbd23ce084d14e8"
+version = "1.1.9"
+source = "git+https://github.com/Provable-Games/game-components.git?tag=v1.1.9#b8e217871a2df949e113b92d8d264c9666344465"
 dependencies = [
  "game_components_interfaces",
  "game_components_utilities",
@@ -166,8 +174,8 @@ dependencies = [
 
 [[package]]
 name = "game_components_interfaces"
-version = "1.1.8"
-source = "git+https://github.com/Provable-Games/game-components.git?tag=v1.1.8#ccef5f4cc51f2f7c2df4e05ffbbd23ce084d14e8"
+version = "1.1.9"
+source = "git+https://github.com/Provable-Games/game-components.git?tag=v1.1.9#b8e217871a2df949e113b92d8d264c9666344465"
 dependencies = [
  "ekubo",
  "metagame_extensions_interfaces",
@@ -175,9 +183,10 @@ dependencies = [
 
 [[package]]
 name = "game_components_metagame"
-version = "1.1.8"
-source = "git+https://github.com/Provable-Games/game-components.git?tag=v1.1.8#ccef5f4cc51f2f7c2df4e05ffbbd23ce084d14e8"
+version = "1.1.9"
+source = "git+https://github.com/Provable-Games/game-components.git?tag=v1.1.9#b8e217871a2df949e113b92d8d264c9666344465"
 dependencies = [
+ "alexandria_merkle_tree",
  "game_components_embeddable_game_standard",
  "game_components_interfaces",
  "game_components_utilities",
@@ -188,8 +197,8 @@ dependencies = [
 
 [[package]]
 name = "game_components_test_common"
-version = "1.1.8"
-source = "git+https://github.com/Provable-Games/game-components.git?tag=v1.1.8#ccef5f4cc51f2f7c2df4e05ffbbd23ce084d14e8"
+version = "1.1.9"
+source = "git+https://github.com/Provable-Games/game-components.git?tag=v1.1.9#b8e217871a2df949e113b92d8d264c9666344465"
 dependencies = [
  "game_components_embeddable_game_standard",
  "game_components_interfaces",
@@ -205,8 +214,8 @@ dependencies = [
 
 [[package]]
 name = "game_components_utilities"
-version = "1.1.8"
-source = "git+https://github.com/Provable-Games/game-components.git?tag=v1.1.8#ccef5f4cc51f2f7c2df4e05ffbbd23ce084d14e8"
+version = "1.1.9"
+source = "git+https://github.com/Provable-Games/game-components.git?tag=v1.1.9#b8e217871a2df949e113b92d8d264c9666344465"
 dependencies = [
  "alexandria_encoding",
  "game_components_embeddable_game_standard",
