@@ -23,6 +23,7 @@ use game_components_embeddable_game_standard::token::extensions::objectives::obj
 use game_components_embeddable_game_standard::token::extensions::renderer::renderer::RendererComponent;
 use game_components_embeddable_game_standard::token::extensions::settings::settings::SettingsComponent;
 use game_components_embeddable_game_standard::token::extensions::skills::skills::SkillsComponent;
+use game_components_embeddable_game_standard::token::interface::IMINIGAME_TOKEN_ID;
 use game_components_embeddable_game_standard::token::structs::TokenMetadata;
 use game_components_embeddable_game_standard::token::token_component::CoreTokenComponent;
 use game_components_utilities::renderer::metadata::create_custom_metadata;
@@ -544,6 +545,24 @@ pub mod Denshokan {
             self.ownable.assert_only_owner();
             self.upgradeable.upgrade(new_class_hash);
         }
+    }
+
+    // ================================================================================================
+    // POST-UPGRADE MIGRATION
+    // ================================================================================================
+    //
+    // CoreTokenComponent::initializer registers IMINIGAME_TOKEN_ID at deploy time. When the
+    // interface surface changes (e.g. game-components shipping a new mint_batch_recipients
+    // signature), the constant rotates to a fresh felt, but the SRC5 storage on the live
+    // contract still has only the old id. This entrypoint lets the owner register the new id
+    // after `upgrade(...)` without redeploying. Callable repeatedly — `register_interface` is
+    // idempotent. The old id stays registered so contracts that hardcoded it (e.g. existing
+    // minigame/metagame initializers in the wild) keep passing their SRC5 introspection check.
+
+    #[external(v0)]
+    fn register_minigame_token_interface(ref self: ContractState) {
+        self.ownable.assert_only_owner();
+        self.src5.register_interface(IMINIGAME_TOKEN_ID);
     }
 
     // NOTE: Filter functionality has been moved to DenshokanViewer contract
