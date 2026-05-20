@@ -28,13 +28,11 @@ use game_components_embeddable_game_standard::token::interface::{
     IMinigameTokenMixinDispatcher, IMinigameTokenMixinDispatcherTrait,
 };
 use game_components_embeddable_game_standard::token::structs::{
-    unpack_game_id, unpack_minted_at, unpack_minted_by, unpack_objective_id, unpack_settings_id,
-    unpack_soulbound,
+    unpack_game_id, unpack_minted_by, unpack_objective_id, unpack_settings_id, unpack_soulbound,
 };
 use openzeppelin_access::ownable::OwnableComponent;
 use openzeppelin_interfaces::erc721::{
     IERC721Dispatcher, IERC721DispatcherTrait, IERC721MetadataDispatcher,
-    IERC721MetadataDispatcherTrait,
 };
 use openzeppelin_interfaces::introspection::{ISRC5Dispatcher, ISRC5DispatcherTrait};
 use openzeppelin_interfaces::upgrades::IUpgradeable;
@@ -186,7 +184,7 @@ pub mod DenshokanViewer {
                 if j >= cache.len() {
                     break;
                 }
-                let (cached_id, cached_addr) = *cache.at(j);
+                let (cached_id, _) = *cache.at(j);
                 if cached_id == minter_id {
                     break;
                 }

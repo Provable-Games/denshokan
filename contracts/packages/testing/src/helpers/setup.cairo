@@ -61,10 +61,16 @@ pub fn deploy_mock_game() -> (
     (minigame_dispatcher, minigame_init_dispatcher, minigame_mock_dispatcher)
 }
 
-/// Deploy DefaultRenderer contract (stateless SVG generator)
+/// Deploy DefaultRenderer contract (upgradeable SVG generator, owner-gated upgrade).
 pub fn deploy_default_renderer() -> ContractAddress {
     let contract = declare("DefaultRenderer").unwrap().contract_class();
-    let (contract_address, _) = contract.deploy(@array![]).unwrap();
+    // Use the canonical OWNER from test constants so other helpers can
+    // exercise upgrade() if needed; the renderer itself doesn't read owner
+    // outside of upgrade gating.
+    let mut calldata: Array<felt252> = array![];
+    let owner: ContractAddress = crate::helpers::constants::OWNER().into();
+    calldata.append(owner.into());
+    let (contract_address, _) = contract.deploy(@calldata).unwrap();
     contract_address
 }
 

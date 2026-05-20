@@ -27,9 +27,53 @@ pub mod DefaultRenderer {
     use game_components_embeddable_game_standard::registry::interface::GameMetadata;
     use game_components_embeddable_game_standard::token::structs::TokenMetadata;
     use game_components_utilities::renderer::svg::create_default_svg as _create_default_svg;
+    use openzeppelin_access::ownable::OwnableComponent;
+    use openzeppelin_interfaces::upgrades::IUpgradeable;
+    use openzeppelin_upgrades::upgradeable::UpgradeableComponent;
+    use starknet::{ClassHash, ContractAddress};
+
+    component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
+    component!(path: UpgradeableComponent, storage: upgradeable, event: UpgradeableEvent);
+
+    #[abi(embed_v0)]
+    impl OwnableImpl = OwnableComponent::OwnableImpl<ContractState>;
+    impl OwnableInternalImpl = OwnableComponent::InternalImpl<ContractState>;
+    impl UpgradeableInternalImpl = UpgradeableComponent::InternalImpl<ContractState>;
 
     #[storage]
-    struct Storage {}
+    struct Storage {
+        #[substorage(v0)]
+        ownable: OwnableComponent::Storage,
+        #[substorage(v0)]
+        upgradeable: UpgradeableComponent::Storage,
+    }
+
+    #[event]
+    #[derive(Drop, starknet::Event)]
+    enum Event {
+        #[flat]
+        OwnableEvent: OwnableComponent::Event,
+        #[flat]
+        UpgradeableEvent: UpgradeableComponent::Event,
+    }
+
+    #[constructor]
+    fn constructor(ref self: ContractState, owner: ContractAddress) {
+        self.ownable.initializer(owner);
+    }
+
+    #[abi(embed_v0)]
+    impl UpgradeableImpl of IUpgradeable<ContractState> {
+        /// Class-hash swap, owner-only. Used to ship new SVG output or to
+        /// adapt to upstream struct shape changes (e.g. felt252 vs ByteArray
+        /// for GameSetting/GameObjective name+value) without redeploying
+        /// the renderer at a new address — denshokan keeps its
+        /// `default_renderer_address` pointer.
+        fn upgrade(ref self: ContractState, new_class_hash: ClassHash) {
+            self.ownable.assert_only_owner();
+            self.upgradeable.upgrade(new_class_hash);
+        }
+    }
 
     #[abi(embed_v0)]
     impl DefaultRendererImpl of super::IDefaultRenderer<ContractState> {
