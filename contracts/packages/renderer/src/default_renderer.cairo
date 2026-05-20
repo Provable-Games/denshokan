@@ -64,11 +64,6 @@ pub mod DefaultRenderer {
 
     #[abi(embed_v0)]
     impl UpgradeableImpl of IUpgradeable<ContractState> {
-        /// Class-hash swap, owner-only. Used to ship new SVG output or to
-        /// adapt to upstream struct shape changes (e.g. felt252 vs ByteArray
-        /// for GameSetting/GameObjective name+value) without redeploying
-        /// the renderer at a new address — denshokan keeps its
-        /// `default_renderer_address` pointer.
         fn upgrade(ref self: ContractState, new_class_hash: ClassHash) {
             self.ownable.assert_only_owner();
             self.upgradeable.upgrade(new_class_hash);

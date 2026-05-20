@@ -565,21 +565,6 @@ pub mod Denshokan {
         self.src5.register_interface(IMINIGAME_TOKEN_ID);
     }
 
-    // ================================================================================================
-    // RENDERER MANAGEMENT
-    // ================================================================================================
-    //
-    // The default renderer is invoked by `token_uri` when a game's per-token renderer is unset
-    // or returns an empty `game_details_svg`. Its address is captured at construction (see
-    // `constructor`) and read on every `token_uri` call.
-    //
-    // When the shapes of structs passed to the renderer change (e.g. `GameSetting.name/value`
-    // flipped from `ByteArray` to `felt252` upstream), the deployed renderer's compiled
-    // expectations drift from what denshokan ships and every `token_uri` call reverts with
-    // "Failed to deserialize param #5". The renderer contract itself is intentionally
-    // stateless / non-upgradeable in older builds, so the recovery path is "deploy a fresh
-    // renderer, point denshokan at it" — this setter exists for that.
-
     #[external(v0)]
     fn set_default_renderer_address(ref self: ContractState, new_renderer: ContractAddress) {
         self.ownable.assert_only_owner();
