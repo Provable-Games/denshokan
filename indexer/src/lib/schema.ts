@@ -84,6 +84,17 @@ export const tokens = pgTable(
     // Token URI fetched via RPC
     tokenUri: text("token_uri"),
     tokenUriFetched: boolean("token_uri_fetched").notNull().default(false),
+    // Permanent failure flag. The URI fetcher does an in-process retry
+    // burst (MAX_RETRIES with backoff) per call to absorb transient RPC
+    // hiccups; if it still can't fetch, sets this to true and never
+    // attempts again. Same on-chain state would produce the same revert,
+    // so cross-poll retries buy nothing. Reset to false (and clear
+    // `token_uri_fetch_last_error`) when the underlying issue is fixed
+    // (e.g. game contract upgrade) and you want to re-attempt.
+    tokenUriFetchFailed: boolean("token_uri_fetch_failed").notNull().default(false),
+    // Last error message from a failed URI fetch — kept for triage so
+    // operators can grep this column instead of trawling logs.
+    tokenUriFetchLastError: text("token_uri_fetch_last_error"),
 
     // Indexer metadata
     createdAtBlock: bigint("created_at_block", { mode: "bigint" }).notNull(),

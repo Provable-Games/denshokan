@@ -15,7 +15,7 @@
  */
 
 import { drizzle } from "drizzle-orm/node-postgres";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { Pool } from "pg";
 import { RpcProvider, Contract } from "starknet";
 import { readFileSync } from "fs";
@@ -83,7 +83,9 @@ const toId = (id: bigint) => id.toString();
 // Fetch logic
 // ---------------------------------------------------------------------------
 
-async function fetchAndStore(tokenId: bigint): Promise<boolean> {
+async function fetchAndStore(
+  tokenId: bigint,
+): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     const result = await contract.call("token_uri", [tokenId]);
     const uri = result.toString();
@@ -116,18 +118,46 @@ async function fetchAndStore(tokenId: bigint): Promise<boolean> {
       .set(tokenUpdate)
       .where(eq(schema.tokens.tokenId, toId(tokenId)));
 
-    return true;
+    return { ok: true };
   } catch (error) {
-    console.warn(`[URI] Failed for token ${tokenId}: ${error}`);
-    return false;
+    const msg = error instanceof Error ? error.message : String(error);
+    console.warn(`[URI] Failed for token ${tokenId}: ${msg}`);
+    return { ok: false, error: msg };
   }
 }
 
+/**
+ * Mark a token's URI fetch as permanently failed. Subsequent poll cycles
+ * skip it via the `token_uri_fetch_failed = false` filter in the work
+ * queue. Reset manually (UPDATE ... SET token_uri_fetch_failed = false)
+ * when the underlying issue is fixed (e.g. game contract upgrade).
+ */
+async function markFailed(tokenId: bigint, error: string): Promise<void> {
+  // PG text columns reject NUL bytes; truncate huge errors to a sensible
+  // length so triage stays readable.
+  const truncated = error.replace(/\0/g, "").slice(0, 2000);
+  await db
+    .update(schema.tokens)
+    .set({
+      tokenUriFetchFailed: true,
+      tokenUriFetchLastError: truncated,
+      lastUpdatedAt: new Date(),
+    })
+    .where(eq(schema.tokens.tokenId, toId(tokenId)));
+}
+
 async function processUnfetched(): Promise<number> {
+  // Exclude tokens that have already exhausted their in-process retry
+  // burst — same on-chain state next poll would just revert the same way.
   const unfetched = await db
     .select({ tokenId: schema.tokens.tokenId })
     .from(schema.tokens)
-    .where(eq(schema.tokens.tokenUriFetched, false));
+    .where(
+      and(
+        eq(schema.tokens.tokenUriFetched, false),
+        eq(schema.tokens.tokenUriFetchFailed, false),
+      ),
+    );
 
   if (unfetched.length === 0) {
     return 0;
@@ -142,11 +172,17 @@ async function processUnfetched(): Promise<number> {
     const results = await Promise.allSettled(
       batch.map(async (row) => {
         const tokenId = BigInt(row.tokenId);
+        let lastError = "no attempts";
         for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-          if (await fetchAndStore(tokenId)) return true;
+          const result = await fetchAndStore(tokenId);
+          if (result.ok) return true;
+          lastError = result.error;
           const delay = RETRY_BASE_DELAY_MS * 2 ** attempt;
           await new Promise((r) => setTimeout(r, delay));
         }
+        // In-process burst exhausted: quarantine permanently so the next
+        // poll cycle skips this token.
+        await markFailed(tokenId, lastError);
         return false;
       }),
     );
