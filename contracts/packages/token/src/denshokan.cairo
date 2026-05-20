@@ -565,6 +565,18 @@ pub mod Denshokan {
         self.src5.register_interface(IMINIGAME_TOKEN_ID);
     }
 
+    #[external(v0)]
+    fn set_default_renderer_address(ref self: ContractState, new_renderer: ContractAddress) {
+        self.ownable.assert_only_owner();
+        assert!(!new_renderer.is_zero(), "Denshokan: Default renderer address cannot be zero");
+        self.default_renderer_address.write(new_renderer);
+    }
+
+    #[external(v0)]
+    fn get_default_renderer_address(self: @ContractState) -> ContractAddress {
+        self.default_renderer_address.read()
+    }
+
     // NOTE: Filter functionality has been moved to DenshokanViewer contract
     // to reduce contract size. Use the separate DenshokanViewer contract
     // for all IDenshokanFilter operations.

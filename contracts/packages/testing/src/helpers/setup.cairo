@@ -64,7 +64,8 @@ pub fn deploy_mock_game() -> (
 /// Deploy DefaultRenderer contract (stateless SVG generator)
 pub fn deploy_default_renderer() -> ContractAddress {
     let contract = declare("DefaultRenderer").unwrap().contract_class();
-    let (contract_address, _) = contract.deploy(@array![]).unwrap();
+    let owner: ContractAddress = crate::helpers::constants::OWNER().into();
+    let (contract_address, _) = contract.deploy(@array![owner.into()]).unwrap();
     contract_address
 }
 

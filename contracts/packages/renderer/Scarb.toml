@@ -8,6 +8,9 @@ cairo-version.workspace = true
 starknet.workspace = true
 game_components_embeddable_game_standard.workspace = true
 game_components_utilities.workspace = true
+openzeppelin_access.workspace = true
+openzeppelin_interfaces.workspace = true
+openzeppelin_upgrades.workspace = true
 
 [[target.starknet-contract]]
 sierra = true
