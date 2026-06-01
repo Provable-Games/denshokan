@@ -48,6 +48,13 @@ app.get("/", async (c) => {
   const genre = c.req.query("genre");
   const developer = c.req.query("developer");
   const publisher = c.req.query("publisher");
+  // `with_objectives=true` / `with_settings=true` hide games that have
+  // no rows in the respective table. Backed by `EXISTS` against the
+  // composite indexes `(game_address, objective_id)` and
+  // `(game_address, settings_id)` — the leftmost column is the join
+  // key, so this is an index-only probe per row, not a count.
+  const withObjectives = c.req.query("with_objectives") === "true";
+  const withSettings = c.req.query("with_settings") === "true";
 
   const sortFields: Record<string, any> = {
     name: games.name,
@@ -61,11 +68,56 @@ app.get("/", async (c) => {
   if (genre) conditions.push(eq(games.genre, genre));
   if (developer) conditions.push(eq(games.developer, developer));
   if (publisher) conditions.push(eq(games.publisher, publisher));
+  if (withObjectives) {
+    conditions.push(
+      sql`EXISTS (SELECT 1 FROM ${objectives} WHERE ${objectives.gameAddress} = ${games.contractAddress})`,
+    );
+  }
+  if (withSettings) {
+    conditions.push(
+      sql`EXISTS (SELECT 1 FROM ${settings} WHERE ${settings.gameAddress} = ${games.contractAddress})`,
+    );
+  }
   const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+  // Correlated scalar subqueries hand back per-row counts in one
+  // round-trip. Both indexes are leftmost-prefix on `game_address`, so
+  // the planner uses an index-only count.
+  const objectivesCount = sql<number>`(
+    SELECT count(*)::int FROM ${objectives}
+    WHERE ${objectives.gameAddress} = ${games.contractAddress}
+  )`;
+  const settingsCount = sql<number>`(
+    SELECT count(*)::int FROM ${settings}
+    WHERE ${settings.gameAddress} = ${games.contractAddress}
+  )`;
 
   const [results, countResult] = await Promise.all([
     db
-      .select()
+      .select({
+        id: games.id,
+        gameId: games.gameId,
+        contractAddress: games.contractAddress,
+        name: games.name,
+        description: games.description,
+        image: games.image,
+        developer: games.developer,
+        publisher: games.publisher,
+        genre: games.genre,
+        color: games.color,
+        clientUrl: games.clientUrl,
+        rendererAddress: games.rendererAddress,
+        royaltyFraction: games.royaltyFraction,
+        skillsAddress: games.skillsAddress,
+        version: games.version,
+        license: games.license,
+        gameFeeBps: games.gameFeeBps,
+        createdAt: games.createdAt,
+        lastUpdatedBlock: games.lastUpdatedBlock,
+        lastUpdatedAt: games.lastUpdatedAt,
+        objectivesCount: objectivesCount,
+        settingsCount: settingsCount,
+      })
       .from(games)
       .where(where)
       .orderBy(orderBy)
@@ -237,8 +289,40 @@ app.get("/:id", async (c) => {
     return c.json({ error: "Game not found" }, 404);
   }
 
+  const objectivesCount = sql<number>`(
+    SELECT count(*)::int FROM ${objectives}
+    WHERE ${objectives.gameAddress} = ${games.contractAddress}
+  )`;
+  const settingsCount = sql<number>`(
+    SELECT count(*)::int FROM ${settings}
+    WHERE ${settings.gameAddress} = ${games.contractAddress}
+  )`;
+
   const result = await db
-    .select()
+    .select({
+      id: games.id,
+      gameId: games.gameId,
+      contractAddress: games.contractAddress,
+      name: games.name,
+      description: games.description,
+      image: games.image,
+      developer: games.developer,
+      publisher: games.publisher,
+      genre: games.genre,
+      color: games.color,
+      clientUrl: games.clientUrl,
+      rendererAddress: games.rendererAddress,
+      royaltyFraction: games.royaltyFraction,
+      skillsAddress: games.skillsAddress,
+      version: games.version,
+      license: games.license,
+      gameFeeBps: games.gameFeeBps,
+      createdAt: games.createdAt,
+      lastUpdatedBlock: games.lastUpdatedBlock,
+      lastUpdatedAt: games.lastUpdatedAt,
+      objectivesCount: objectivesCount,
+      settingsCount: settingsCount,
+    })
     .from(games)
     .where(eq(games.gameId, resolved.gameId))
     .limit(1);
