@@ -1,0 +1,31 @@
+-- Dirty-marker block for the URI fetcher (fixes lost-update race).
+--
+-- The indexer (on every ERC-4906 MetadataUpdate) sets
+-- `token_uri_fetched = false` to enqueue a refetch, while the standalone
+-- fetch-token-uris.ts process later sets it back to true after pulling
+-- token_uri over RPC. Those two writes raced: a fetch issued mid-game
+-- (game_over still false) could land *after* the indexer's game-over reset,
+-- clobbering it — pinning game_over = false forever so a finished game keeps
+-- showing as active.
+--
+-- `metadata_update_block` records the block of the most recent MetadataUpdate.
+-- The fetcher snapshots this value before its RPC call and only marks the
+-- token clean if the column hasn't advanced past the snapshot, so a stale
+-- result can no longer overwrite a newer dirty state.
+--
+-- Existing rows default to 0; any subsequent MetadataUpdate sets a real block.
+-- To reconcile already-stuck tokens, re-enqueue ones that may be wrongly
+-- "active" (run once, out of band). Scope to tokens whose play window has
+-- already closed (minted_at + end_delay in the past) so currently-playable
+-- games are left untouched and refresh naturally on their next
+-- MetadataUpdate — this keeps the refetch set to the actually-stuck subset
+-- instead of every active token. The fetcher self-throttles (CONCURRENCY,
+-- BATCH_DELAY_MS), so the resulting RPC load is bounded:
+--   UPDATE tokens
+--   SET token_uri_fetched = false
+--   WHERE game_over = false
+--     AND token_uri_fetch_failed = false
+--     AND (minted_at + end_delay) < extract(epoch from now());
+
+ALTER TABLE "tokens"
+  ADD COLUMN "metadata_update_block" bigint NOT NULL DEFAULT 0;
