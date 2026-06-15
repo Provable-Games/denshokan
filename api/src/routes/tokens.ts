@@ -70,6 +70,12 @@ app.get("/", async (c) => {
   const gameId = parseGameId(c.req.query("game_id"));
   const owner = parseAddress(c.req.query("owner"));
   const gameOver = c.req.query("game_over");
+  const playable = c.req.query("playable");
+  const soulbound = c.req.query("soulbound");
+  const settingsId = parseOptionalNonNegativeInt(c.req.query("settings_id"));
+  const objectiveId = parseOptionalNonNegativeInt(c.req.query("objective_id"));
+  const mintedAfter = parseOptionalNonNegativeInt(c.req.query("minted_after"));
+  const mintedBefore = parseOptionalNonNegativeInt(c.req.query("minted_before"));
   const contextId = parseOptionalNonNegativeInt(c.req.query("context_id"));
   const hasContext = c.req.query("has_context");
   const contextName = c.req.query("context_name");
@@ -88,6 +94,31 @@ app.get("/", async (c) => {
   if (owner !== null) conditions.push(eq(tokens.ownerAddress, owner));
   if (gameOver === "true") conditions.push(eq(tokens.gameOver, true));
   if (gameOver === "false") conditions.push(eq(tokens.gameOver, false));
+  if (settingsId !== null) conditions.push(eq(tokens.settingsId, settingsId));
+  if (objectiveId !== null) conditions.push(eq(tokens.objectiveId, objectiveId));
+  if (soulbound === "true") conditions.push(eq(tokens.soulbound, true));
+  if (soulbound === "false") conditions.push(eq(tokens.soulbound, false));
+  if (mintedAfter !== null)
+    conditions.push(sql`${tokens.mintedAt} >= to_timestamp(${mintedAfter}) at time zone 'utc'`);
+  if (mintedBefore !== null)
+    conditions.push(sql`${tokens.mintedAt} <= to_timestamp(${mintedBefore}) at time zone 'utc'`);
+  // `playable` mirrors token_state::is_token_playable in game-components:
+  //   !game_over && !completed_all_objectives && now within the play window,
+  //   where start = minted_at + start_delay and
+  //   end = end_delay > 0 ? start + end_delay : ∞ (0 means never expires).
+  // Keep this in sync with that contract function — it's the on-chain source
+  // of truth the RPC fallback filters on. Only `true` is supported (matches
+  // the viewer's playable methods); `playable=false` is intentionally a no-op.
+  if (playable === "true") {
+    conditions.push(eq(tokens.gameOver, false));
+    conditions.push(eq(tokens.completedAllObjectives, false));
+    conditions.push(
+      sql`${tokens.mintedAt} + ${tokens.startDelay} * interval '1 second' <= (now() at time zone 'utc')`,
+    );
+    conditions.push(
+      sql`(${tokens.endDelay} = 0 OR ${tokens.mintedAt} + (${tokens.startDelay} + ${tokens.endDelay}) * interval '1 second' > (now() at time zone 'utc'))`,
+    );
+  }
   if (contextId !== null) conditions.push(eq(tokens.contextId, contextId));
   if (hasContext === "true") conditions.push(eq(tokens.hasContext, true));
   if (hasContext === "false") conditions.push(eq(tokens.hasContext, false));
