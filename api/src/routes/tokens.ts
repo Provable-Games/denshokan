@@ -43,6 +43,23 @@ async function resolveGameAddress(gameId: number): Promise<string | null> {
   return gameCache.get(gameId) ?? null;
 }
 
+async function resolveGameId(address: string): Promise<number | null> {
+  // Reverse of resolveGameAddress: map a game contract address back to its
+  // registry game_id (tokens store game_id, not the address). BigInt compare so
+  // padding differences between input and stored address don't matter.
+  if (!gameCacheReady) await loadGameCache();
+  const target = BigInt(address);
+  for (const [id, addr] of gameCache) {
+    if (BigInt(addr) === target) return id;
+  }
+  // Cache miss — refresh and retry once
+  await loadGameCache();
+  for (const [id, addr] of gameCache) {
+    if (BigInt(addr) === target) return id;
+  }
+  return null;
+}
+
 async function resolveMinterAddress(mintedBy: string): Promise<string | null> {
   if (!minterCacheReady) await loadMinterCache();
   const cached = minterCache.get(mintedBy);
@@ -68,8 +85,15 @@ async function resolveMinterId(address: string): Promise<bigint | null> {
 // GET /tokens - List tokens (paginated, filterable)
 app.get("/", async (c) => {
   const gameId = parseGameId(c.req.query("game_id"));
+  const gameAddress = parseAddress(c.req.query("game_address"));
   const owner = parseAddress(c.req.query("owner"));
   const gameOver = c.req.query("game_over");
+  const playable = c.req.query("playable");
+  const soulbound = c.req.query("soulbound");
+  const settingsId = parseOptionalNonNegativeInt(c.req.query("settings_id"));
+  const objectiveId = parseOptionalNonNegativeInt(c.req.query("objective_id"));
+  const mintedAfter = parseOptionalNonNegativeInt(c.req.query("minted_after"));
+  const mintedBefore = parseOptionalNonNegativeInt(c.req.query("minted_before"));
   const contextId = parseOptionalNonNegativeInt(c.req.query("context_id"));
   const hasContext = c.req.query("has_context");
   const contextName = c.req.query("context_name");
@@ -85,9 +109,43 @@ app.get("/", async (c) => {
 
   const conditions = [];
   if (gameId !== null) conditions.push(eq(tokens.gameId, gameId));
+  if (gameAddress) {
+    const resolvedGameId = await resolveGameId(gameAddress);
+    if (resolvedGameId !== null) {
+      conditions.push(eq(tokens.gameId, resolvedGameId));
+    } else {
+      // Unknown game address — return empty
+      return c.json({ data: [], total: 0, limit, offset: Math.max(offset, 0) });
+    }
+  }
   if (owner !== null) conditions.push(eq(tokens.ownerAddress, owner));
   if (gameOver === "true") conditions.push(eq(tokens.gameOver, true));
   if (gameOver === "false") conditions.push(eq(tokens.gameOver, false));
+  if (settingsId !== null) conditions.push(eq(tokens.settingsId, settingsId));
+  if (objectiveId !== null) conditions.push(eq(tokens.objectiveId, objectiveId));
+  if (soulbound === "true") conditions.push(eq(tokens.soulbound, true));
+  if (soulbound === "false") conditions.push(eq(tokens.soulbound, false));
+  if (mintedAfter !== null)
+    conditions.push(sql`${tokens.mintedAt} >= to_timestamp(${mintedAfter}) at time zone 'utc'`);
+  if (mintedBefore !== null)
+    conditions.push(sql`${tokens.mintedAt} <= to_timestamp(${mintedBefore}) at time zone 'utc'`);
+  // `playable` mirrors token_state::is_token_playable in game-components:
+  //   !game_over && !completed_all_objectives && now within the play window,
+  //   where start = minted_at + start_delay and
+  //   end = end_delay > 0 ? start + end_delay : ∞ (0 means never expires).
+  // Keep this in sync with that contract function — it's the on-chain source
+  // of truth the RPC fallback filters on. Only `true` is supported (matches
+  // the viewer's playable methods); `playable=false` is intentionally a no-op.
+  if (playable === "true") {
+    conditions.push(eq(tokens.gameOver, false));
+    conditions.push(eq(tokens.completedAllObjectives, false));
+    conditions.push(
+      sql`${tokens.mintedAt} + ${tokens.startDelay} * interval '1 second' <= (now() at time zone 'utc')`,
+    );
+    conditions.push(
+      sql`(${tokens.endDelay} = 0 OR ${tokens.mintedAt} + (${tokens.startDelay} + ${tokens.endDelay}) * interval '1 second' > (now() at time zone 'utc'))`,
+    );
+  }
   if (contextId !== null) conditions.push(eq(tokens.contextId, contextId));
   if (hasContext === "true") conditions.push(eq(tokens.hasContext, true));
   if (hasContext === "false") conditions.push(eq(tokens.hasContext, false));
