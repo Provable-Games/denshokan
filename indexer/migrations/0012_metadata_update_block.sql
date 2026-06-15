@@ -15,10 +15,17 @@
 --
 -- Existing rows default to 0; any subsequent MetadataUpdate sets a real block.
 -- To reconcile already-stuck tokens, re-enqueue ones that may be wrongly
--- "active" (run once, out of band — triggers a one-time RPC refetch burst):
+-- "active" (run once, out of band). Scope to tokens whose play window has
+-- already closed (minted_at + end_delay in the past) so currently-playable
+-- games are left untouched and refresh naturally on their next
+-- MetadataUpdate — this keeps the refetch set to the actually-stuck subset
+-- instead of every active token. The fetcher self-throttles (CONCURRENCY,
+-- BATCH_DELAY_MS), so the resulting RPC load is bounded:
 --   UPDATE tokens
 --   SET token_uri_fetched = false
---   WHERE game_over = false AND token_uri_fetch_failed = false;
+--   WHERE game_over = false
+--     AND token_uri_fetch_failed = false
+--     AND (minted_at + end_delay) < extract(epoch from now());
 
 ALTER TABLE "tokens"
   ADD COLUMN "metadata_update_block" bigint NOT NULL DEFAULT 0;
