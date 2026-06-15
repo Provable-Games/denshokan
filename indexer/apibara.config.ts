@@ -14,10 +14,10 @@ export default defineConfig({
       startingBlock: (process.env.STARTING_BLOCK ?? "0").trim(),
       // PostgreSQL connection string
       databaseUrl: (process.env.DATABASE_URL ?? "postgres://postgres:postgres@localhost:5432/denshokan").trim(),
-      // Starknet RPC URL for token_uri fetches
-      rpcUrl: (process.env.RPC_URL ?? "https://rpc.provable.games/rpc").trim(),
-      // Cartridge RPC API key (Bearer token for Authorization header)
-      rpcApiKey: (process.env.RPC_API_KEY ?? "").trim(),
+      // NOTE: token_uri fetching (the only RPC use) runs in the standalone
+      // scripts/fetch-token-uris.ts process, which reads RPC_URL / RPC_API_KEY
+      // straight from the environment. The indexer itself makes zero RPC calls,
+      // so no rpcUrl/rpcApiKey belongs in this runtime config.
     },
   },
 });
