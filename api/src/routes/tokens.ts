@@ -307,7 +307,10 @@ app.get("/:id/scores", async (c) => {
 });
 
 function serializeToken(t: typeof tokens.$inferSelect) {
-  const { tokenUriFetched, ...rest } = t;
+  // tokenUriFetched / metadataUpdateBlock are internal fetcher bookkeeping and
+  // not part of the public payload. metadataUpdateBlock in particular is a
+  // bigint that would otherwise break JSON.stringify here.
+  const { tokenUriFetched, metadataUpdateBlock, ...rest } = t;
   return {
     ...rest,
     tokenId: rest.tokenId.toString(),
