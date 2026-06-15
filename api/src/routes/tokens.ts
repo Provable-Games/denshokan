@@ -43,6 +43,23 @@ async function resolveGameAddress(gameId: number): Promise<string | null> {
   return gameCache.get(gameId) ?? null;
 }
 
+async function resolveGameId(address: string): Promise<number | null> {
+  // Reverse of resolveGameAddress: map a game contract address back to its
+  // registry game_id (tokens store game_id, not the address). BigInt compare so
+  // padding differences between input and stored address don't matter.
+  if (!gameCacheReady) await loadGameCache();
+  const target = BigInt(address);
+  for (const [id, addr] of gameCache) {
+    if (BigInt(addr) === target) return id;
+  }
+  // Cache miss — refresh and retry once
+  await loadGameCache();
+  for (const [id, addr] of gameCache) {
+    if (BigInt(addr) === target) return id;
+  }
+  return null;
+}
+
 async function resolveMinterAddress(mintedBy: string): Promise<string | null> {
   if (!minterCacheReady) await loadMinterCache();
   const cached = minterCache.get(mintedBy);
@@ -68,6 +85,7 @@ async function resolveMinterId(address: string): Promise<bigint | null> {
 // GET /tokens - List tokens (paginated, filterable)
 app.get("/", async (c) => {
   const gameId = parseGameId(c.req.query("game_id"));
+  const gameAddress = parseAddress(c.req.query("game_address"));
   const owner = parseAddress(c.req.query("owner"));
   const gameOver = c.req.query("game_over");
   const playable = c.req.query("playable");
@@ -91,6 +109,15 @@ app.get("/", async (c) => {
 
   const conditions = [];
   if (gameId !== null) conditions.push(eq(tokens.gameId, gameId));
+  if (gameAddress) {
+    const resolvedGameId = await resolveGameId(gameAddress);
+    if (resolvedGameId !== null) {
+      conditions.push(eq(tokens.gameId, resolvedGameId));
+    } else {
+      // Unknown game address — return empty
+      return c.json({ data: [], total: 0, limit, offset: Math.max(offset, 0) });
+    }
+  }
   if (owner !== null) conditions.push(eq(tokens.ownerAddress, owner));
   if (gameOver === "true") conditions.push(eq(tokens.gameOver, true));
   if (gameOver === "false") conditions.push(eq(tokens.gameOver, false));
