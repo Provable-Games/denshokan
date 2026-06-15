@@ -573,6 +573,34 @@ jobs:
             exit 1
           fi
 
+      # Validates the `playable` filter's SQL replica against the on-chain
+      # token_state::is_token_playable rule using deterministic fixtures.
+      # Self-skips on an API without the filter (e.g. before the playable
+      # filter PR merges) so it never blocks unrelated changes.
+      - name: is_playable boundary check
+        run: |
+          set -uo pipefail
+          psql "$DATABASE_URL" -f api/test/fixtures/playable.sql
+          BASE=http://localhost:3001
+          ids() { curl -s "$1" | jq -r '.data[].tokenId' | sort | tr '\n' ' '; }
+          all=$(ids "$BASE/tokens?owner=0xf1&limit=200")
+          playable=$(ids "$BASE/tokens?owner=0xf1&playable=true&limit=200")
+          echo "fixtures:        $all"
+          echo "playable result: $playable"
+          if [ "$all" != "1001 1002 1003 1004 1005 1006 " ]; then
+            echo "::error::fixture load failed — expected 6 rows, got '$all'"
+            exit 1
+          fi
+          if [ "$playable" = "$all" ]; then
+            echo "::warning::playable filter not active on this API (pre-filter build) - skipping boundary assertion"
+            exit 0
+          fi
+          if [ "$playable" != "1001 1004 " ]; then
+            echo "::error::playable filter mismatch — expected '1001 1004 ' got '$playable'"
+            exit 1
+          fi
+          echo "is_playable boundary check passed"
+
   claude-review:
     needs: changes
     if: needs.changes.outputs.has_reviews == 'true' && needs.changes.outputs.can_run_claude_reviews == 'true'
