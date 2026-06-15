@@ -432,10 +432,26 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
               logger.info(`${blk} MetadataUpdate: token_id=${decoded.tokenId}`);
 
               // Mark token for URI refetch — the standalone fetcher process
-              // picks it up within its poll interval (default 30s)
+              // picks it up within its poll interval (default 30s).
+              //
+              // Also lift any prior quarantine: a fresh MetadataUpdate proves
+              // the on-chain state changed, which invalidates the "permanently
+              // failing" assumption from a previous fetch burst. Without this
+              // reset, a token quarantined earlier (e.g. a transient RPC blip)
+              // would be skipped forever by the fetcher's
+              // token_uri_fetch_failed = false gate — so game_over (and other
+              // mutable state) would never be written and the token would
+              // remain "active" indefinitely.
               await db
                 .update(schema.tokens)
-                .set({ tokenUriFetched: false })
+                .set({
+                  tokenUriFetched: false,
+                  tokenUriFetchFailed: false,
+                  tokenUriFetchLastError: null,
+                  // Advance the dirty marker so the fetcher can detect whether
+                  // a newer update arrived while its RPC call was in flight.
+                  metadataUpdateBlock: blockNumber,
+                })
                 .where(eq(schema.tokens.tokenId, toId(decoded.tokenId)));
               break;
             }

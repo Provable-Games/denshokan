@@ -15,7 +15,7 @@
  */
 
 import { drizzle } from "drizzle-orm/node-postgres";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { Pool } from "pg";
 import { RpcProvider, Contract } from "starknet";
 import { readFileSync } from "fs";
@@ -51,7 +51,7 @@ const DATABASE_URL =
   process.env.DATABASE_URL ??
   "postgres://postgres:postgres@localhost:5432/denshokan";
 const RPC_URL =
-  process.env.RPC_URL ?? "https://api.cartridge.gg/x/starknet/mainnet";
+  process.env.RPC_URL ?? "https://rpc.provable.games/rpc";
 const RPC_API_KEY = process.env.RPC_API_KEY ?? "";
 const DENSHOKAN_ADDRESS = (process.env.DENSHOKAN_ADDRESS ?? "0x0").trim();
 
@@ -85,6 +85,7 @@ const toId = (id: bigint) => id.toString();
 
 async function fetchAndStore(
   tokenId: bigint,
+  seenBlock: bigint,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     const result = await contract.call("token_uri", [tokenId]);
@@ -94,7 +95,14 @@ async function fetchAndStore(
 
     const tokenUpdate: Record<string, unknown> = {
       tokenUri: uri,
-      tokenUriFetched: true,
+      // Only mark the token clean if no newer MetadataUpdate landed while this
+      // RPC call was in flight. `seenBlock` is the dirty marker read before the
+      // fetch; if the indexer advanced metadata_update_block past it (a new
+      // game-over/score update), this evaluates to false so the token stays in
+      // the work queue and gets re-fetched against the fresher state. Without
+      // this guard a pre-game-over fetch could land after the game-over reset
+      // and pin game_over = false forever.
+      tokenUriFetched: sql`${schema.tokens.metadataUpdateBlock} <= ${seenBlock}`,
       lastUpdatedAt: new Date(),
     };
 
@@ -150,7 +158,12 @@ async function processUnfetched(): Promise<number> {
   // Exclude tokens that have already exhausted their in-process retry
   // burst — same on-chain state next poll would just revert the same way.
   const unfetched = await db
-    .select({ tokenId: schema.tokens.tokenId })
+    .select({
+      tokenId: schema.tokens.tokenId,
+      // Snapshot the dirty marker now; fetchAndStore only marks the token clean
+      // if it hasn't advanced by the time the RPC result is written back.
+      metadataUpdateBlock: schema.tokens.metadataUpdateBlock,
+    })
     .from(schema.tokens)
     .where(
       and(
@@ -172,9 +185,10 @@ async function processUnfetched(): Promise<number> {
     const results = await Promise.allSettled(
       batch.map(async (row) => {
         const tokenId = BigInt(row.tokenId);
+        const seenBlock = row.metadataUpdateBlock ?? 0n;
         let lastError = "no attempts";
         for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-          const result = await fetchAndStore(tokenId);
+          const result = await fetchAndStore(tokenId, seenBlock);
           if (result.ok) return true;
           lastError = result.error;
           const delay = RETRY_BASE_DELAY_MS * 2 ** attempt;

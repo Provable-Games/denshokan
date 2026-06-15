@@ -95,6 +95,16 @@ export const tokens = pgTable(
     // Last error message from a failed URI fetch — kept for triage so
     // operators can grep this column instead of trawling logs.
     tokenUriFetchLastError: text("token_uri_fetch_last_error"),
+    // Monotonic dirty marker: the block of the most recent MetadataUpdate
+    // (ERC-4906) for this token. The URI fetcher records the value it saw
+    // before issuing its RPC call and only marks the token clean
+    // (token_uri_fetched = true) if this column still matches — otherwise a
+    // newer MetadataUpdate arrived mid-fetch and the (now-stale) result must
+    // not clobber it. Prevents the lost-update race where a pre-game-over
+    // fetch lands after the game-over reset and pins game_over = false.
+    metadataUpdateBlock: bigint("metadata_update_block", { mode: "bigint" })
+      .notNull()
+      .default(0n),
 
     // Indexer metadata
     createdAtBlock: bigint("created_at_block", { mode: "bigint" }).notNull(),
