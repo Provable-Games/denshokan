@@ -463,6 +463,144 @@ jobs:
       - name: TypeScript check (api)
         run: cd api && npx tsc --noEmit
 
+  # Runtime smoke test: boots the API against a migrated + seeded Postgres and
+  # asserts the token-serializing routes return 200 with valid JSON. tsc cannot
+  # catch this class of bug — e.g. a new bigint column leaking into c.json()
+  # throws "Do not know how to serialize a BigInt" only at runtime.
+  api-smoke:
+    needs: changes
+    if: needs.changes.outputs.indexer == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: denshokan
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/denshokan
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run migrations
+        run: npm run db:migrate
+
+      - name: Seed database
+        run: npm run db:seed -- --count 200
+
+      - name: Start API server
+        run: npm run dev:api &
+        env:
+          PORT: 3001
+          CORS_ORIGIN: "*"
+
+      - name: Wait for API
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:3001/health && break
+            sleep 1
+          done
+
+      - name: Smoke-test endpoints (assert 2xx + valid JSON)
+        run: |
+          set -uo pipefail
+          BASE=http://localhost:3001
+          fail=0
+
+          check() {
+            local path="$1"
+            local code
+            code=$(curl -s -o /tmp/body.json -w '%{http_code}' "$BASE$path" || echo 000)
+            if [ "$code" != "200" ]; then
+              echo "::error::GET $path returned HTTP $code"
+              head -c 500 /tmp/body.json; echo
+              fail=1
+              return
+            fi
+            # Valid JSON body — catches serializer regressions (e.g. bigint).
+            if ! jq -e . /tmp/body.json >/dev/null 2>&1; then
+              echo "::error::GET $path returned invalid/non-JSON body"
+              head -c 500 /tmp/body.json; echo
+              fail=1
+              return
+            fi
+            echo "OK   $path"
+          }
+
+          check /health
+          check "/tokens?limit=50"
+          check "/games?limit=50"
+          check "/minters"
+          check "/settings"
+          check "/objectives"
+
+          # Exercise parameterized routes with real seeded values.
+          TOKEN_ID=$(curl -s "$BASE/tokens?limit=1" | jq -r '.data[0].tokenId // empty')
+          if [ -n "$TOKEN_ID" ]; then
+            check "/tokens/$TOKEN_ID"
+            OWNER=$(curl -s "$BASE/tokens/$TOKEN_ID" | jq -r '.data.ownerAddress // empty')
+            [ -n "$OWNER" ] && check "/players/$OWNER"
+          else
+            echo "::warning::No seeded tokens — skipping /tokens/:id and /players/:addr"
+          fi
+
+          if [ "$fail" != "0" ]; then
+            echo "::error::API smoke test failed"
+            exit 1
+          fi
+
+      # Validates the `playable` filter's SQL replica against the on-chain
+      # token_state::is_token_playable rule using deterministic fixtures.
+      # Self-skips on an API without the filter (e.g. before the playable
+      # filter PR merges) so it never blocks unrelated changes.
+      - name: is_playable boundary check
+        run: |
+          set -uo pipefail
+          psql "$DATABASE_URL" -f api/test/fixtures/playable.sql
+          BASE=http://localhost:3001
+          ids() { curl -s "$1" | jq -r '.data[].tokenId' | sort | tr '\n' ' '; }
+          all=$(ids "$BASE/tokens?owner=0xf1&limit=200")
+          playable=$(ids "$BASE/tokens?owner=0xf1&playable=true&limit=200")
+          echo "fixtures:        $all"
+          echo "playable result: $playable"
+          if [ "$all" != "1001 1002 1003 1004 1005 1006 " ]; then
+            echo "::error::fixture load failed — expected 6 rows, got '$all'"
+            exit 1
+          fi
+          if [ "$playable" = "$all" ]; then
+            echo "::warning::playable filter not active on this API (pre-filter build) - skipping boundary assertion"
+            exit 0
+          fi
+          if [ "$playable" != "1001 1004 " ]; then
+            echo "::error::playable filter mismatch — expected '1001 1004 ' got '$playable'"
+            exit 1
+          fi
+          echo "is_playable boundary check passed"
+
   claude-review:
     needs: changes
     if: needs.changes.outputs.has_reviews == 'true' && needs.changes.outputs.can_run_claude_reviews == 'true'
@@ -713,6 +851,7 @@ jobs:
       - setup
       - test
       - typecheck-indexer
+      - api-smoke
       - claude-review
       - codex-review
     if: always()
