@@ -1,10 +1,7 @@
 import { ReactNode, useMemo } from "react";
-import {
-  StarknetConfig,
-  jsonRpcProvider,
-  voyager,
-  InjectedConnector,
-} from "@starknet-react/core";
+import { StarknetConfig } from "@starknet-start/react";
+import { jsonRpcProvider } from "@starknet-start/providers";
+import { voyager } from "@starknet-start/explorers";
 import ControllerConnector from "@cartridge/connector/controller";
 import {
   getDefaultChainId,
@@ -34,27 +31,18 @@ const cartridgeConnector =
       })
     : null;
 
-const argentConnector = new InjectedConnector({
-  options: { id: "argentX", name: "Argent X" },
-});
-
-const braavosConnector = new InjectedConnector({
-  options: { id: "braavos", name: "Braavos" },
-});
-
 const rpcByChainId: Record<string, string> = {
   [String(chains[0].id)]: mainnetConfig.rpcUrl,
   [String(chains[1].id)]: sepoliaConfig.rpcUrl,
 };
 
 export function StarknetProvider({ children }: { children: ReactNode }) {
-  const connectors = useMemo(() => {
-    const base: any[] = [];
+  const extraWallets = useMemo(() => {
+    const wallets: any[] = [];
     if (cartridgeConnector) {
-      base.push(cartridgeConnector);
+      wallets.push(cartridgeConnector.asWalletStandard());
     }
-    base.push(argentConnector, braavosConnector);
-    return base;
+    return wallets;
   }, []);
 
   const rpc = useMemo(
@@ -68,7 +56,7 @@ export function StarknetProvider({ children }: { children: ReactNode }) {
     <StarknetConfig
       chains={[...orderedChains]}
       provider={jsonRpcProvider({ rpc })}
-      connectors={connectors}
+      extraWallets={extraWallets}
       explorer={voyager}
       autoConnect
     >

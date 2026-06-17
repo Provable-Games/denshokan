@@ -1,5 +1,7 @@
 import { createContext, useContext, ReactNode, useMemo, useCallback } from "react";
-import { useAccount, useConnect, useDisconnect, type Connector } from "@starknet-react/core";
+import { useAccount, useConnect, useDisconnect } from "@starknet-start/react";
+
+type Connector = ReturnType<typeof useConnect>["connectors"][number];
 
 interface ControllerContextValue {
   isConnected: boolean;
