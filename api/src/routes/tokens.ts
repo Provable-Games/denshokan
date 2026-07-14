@@ -163,6 +163,9 @@ app.post("/query", async (c) => {
     owner?: unknown;
     gameOver?: unknown;
     minterAddress?: unknown;
+    hasContext?: unknown;
+    contextId?: unknown;
+    contextName?: unknown;
     sort?: { field?: unknown; direction?: unknown };
     limit?: unknown;
     offset?: unknown;
@@ -210,6 +213,16 @@ app.post("/query", async (c) => {
   if (owner !== null) conditions.push(eq(tokens.ownerAddress, owner));
   if (body.gameOver === true) conditions.push(eq(tokens.gameOver, true));
   if (body.gameOver === false) conditions.push(eq(tokens.gameOver, false));
+  // Context filters — parity with the GET /tokens path.
+  if (body.hasContext === true) conditions.push(eq(tokens.hasContext, true));
+  if (body.hasContext === false) conditions.push(eq(tokens.hasContext, false));
+  const contextId = parseOptionalNonNegativeInt(
+    body.contextId != null ? String(body.contextId) : undefined,
+  );
+  if (contextId !== null) conditions.push(eq(tokens.contextId, contextId));
+  if (typeof body.contextName === "string" && body.contextName) {
+    conditions.push(eq(tokens.contextName, body.contextName));
+  }
   const minterAddress = parseAddress(
     body.minterAddress != null ? String(body.minterAddress) : undefined,
   );
