@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { eq, desc, asc, and, sql } from "drizzle-orm";
+import { eq, desc, asc, and, sql, inArray } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { tokens, scoreHistory, minters, games } from "../db/schema.js";
 import { parseTokenId, parseGameId, parseAddress, parseNonNegativeInt, parseOptionalNonNegativeInt } from "../utils/validation.js";
@@ -11,6 +11,20 @@ import {
 } from "../utils/rank.js";
 
 const MAX_BULK_RANK_TOKENS = 500;
+// Cap for the by-ids fetch (POST /tokens/query). Matches the bulk-rank cap — a
+// player's whole game set (e.g. every campaign-minted beast) in one request.
+const MAX_TOKENS_BY_IDS = 500;
+
+// Sort field name (API short form) → column. Shared by GET / and POST /query.
+const SORT_FIELDS: Record<string, any> = {
+  score: tokens.currentScore,
+  minted: tokens.mintedAt,
+  updated: tokens.lastUpdatedAt,
+  completedAt: tokens.completedAt,
+  start: tokens.startDelay,
+  end: tokens.endDelay,
+  name: tokens.playerName,
+};
 
 const app = new Hono();
 
@@ -105,16 +119,7 @@ app.get("/", async (c) => {
   const where = conditions.length > 0 ? and(...conditions) : undefined;
 
   // Resolve sort order
-  const sortFields: Record<string, any> = {
-    score: tokens.currentScore,
-    minted: tokens.mintedAt,
-    updated: tokens.lastUpdatedAt,
-    completedAt: tokens.completedAt,
-    start: tokens.startDelay,
-    end: tokens.endDelay,
-    name: tokens.playerName,
-  };
-  const sortColumn = sortFields[sortBy ?? ""] ?? tokens.lastUpdatedAt;
+  const sortColumn = SORT_FIELDS[sortBy ?? ""] ?? tokens.lastUpdatedAt;
   const orderBy = sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn);
 
   const [results, countResult] = await Promise.all([
@@ -140,6 +145,120 @@ app.get("/", async (c) => {
     total: countResult[0]?.count ?? 0,
     limit,
     offset: Math.max(offset, 0),
+  });
+});
+
+// POST /tokens/query - List tokens filtered to an explicit tokenIds set.
+//
+// Same shape as GET /tokens (data/total/limit/offset + the same optional
+// gameId/owner/gameOver/minterAddress filters and sort), but scoped to the
+// provided ids. POST (not a GET ?token_ids=) because the id list can be hundreds
+// of felt252 values — URL-length limits in proxies/CDNs would bite (same reason
+// as POST /tokens/rank). This is the by-ids fetch behind the SDK's
+// `getTokens({ tokenIds })` / `useTokens({ tokenIds })`.
+app.post("/query", async (c) => {
+  type Body = {
+    tokenIds?: unknown;
+    gameId?: unknown;
+    owner?: unknown;
+    gameOver?: unknown;
+    minterAddress?: unknown;
+    sort?: { field?: unknown; direction?: unknown };
+    limit?: unknown;
+    offset?: unknown;
+  };
+
+  let body: Body;
+  try {
+    body = await c.req.json<Body>();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+
+  if (!Array.isArray(body.tokenIds)) {
+    return c.json({ error: "tokenIds must be an array" }, 400);
+  }
+  const offset = parseNonNegativeInt(
+    body.offset != null ? String(body.offset) : undefined,
+    0,
+  );
+  if (body.tokenIds.length === 0) {
+    return c.json({ data: [], total: 0, limit: 0, offset });
+  }
+  if (body.tokenIds.length > MAX_TOKENS_BY_IDS) {
+    return c.json(
+      { error: `Too many tokenIds (max ${MAX_TOKENS_BY_IDS})` },
+      400,
+    );
+  }
+
+  const ids: string[] = [];
+  for (const raw of body.tokenIds) {
+    const id = parseTokenId(typeof raw === "string" ? raw : String(raw));
+    if (id === null) {
+      return c.json({ error: `Invalid tokenId: ${raw}` }, 400);
+    }
+    ids.push(id);
+  }
+
+  const conditions = [inArray(tokens.tokenId, ids)];
+  const gameId = parseGameId(
+    body.gameId != null ? String(body.gameId) : undefined,
+  );
+  if (gameId !== null) conditions.push(eq(tokens.gameId, gameId));
+  const owner = parseAddress(body.owner != null ? String(body.owner) : undefined);
+  if (owner !== null) conditions.push(eq(tokens.ownerAddress, owner));
+  if (body.gameOver === true) conditions.push(eq(tokens.gameOver, true));
+  if (body.gameOver === false) conditions.push(eq(tokens.gameOver, false));
+  const minterAddress = parseAddress(
+    body.minterAddress != null ? String(body.minterAddress) : undefined,
+  );
+  if (minterAddress) {
+    const minterId = await resolveMinterId(minterAddress);
+    if (minterId === null) {
+      return c.json({ data: [], total: 0, limit: ids.length, offset });
+    }
+    conditions.push(eq(tokens.mintedBy, minterId));
+  }
+
+  const where = and(...conditions);
+  const sortBy = typeof body.sort?.field === "string" ? body.sort.field : undefined;
+  const sortOrder = body.sort?.direction === "asc" ? "asc" : "desc";
+  const sortColumn = SORT_FIELDS[sortBy ?? ""] ?? tokens.lastUpdatedAt;
+  const orderBy = sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn);
+  const cappedLimit = Math.min(
+    parseNonNegativeInt(
+      body.limit != null ? String(body.limit) : undefined,
+      ids.length,
+    ),
+    1000,
+  );
+
+  const [results, countResult] = await Promise.all([
+    db
+      .select()
+      .from(tokens)
+      .where(where)
+      .orderBy(orderBy, asc(tokens.mintedAt))
+      .limit(cappedLimit)
+      .offset(offset),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(tokens)
+      .where(where),
+  ]);
+
+  return c.json({
+    data: await Promise.all(
+      results.map(async (t) => ({
+        ...serializeToken(t),
+        minterAddress: await resolveMinterAddress(t.mintedBy.toString()),
+        gameAddress: await resolveGameAddress(t.gameId),
+      })),
+    ),
+    total: countResult[0]?.count ?? 0,
+    limit: cappedLimit,
+    offset,
   });
 });
 

@@ -10,6 +10,18 @@ interface Subscription {
   owners: Set<string>;
   settingsIds: Set<number>;
   objectiveIds: Set<number>;
+  /** Explicit token-id allowlist (normalized decimal). Empty ⇒ no id filter. */
+  tokenIds: Set<string>;
+}
+
+/** Normalize a token id (decimal or hex) to unpadded decimal so ids from the
+ *  client compare equal to the indexer's stored form regardless of formatting. */
+function normalizeTokenId(value: string): string {
+  try {
+    return BigInt(value).toString();
+  } catch {
+    return value;
+  }
 }
 
 // Valid PG LISTEN channels (from 004_functions.sql + 0002_websocket_triggers.sql)
@@ -184,6 +196,10 @@ function matchesFilters(sub: Subscription, data: Record<string, unknown>): boole
     const objectiveId = data.objective_id;
     if (objectiveId != null && !sub.objectiveIds.has(Number(objectiveId))) return false;
   }
+  if (sub.tokenIds.size > 0) {
+    const tokenId = data.token_id;
+    if (tokenId == null || !sub.tokenIds.has(normalizeTokenId(String(tokenId)))) return false;
+  }
   return true;
 }
 
@@ -225,6 +241,7 @@ export function handleWSConnection(ws: WebSocket) {
     owners: new Set(),
     settingsIds: new Set(),
     objectiveIds: new Set(),
+    tokenIds: new Set(),
   };
   clients.set(ws, sub);
   aliveClients.add(ws);
@@ -244,6 +261,7 @@ export function handleWSConnection(ws: WebSocket) {
         owners?: string[];
         settingsIds?: number[];
         objectiveIds?: number[];
+        tokenIds?: string[];
       };
 
       if (msg.type === "subscribe" && Array.isArray(msg.channels)) {
@@ -269,6 +287,9 @@ export function handleWSConnection(ws: WebSocket) {
         }
         if (Array.isArray(msg.objectiveIds)) {
           for (const oid of msg.objectiveIds) sub.objectiveIds.add(Number(oid));
+        }
+        if (Array.isArray(msg.tokenIds)) {
+          for (const tid of msg.tokenIds) sub.tokenIds.add(normalizeTokenId(String(tid)));
         }
         ws.send(JSON.stringify({ type: "subscribed", channels: [...sub.channels] }));
       }
