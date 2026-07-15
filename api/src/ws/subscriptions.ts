@@ -2,8 +2,7 @@ import type { WebSocket } from "ws";
 import pg from "pg";
 import { pool } from "../db/client.js";
 
-interface Subscription {
-  channels: Set<string>;
+interface ChannelFilter {
   gameIds: Set<string>;
   contextIds: Set<number>;
   mintedByIds: Set<number>;
@@ -12,6 +11,32 @@ interface Subscription {
   objectiveIds: Set<number>;
   /** Explicit token-id allowlist (normalized decimal). Empty ⇒ no id filter. */
   tokenIds: Set<string>;
+}
+
+/**
+ * Filters are scoped PER pg-channel. The SDK sends a SEPARATE `subscribe` per hook
+ * over one socket (e.g. `scores` filtered by `tokenIds`, `mints`/`game_over` filtered
+ * by a `minterAddress`), and each subscribe's filters must apply ONLY to the channels
+ * in THAT message. The previous model accumulated every subscribe's filters into one
+ * global AND'd set per connection, so an unrelated channel's filter silently dropped
+ * another channel's events — e.g. a Greed `mints` subscription's `minterAddress`
+ * filtered out all beast `score_updates` frames (different minter). Per-channel scoping
+ * fixes that.
+ */
+interface Subscription {
+  byChannel: Map<string, ChannelFilter>;
+}
+
+function emptyFilter(): ChannelFilter {
+  return {
+    gameIds: new Set(),
+    contextIds: new Set(),
+    mintedByIds: new Set(),
+    owners: new Set(),
+    settingsIds: new Set(),
+    objectiveIds: new Set(),
+    tokenIds: new Set(),
+  };
 }
 
 /** Normalize a token id (decimal or hex) to unpadded decimal so ids from the
@@ -171,34 +196,34 @@ export function shutdownWS() {
   clients.clear();
 }
 
-function matchesFilters(sub: Subscription, data: Record<string, unknown>): boolean {
-  if (sub.gameIds.size > 0) {
+function matchesFilters(f: ChannelFilter, data: Record<string, unknown>): boolean {
+  if (f.gameIds.size > 0) {
     const gameId = data.game_id;
-    if (gameId != null && !sub.gameIds.has(String(gameId))) return false;
+    if (gameId != null && !f.gameIds.has(String(gameId))) return false;
   }
-  if (sub.contextIds.size > 0) {
+  if (f.contextIds.size > 0) {
     const contextId = data.context_id;
-    if (contextId != null && !sub.contextIds.has(Number(contextId))) return false;
+    if (contextId != null && !f.contextIds.has(Number(contextId))) return false;
   }
-  if (sub.mintedByIds.size > 0) {
+  if (f.mintedByIds.size > 0) {
     const mintedBy = data.minted_by;
-    if (mintedBy != null && !sub.mintedByIds.has(Number(mintedBy))) return false;
+    if (mintedBy != null && !f.mintedByIds.has(Number(mintedBy))) return false;
   }
-  if (sub.owners.size > 0) {
+  if (f.owners.size > 0) {
     const owner = data.owner_address;
-    if (owner == null || !sub.owners.has(normalizeAddress(String(owner)))) return false;
+    if (owner == null || !f.owners.has(normalizeAddress(String(owner)))) return false;
   }
-  if (sub.settingsIds.size > 0) {
+  if (f.settingsIds.size > 0) {
     const settingsId = data.settings_id;
-    if (settingsId != null && !sub.settingsIds.has(Number(settingsId))) return false;
+    if (settingsId != null && !f.settingsIds.has(Number(settingsId))) return false;
   }
-  if (sub.objectiveIds.size > 0) {
+  if (f.objectiveIds.size > 0) {
     const objectiveId = data.objective_id;
-    if (objectiveId != null && !sub.objectiveIds.has(Number(objectiveId))) return false;
+    if (objectiveId != null && !f.objectiveIds.has(Number(objectiveId))) return false;
   }
-  if (sub.tokenIds.size > 0) {
+  if (f.tokenIds.size > 0) {
     const tokenId = data.token_id;
-    if (tokenId == null || !sub.tokenIds.has(normalizeTokenId(String(tokenId)))) return false;
+    if (tokenId == null || !f.tokenIds.has(normalizeTokenId(String(tokenId)))) return false;
   }
   return true;
 }
@@ -215,8 +240,9 @@ function broadcast(channel: string, payload: unknown) {
   const data = payload as Record<string, unknown>;
 
   for (const [ws, sub] of clients) {
-    if (!sub.channels.has(channel)) continue;
-    if (!matchesFilters(sub, data)) continue;
+    const f = sub.byChannel.get(channel);
+    if (!f) continue;
+    if (!matchesFilters(f, data)) continue;
 
     try {
       ws.send(message);
@@ -233,16 +259,7 @@ export function handleWSConnection(ws: WebSocket) {
   initPgListener();
   startHeartbeat();
 
-  const sub: Subscription = {
-    channels: new Set(),
-    gameIds: new Set(),
-    contextIds: new Set(),
-    mintedByIds: new Set(),
-    owners: new Set(),
-    settingsIds: new Set(),
-    objectiveIds: new Set(),
-    tokenIds: new Set(),
-  };
+  const sub: Subscription = { byChannel: new Map() };
   clients.set(ws, sub);
   aliveClients.add(ws);
 
@@ -265,33 +282,40 @@ export function handleWSConnection(ws: WebSocket) {
       };
 
       if (msg.type === "subscribe" && Array.isArray(msg.channels)) {
+        // This message's filters apply ONLY to the channels in this message.
+        const mintedByIds =
+          Array.isArray(msg.minterAddresses) && msg.minterAddresses.length > 0
+            ? await resolveMinterAddresses(msg.minterAddresses)
+            : [];
         for (const ch of msg.channels) {
           const pgChannel = CHANNEL_MAP[ch];
-          if (pgChannel) sub.channels.add(pgChannel);
+          if (!pgChannel) continue;
+          let f = sub.byChannel.get(pgChannel);
+          if (!f) {
+            f = emptyFilter();
+            sub.byChannel.set(pgChannel, f);
+          }
+          if (Array.isArray(msg.gameIds)) {
+            for (const gid of msg.gameIds) f.gameIds.add(String(gid));
+          }
+          if (Array.isArray(msg.contextIds)) {
+            for (const cid of msg.contextIds) f.contextIds.add(Number(cid));
+          }
+          for (const id of mintedByIds) f.mintedByIds.add(id);
+          if (Array.isArray(msg.owners)) {
+            for (const addr of msg.owners) f.owners.add(normalizeAddress(String(addr)));
+          }
+          if (Array.isArray(msg.settingsIds)) {
+            for (const sid of msg.settingsIds) f.settingsIds.add(Number(sid));
+          }
+          if (Array.isArray(msg.objectiveIds)) {
+            for (const oid of msg.objectiveIds) f.objectiveIds.add(Number(oid));
+          }
+          if (Array.isArray(msg.tokenIds)) {
+            for (const tid of msg.tokenIds) f.tokenIds.add(normalizeTokenId(String(tid)));
+          }
         }
-        if (Array.isArray(msg.gameIds)) {
-          for (const gid of msg.gameIds) sub.gameIds.add(String(gid));
-        }
-        if (Array.isArray(msg.contextIds)) {
-          for (const cid of msg.contextIds) sub.contextIds.add(Number(cid));
-        }
-        if (Array.isArray(msg.minterAddresses) && msg.minterAddresses.length > 0) {
-          const mintedByIds = await resolveMinterAddresses(msg.minterAddresses);
-          for (const id of mintedByIds) sub.mintedByIds.add(id);
-        }
-        if (Array.isArray(msg.owners)) {
-          for (const addr of msg.owners) sub.owners.add(normalizeAddress(String(addr)));
-        }
-        if (Array.isArray(msg.settingsIds)) {
-          for (const sid of msg.settingsIds) sub.settingsIds.add(Number(sid));
-        }
-        if (Array.isArray(msg.objectiveIds)) {
-          for (const oid of msg.objectiveIds) sub.objectiveIds.add(Number(oid));
-        }
-        if (Array.isArray(msg.tokenIds)) {
-          for (const tid of msg.tokenIds) sub.tokenIds.add(normalizeTokenId(String(tid)));
-        }
-        ws.send(JSON.stringify({ type: "subscribed", channels: [...sub.channels] }));
+        ws.send(JSON.stringify({ type: "subscribed", channels: [...sub.byChannel.keys()] }));
       }
 
       if (msg.type === "ping") {
@@ -302,9 +326,9 @@ export function handleWSConnection(ws: WebSocket) {
       if (msg.type === "unsubscribe" && Array.isArray(msg.channels)) {
         for (const ch of msg.channels) {
           const pgChannel = CHANNEL_MAP[ch];
-          if (pgChannel) sub.channels.delete(pgChannel);
+          if (pgChannel) sub.byChannel.delete(pgChannel);
         }
-        ws.send(JSON.stringify({ type: "unsubscribed", channels: [...sub.channels] }));
+        ws.send(JSON.stringify({ type: "unsubscribed", channels: [...sub.byChannel.keys()] }));
       }
     } catch (e) {
       console.error("[WebSocket] Error processing message:", e);
