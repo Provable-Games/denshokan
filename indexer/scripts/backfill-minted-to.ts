@@ -22,7 +22,7 @@
  */
 
 import { drizzle } from "drizzle-orm/node-postgres";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { isNull, sql } from "drizzle-orm";
 import { Pool } from "pg";
 import { RpcProvider, hash, num } from "starknet";
 
@@ -78,10 +78,31 @@ async function main() {
   let updated = 0;
   let pages = 0;
 
+  // Batch the writes: one UPDATE…FROM (VALUES…) per page of mints instead of
+  // a round-trip per row — the difference between minutes and hours when the
+  // database is reached over a WAN proxy. Still NULL-guarded per row.
+  async function flush(batch: Array<{ tokenId: string; to: string }>): Promise<void> {
+    if (batch.length === 0 || DRY_RUN) return;
+    const values: string[] = [];
+    const params: string[] = [];
+    batch.forEach((row, i) => {
+      values.push(`($${i * 2 + 1}::numeric, $${i * 2 + 2}::text)`);
+      params.push(row.tokenId, row.to);
+    });
+    const res = await pool.query(
+      `UPDATE tokens AS t SET minted_to = v.recipient
+       FROM (VALUES ${values.join(",")}) AS v(token_id, recipient)
+       WHERE t.token_id = v.token_id AND t.minted_to IS NULL`,
+      params
+    );
+    updated += res.rowCount ?? 0;
+  }
+
   for (;;) {
     const result = await provider.getEvents(filter);
     pages++;
 
+    const batch: Array<{ tokenId: string; to: string }> = [];
     for (const event of result.events ?? []) {
       // keys = [selector, from, to, token_id.low, token_id.high]
       const to = event.keys[2];
@@ -90,20 +111,9 @@ async function main() {
       if (!to || low === undefined || high === undefined) continue;
       const tokenId = (BigInt(high) << 128n) | BigInt(low);
       scanned++;
-
-      if (DRY_RUN) continue;
-      const res = await db
-        .update(schema.tokens)
-        .set({ mintedTo: num.toHex(BigInt(to)) })
-        .where(
-          and(
-            eq(schema.tokens.tokenId, tokenId.toString()),
-            // NULL guard: never touch rows the live indexer already wrote.
-            isNull(schema.tokens.mintedTo)
-          )
-        );
-      updated += res.rowCount ?? 0;
+      batch.push({ tokenId: tokenId.toString(), to: num.toHex(BigInt(to)) });
     }
+    await flush(batch);
 
     if (pages % 10 === 0 || !result.continuation_token) {
       console.log(
