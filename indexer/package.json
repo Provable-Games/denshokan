@@ -13,7 +13,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
-    "postinstall": "test -d node_modules/@apibara/indexer && npx patch-package || true"
+    "postinstall": "test -d node_modules/@apibara/indexer && npx patch-package || true",
+    "backfill:minted-to": "npm run db:migrate && tsx scripts/backfill-minted-to.ts"
   },
   "keywords": [
     "starknet",

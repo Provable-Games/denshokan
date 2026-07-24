@@ -68,6 +68,12 @@ export const tokens = pgTable(
 
     // From Transfer events and player actions
     ownerAddress: text("owner_address").notNull(),
+    // Original mint recipient (the `to` of the Transfer from 0x0). Written
+    // once at mint and never updated by later transfers — the immutable
+    // "who earned this by playing" identity, as opposed to owner_address
+    // which follows the asset. Nullable: rows minted before this column
+    // are filled by scripts/backfill-minted-to.ts.
+    mintedTo: text("minted_to"),
     playerName: text("player_name"),
     clientUrl: text("client_url"),
 

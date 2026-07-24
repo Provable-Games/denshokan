@@ -1,97 +1,104 @@
 {
-	"version": "7",
-	"dialect": "postgresql",
-	"entries": [
-		{
-			"idx": 0,
-			"version": "7",
-			"when": 1769725123921,
-			"tag": "0000_initial",
-			"breakpoints": true
-		},
-		{
-			"idx": 1,
-			"version": "7",
-			"when": 1772294986086,
-			"tag": "0001_good_invisible_woman",
-			"breakpoints": true
-		},
-		{
-			"idx": 2,
-			"version": "7",
-			"when": 1772726400000,
-			"tag": "0002_skills_address_rename",
-			"breakpoints": true
-		},
-		{
-			"idx": 3,
-			"version": "7",
-			"when": 1772813400000,
-			"tag": "0003_token_skills_address",
-			"breakpoints": true
-		},
-		{
-			"idx": 4,
-			"version": "7",
-			"when": 1772899800000,
-			"tag": "0004_token_uri",
-			"breakpoints": true
-		},
-		{
-			"idx": 5,
-			"version": "7",
-			"when": 1772986200000,
-			"tag": "0005_game_version",
-			"breakpoints": true
-		},
-		{
-			"idx": 6,
-			"version": "7",
-			"when": 1774252800000,
-			"tag": "0006_game_fee_license",
-			"breakpoints": true
-		},
-		{
-			"idx": 7,
-			"version": "7",
-			"when": 1774339200000,
-			"tag": "0007_enrich_ws_payloads",
-			"breakpoints": true
-		},
-		{
-			"idx": 8,
-			"version": "7",
-			"when": 1774425600000,
-			"tag": "0008_fix_ws_numeric_precision",
-			"breakpoints": true
-		},
-		{
-			"idx": 9,
-			"version": "7",
-			"when": 1776192000000,
-			"tag": "0009_drop_token_events_and_leaderboards",
-			"breakpoints": true
-		},
-		{
-			"idx": 10,
-			"version": "7",
-			"when": 1776278400000,
-			"tag": "0010_completed_at",
-			"breakpoints": true
-		},
-		{
-			"idx": 11,
-			"version": "7",
-			"when": 1778284800000,
-			"tag": "0011_token_uri_fetch_failed",
-			"breakpoints": true
-		},
-		{
-			"idx": 12,
-			"version": "7",
-			"when": 1781515964000,
-			"tag": "0012_metadata_update_block",
-			"breakpoints": true
-		}
-	]
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1769725123921,
+      "tag": "0000_initial",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1772294986086,
+      "tag": "0001_good_invisible_woman",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1772726400000,
+      "tag": "0002_skills_address_rename",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1772813400000,
+      "tag": "0003_token_skills_address",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1772899800000,
+      "tag": "0004_token_uri",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1772986200000,
+      "tag": "0005_game_version",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1774252800000,
+      "tag": "0006_game_fee_license",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1774339200000,
+      "tag": "0007_enrich_ws_payloads",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1774425600000,
+      "tag": "0008_fix_ws_numeric_precision",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1776192000000,
+      "tag": "0009_drop_token_events_and_leaderboards",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1776278400000,
+      "tag": "0010_completed_at",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1778284800000,
+      "tag": "0011_token_uri_fetch_failed",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1781515964000,
+      "tag": "0012_metadata_update_block",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1784920000000,
+      "tag": "0013_minted_to",
+      "breakpoints": true
+    }
+  ]
 }

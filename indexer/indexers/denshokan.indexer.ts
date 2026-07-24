@@ -195,6 +195,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                   salt: packed.salt,
                   metadata: packed.metadata,
                   ownerAddress: decoded.to,
+                  mintedTo: decoded.to,
                   createdAtBlock: blockNumber,
                   lastUpdatedBlock: blockNumber,
                   lastUpdatedAt: blockTimestamp,
@@ -202,6 +203,9 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                   target: schema.tokens.tokenId,
                   set: {
                     ownerAddress: decoded.to,
+                    // Conflict on a mint = replay/re-org of the mint event
+                    // itself, so minted_to is the same fact re-observed.
+                    mintedTo: decoded.to,
                     lastUpdatedBlock: blockNumber,
                     lastUpdatedAt: blockTimestamp,
                   },
