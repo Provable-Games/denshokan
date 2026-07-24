@@ -136,9 +136,12 @@ app.get("/", async (c) => {
       .where(where),
   ]);
 
+  // Opt out of the ~40 KB tokenUri per row with ?include_uri=false. Default keeps
+  // it (backward-compatible for existing callers / raw consumers).
+  const includeUri = c.req.query("include_uri") !== "false";
   return c.json({
     data: await Promise.all(results.map(async (t) => ({
-      ...serializeToken(t),
+      ...serializeToken(t, includeUri),
       minterAddress: await resolveMinterAddress(t.mintedBy.toString()),
       gameAddress: await resolveGameAddress(t.gameId),
     }))),
@@ -169,6 +172,7 @@ app.post("/query", async (c) => {
     sort?: { field?: unknown; direction?: unknown };
     limit?: unknown;
     offset?: unknown;
+    includeUri?: unknown;
   };
 
   let body: Body;
@@ -261,10 +265,13 @@ app.post("/query", async (c) => {
       .where(where),
   ]);
 
+  // Opt out of the ~40 KB tokenUri per row with { includeUri: false } — this is the
+  // SDK's by-ids fetch path (the beast-achievements poller), where it dominates egress.
+  const includeUri = body.includeUri !== false;
   return c.json({
     data: await Promise.all(
       results.map(async (t) => ({
-        ...serializeToken(t),
+        ...serializeToken(t, includeUri),
         minterAddress: await resolveMinterAddress(t.mintedBy.toString()),
         gameAddress: await resolveGameAddress(t.gameId),
       })),
@@ -438,12 +445,25 @@ app.get("/:id/scores", async (c) => {
   });
 });
 
-function serializeToken(t: typeof tokens.$inferSelect) {
+function serializeToken(t: typeof tokens.$inferSelect, includeUri = true) {
   // tokenUriFetched / metadataUpdateBlock are internal fetcher bookkeeping and
   // not part of the public payload. metadataUpdateBlock in particular is a
   // bigint that would otherwise break JSON.stringify here.
-  const { tokenUriFetched, metadataUpdateBlock, ...rest } = t;
-  return {
+  //
+  // `tokenUri` is the ~40 KB embedded data-URI (base64 SVG). Most list/batch
+  // consumers only need tokenId/score, so callers can opt out with
+  // include_uri=false — the difference is ~40 KB/token vs ~100 B, i.e. the whole
+  // beast-achievements poller egress spike. Gated (with its two fetch-status
+  // companions) so an unqualified request stays backward-compatible.
+  const {
+    tokenUriFetched,
+    metadataUpdateBlock,
+    tokenUri,
+    tokenUriFetchFailed,
+    tokenUriFetchLastError,
+    ...rest
+  } = t;
+  const base = {
     ...rest,
     tokenId: rest.tokenId.toString(),
     mintedBy: rest.mintedBy.toString(),
@@ -451,6 +471,9 @@ function serializeToken(t: typeof tokens.$inferSelect) {
     createdAtBlock: rest.createdAtBlock.toString(),
     lastUpdatedBlock: rest.lastUpdatedBlock.toString(),
   };
+  return includeUri
+    ? { ...base, tokenUri, tokenUriFetchFailed, tokenUriFetchLastError }
+    : base;
 }
 
 export default app;
