@@ -175,6 +175,12 @@ export async function computeRanksBulk(
   // We materialize ranks for every row in scope, then filter to the requested
   // ids. For typical Budokan tournament sizes (hundreds to low thousands of
   // entries) this is a single index scan + sort and stays well under 100ms.
+  //
+  // The id list is spelled out as ARRAY[$1, $2, ...]::numeric[] rather than
+  // interpolated as one value. token_id is a numeric column, so Postgres types
+  // the ANY() operand as numeric[]; embedding the JS array directly makes
+  // Drizzle bind a bare scalar there, and every call fails with
+  // `malformed array literal: "2582257391713022638751490046647058842..."`.
   const result = await db.execute<{
     token_id: string;
     rank: number;
@@ -194,7 +200,10 @@ export async function computeRanksBulk(
     )
     SELECT token_id, rank::int AS rank, total::int AS total, score::text AS score
     FROM ranked
-    WHERE token_id = ANY(${tokenIds})
+    WHERE token_id = ANY(ARRAY[${sql.join(
+      tokenIds.map((id) => sql`${id}`),
+      sql`, `,
+    )}]::numeric[])
   `);
 
   return result.rows.map((r) => ({
