@@ -4,6 +4,7 @@ import { db } from "../db/client.js";
 import { tokens, minters, games } from "../db/schema.js";
 import { parseAddress, parseGameId, parseNonNegativeInt } from "../utils/validation.js";
 import { parseRankScope, computeRank } from "../utils/rank.js";
+import { resolveUriAccess } from "../utils/uriAccess.js";
 
 // In-memory minter cache (minter_id -> contract_address)
 let minterCache = new Map<string, string>();
@@ -89,9 +90,13 @@ app.get("/:address/tokens", async (c) => {
       .where(where),
   ]);
 
+  // A portfolio is a list, so it follows the same opt-in rule as GET /tokens:
+  // ask with ?include_uri=true from an allowlisted origin. See utils/uriAccess.ts.
+  const includeUri = resolveUriAccess(c, c.req.query("include_uri") === "true");
+
   return c.json({
     data: await Promise.all(results.map(async (t) => ({
-      ...serializeToken(t),
+      ...serializeToken(t, includeUri),
       minterAddress: await resolveMinterAddress(t.mintedBy.toString()),
       gameAddress: await resolveGameAddress(t.gameId),
     }))),
@@ -178,12 +183,23 @@ app.get("/:address/stats", async (c) => {
   });
 });
 
-function serializeToken(t: typeof tokens.$inferSelect) {
+function serializeToken(t: typeof tokens.$inferSelect, includeUri = false) {
   // tokenUriFetched / metadataUpdateBlock are internal fetcher bookkeeping and
   // not part of the public payload. metadataUpdateBlock in particular is a
   // bigint that would otherwise break JSON.stringify here.
-  const { tokenUriFetched, metadataUpdateBlock, ...rest } = t;
-  return {
+  //
+  // tokenUri is the ~40 KB base64 SVG — same opt-in treatment as the /tokens
+  // list endpoints, since a portfolio page is exactly the case where returning
+  // it unconditionally is most expensive.
+  const {
+    tokenUriFetched,
+    metadataUpdateBlock,
+    tokenUri,
+    tokenUriFetchFailed,
+    tokenUriFetchLastError,
+    ...rest
+  } = t;
+  const base = {
     ...rest,
     tokenId: rest.tokenId.toString(),
     mintedBy: rest.mintedBy.toString(),
@@ -191,6 +207,9 @@ function serializeToken(t: typeof tokens.$inferSelect) {
     createdAtBlock: rest.createdAtBlock.toString(),
     lastUpdatedBlock: rest.lastUpdatedBlock.toString(),
   };
+  return includeUri
+    ? { ...base, tokenUri, tokenUriFetchFailed, tokenUriFetchLastError }
+    : base;
 }
 
 export default app;

@@ -8,6 +8,7 @@ import { createNodeWebSocket } from "@hono/node-ws";
 import { healthCheck, getLatestIndexedBlock, shutdown } from "./db/client.js";
 import { rateLimit, cleanupTimer } from "./middleware/rateLimit.js";
 import { handleWSConnection, shutdownWS } from "./ws/subscriptions.js";
+import { describeUriPolicy } from "./utils/uriAccess.js";
 
 import tokensRouter from "./routes/tokens.js";
 import gamesRouter from "./routes/games.js";
@@ -20,7 +21,17 @@ const app = new Hono();
 const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app });
 
 // Middleware
-app.use("*", cors());
+//
+// CORS_ORIGIN is a comma-separated origin allowlist
+// (e.g. https://denshokan.gg,http://localhost:5173). Unset means allow any
+// origin, which is what this served before the variable was wired up.
+const corsOrigins = (process.env.CORS_ORIGIN ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+const corsAllowsAll = corsOrigins.length === 0 || corsOrigins.includes("*");
+
+app.use("*", corsAllowsAll ? cors() : cors({ origin: corsOrigins }));
 app.use("*", rateLimit(300));
 
 // Health
@@ -66,6 +77,10 @@ try {
 const server = serve(serverOptions, (info) => {
   const protocol = serverOptions.createServer ? "https" : "http";
   console.log(`[Denshokan API] Listening on ${protocol}://localhost:${info.port}`);
+  console.log(
+    `[Denshokan API] CORS: ${corsAllowsAll ? "any origin" : corsOrigins.join(", ")}`,
+  );
+  console.log(`[Denshokan API] ${describeUriPolicy()}`);
 });
 
 injectWebSocket(server);

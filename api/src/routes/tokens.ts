@@ -9,6 +9,7 @@ import {
   computeRank,
   computeRanksBulk,
 } from "../utils/rank.js";
+import { resolveUriAccess } from "../utils/uriAccess.js";
 
 const MAX_BULK_RANK_TOKENS = 500;
 // Cap for the by-ids fetch (POST /tokens/query). Matches the bulk-rank cap — a
@@ -136,9 +137,11 @@ app.get("/", async (c) => {
       .where(where),
   ]);
 
-  // Opt out of the ~40 KB tokenUri per row with ?include_uri=false. Default keeps
-  // it (backward-compatible for existing callers / raw consumers).
-  const includeUri = c.req.query("include_uri") !== "false";
+  // The ~40 KB tokenUri per row is opt-in on list endpoints: ask for it with
+  // ?include_uri=true, from an origin in URI_ALLOWED_ORIGINS. A page of 1000
+  // tokens is ~100 KB without it and ~40 MB with it, which is why the default
+  // flipped — see utils/uriAccess.ts.
+  const includeUri = resolveUriAccess(c, c.req.query("include_uri") === "true");
   return c.json({
     data: await Promise.all(results.map(async (t) => ({
       ...serializeToken(t, includeUri),
@@ -265,9 +268,10 @@ app.post("/query", async (c) => {
       .where(where),
   ]);
 
-  // Opt out of the ~40 KB tokenUri per row with { includeUri: false } — this is the
-  // SDK's by-ids fetch path (the beast-achievements poller), where it dominates egress.
-  const includeUri = body.includeUri !== false;
+  // Opt in to the ~40 KB tokenUri per row with { includeUri: true }, from an
+  // origin in URI_ALLOWED_ORIGINS. This is the SDK's by-ids fetch path (the
+  // beast-achievements poller) where it dominated egress, so it defaults off.
+  const includeUri = resolveUriAccess(c, body.includeUri === true);
   return c.json({
     data: await Promise.all(
       results.map(async (t) => ({
@@ -299,9 +303,14 @@ app.get("/:id", async (c) => {
     return c.json({ error: "Token not found" }, 404);
   }
 
+  // Single token — one URI, not a page of them, so this stays opt-out
+  // (?include_uri=false) to keep token-detail views working unchanged. The
+  // origin allowlist still applies.
+  const includeUri = resolveUriAccess(c, c.req.query("include_uri") !== "false");
+
   return c.json({
     data: {
-      ...serializeToken(result[0]),
+      ...serializeToken(result[0], includeUri),
       minterAddress: await resolveMinterAddress(result[0].mintedBy.toString()),
       gameAddress: await resolveGameAddress(result[0].gameId),
     },
@@ -450,11 +459,11 @@ function serializeToken(t: typeof tokens.$inferSelect, includeUri = true) {
   // not part of the public payload. metadataUpdateBlock in particular is a
   // bigint that would otherwise break JSON.stringify here.
   //
-  // `tokenUri` is the ~40 KB embedded data-URI (base64 SVG). Most list/batch
-  // consumers only need tokenId/score, so callers can opt out with
-  // include_uri=false — the difference is ~40 KB/token vs ~100 B, i.e. the whole
-  // beast-achievements poller egress spike. Gated (with its two fetch-status
-  // companions) so an unqualified request stays backward-compatible.
+  // `tokenUri` is the ~40 KB embedded data-URI (base64 SVG) — vs ~100 B for the
+  // rest of the row. Most list/batch consumers only need tokenId/score, so list
+  // endpoints omit it unless a caller opts in AND its origin is allowlisted
+  // (utils/uriAccess.ts). Callers decide via the `includeUri` argument; the two
+  // fetch-status companions ride along with it.
   const {
     tokenUriFetched,
     metadataUpdateBlock,
