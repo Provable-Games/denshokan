@@ -44,6 +44,11 @@ jobs:
             contracts:
               - "contracts/packages/**"
               - "contracts/.tool-versions"
+              # A dependency bump changes only the manifest/lockfile, and it is
+              # the change class most likely to break the build — without these
+              # the contract lint/build/test jobs skip on exactly those PRs.
+              - "contracts/Scarb.toml"
+              - "contracts/Scarb.lock"
             contracts_review:
               - "contracts/**"
             indexer:
