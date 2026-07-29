@@ -88,6 +88,9 @@ jobs:
               - "contracts/packages/games/**"
             tool_versions:
               - "contracts/.tool-versions"
+            workspace_manifests:
+              - "contracts/Scarb.toml"
+              - "contracts/Scarb.lock"
 
       - name: Compute test matrix from changed packages
         id: compute-test-matrix
@@ -99,9 +102,10 @@ jobs:
           FILTER_REGISTRY: ${{ steps.filter.outputs.registry }}
           FILTER_GAMES: ${{ steps.filter.outputs.games }}
           FILTER_TOOL_VERSIONS: ${{ steps.filter.outputs.tool_versions }}
+          FILTER_WORKSPACE_MANIFESTS: ${{ steps.filter.outputs.workspace_manifests }}
         run: |
           # Determine which packages need testing based on transitive deps
-          # interfaces, testing, or .tool-versions → ALL packages
+          # interfaces, testing, .tool-versions, or workspace manifests → ALL packages
           # individual package → just that package
 
           RUN_ALL="false"
@@ -110,7 +114,7 @@ jobs:
           NEED_REGISTRY="false"
           NEED_GAMES="false"
 
-          if [ "$FILTER_INTERFACES" = "true" ] || [ "$FILTER_TESTING" = "true" ] || [ "$FILTER_TOOL_VERSIONS" = "true" ]; then
+          if [ "$FILTER_INTERFACES" = "true" ] || [ "$FILTER_TESTING" = "true" ] || [ "$FILTER_TOOL_VERSIONS" = "true" ] || [ "$FILTER_WORKSPACE_MANIFESTS" = "true" ]; then
             RUN_ALL="true"
           fi
 
