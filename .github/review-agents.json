@@ -1,0 +1,29 @@
+{
+  "agents": [
+    {
+      "agent_id": "contracts",
+      "agent_name": "Cairo/Starknet Contract Review",
+      "prompt_file": ".github/prompts/cairo-review.md",
+      "diff_paths": ["contracts/"]
+    },
+    {
+      "agent_id": "indexer",
+      "agent_name": "Indexer/API Review",
+      "prompt_file": ".github/prompts/indexer-review.md",
+      "diff_paths": ["indexer/", "api/"]
+    },
+    {
+      "agent_id": "client",
+      "agent_name": "Client Review",
+      "prompt_file": ".github/prompts/client-review.md",
+      "diff_paths": ["client/"]
+    },
+    {
+      "agent_id": "general",
+      "agent_name": "General Engineering Review",
+      "prompt_file": ".github/prompts/general-purpose.md",
+      "diff_paths": ["."],
+      "exclude_paths": ["contracts/", "indexer/", "api/", "client/"]
+    }
+  ]
+}
