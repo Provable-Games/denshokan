@@ -26,7 +26,6 @@ use game_components_embeddable_game_standard::token::extensions::skills::skills:
 use game_components_embeddable_game_standard::token::interface::IMINIGAME_TOKEN_ID;
 use game_components_embeddable_game_standard::token::structs::TokenMetadata;
 use game_components_embeddable_game_standard::token::token_component::CoreTokenComponent;
-use game_components_utilities::renderer::metadata::create_custom_metadata;
 use openzeppelin_access::ownable::OwnableComponent;
 use openzeppelin_interfaces::erc2981::{IERC2981, IERC2981_ID};
 use openzeppelin_interfaces::erc721::{
@@ -38,8 +37,8 @@ use openzeppelin_token::common::erc2981::erc2981::{DefaultConfig, ERC2981Compone
 use openzeppelin_token::erc721::ERC721Component;
 use openzeppelin_upgrades::UpgradeableComponent;
 use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
-use starknet::syscalls::call_contract_syscall;
-use starknet::{ClassHash, ContractAddress};
+use starknet::syscalls::{call_contract_syscall, library_call_syscall};
+use starknet::{ClassHash, ContractAddress, SyscallResultTrait};
 
 fn try_call_and_deserialize<T, +Serde<T>, +Drop<T>>(
     address: ContractAddress, selector: felt252, calldata: Span<felt252>, default: T,
@@ -123,6 +122,12 @@ fn _lookup_or_fetch_address(
 // CONTRACT
 // ================================================================================================
 
+#[starknet::interface]
+pub trait IDenshokanMetadataLibAdmin<TState> {
+    fn set_metadata_lib_class_hash(ref self: TState, class_hash: ClassHash);
+    fn metadata_lib_class_hash(self: @TState) -> ClassHash;
+}
+
 #[starknet::contract]
 pub mod Denshokan {
     use super::*;
@@ -171,6 +176,10 @@ pub mod Denshokan {
         upgradeable: UpgradeableComponent::Storage,
         // Default renderer contract address (for SVG generation)
         default_renderer_address: ContractAddress,
+        // Class hash of the metadata-assembly library (declared, never deployed).
+        // token_uri library-calls it so ~13.3k felts of JSON/SVG string building
+        // live outside this class, which otherwise exceeds Starknet's size limit.
+        metadata_lib_class_hash: ClassHash,
         // Optional storage (only included if features are enabled)
         #[substorage(v0)]
         minter: MinterComponent::Storage,
@@ -429,21 +438,44 @@ pub mod Denshokan {
                 final_metadata.skills_address = skills_address;
             }
 
-            create_custom_metadata(
-                token_id_felt,
-                token_name,
-                token_description,
-                final_metadata,
-                game_details_svg,
-                game_details,
-                settings_details,
-                context_details,
-                token_metadata,
-                score,
-                minted_by_address,
-                player_name,
-                objective_name,
+            let mut calldata: Array<felt252> = array![];
+            token_id_felt.serialize(ref calldata);
+            token_name.serialize(ref calldata);
+            token_description.serialize(ref calldata);
+            final_metadata.serialize(ref calldata);
+            game_details_svg.serialize(ref calldata);
+            game_details.serialize(ref calldata);
+            settings_details.serialize(ref calldata);
+            context_details.serialize(ref calldata);
+            token_metadata.serialize(ref calldata);
+            score.serialize(ref calldata);
+            minted_by_address.serialize(ref calldata);
+            player_name.serialize(ref calldata);
+            objective_name.serialize(ref calldata);
+
+            let mut result = library_call_syscall(
+                self.metadata_lib_class_hash.read(), selector!("render"), calldata.span(),
             )
+                .unwrap_syscall();
+            Serde::<ByteArray>::deserialize(ref result).expect('metadata lib returned bad data')
+        }
+    }
+
+    #[abi(embed_v0)]
+    impl DenshokanMetadataLibAdmin of IDenshokanMetadataLibAdmin<ContractState> {
+        /// Points `token_uri` at a new metadata-assembly class.
+        ///
+        /// The slot is empty on a contract upgraded from a pre-library class, so
+        /// this must be called in the same multicall as `upgrade` — `token_uri`
+        /// reverts until it is set.
+        fn set_metadata_lib_class_hash(ref self: ContractState, class_hash: ClassHash) {
+            self.ownable.assert_only_owner();
+            assert!(class_hash.is_non_zero(), "Denshokan: Metadata lib class hash cannot be zero");
+            self.metadata_lib_class_hash.write(class_hash);
+        }
+
+        fn metadata_lib_class_hash(self: @ContractState) -> ClassHash {
+            self.metadata_lib_class_hash.read()
         }
     }
 
@@ -631,6 +663,7 @@ pub mod Denshokan {
         base_uri: ByteArray,
         game_registry_address: ContractAddress,
         default_renderer_address: ContractAddress,
+        metadata_lib_class_hash: ClassHash,
     ) {
         // Initialize ownership
         assert!(!owner.is_zero(), "Denshokan: owner address cannot be zero");
@@ -652,6 +685,12 @@ pub mod Denshokan {
             .initializer(Option::None, Option::None, Option::Some(game_registry_address));
 
         self.default_renderer_address.write(default_renderer_address);
+
+        assert!(
+            metadata_lib_class_hash.is_non_zero(),
+            "Denshokan: Metadata lib class hash cannot be zero",
+        );
+        self.metadata_lib_class_hash.write(metadata_lib_class_hash);
 
         self.erc721_enumerable.initializer();
         self.minter.initializer();

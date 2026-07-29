@@ -28,6 +28,7 @@ build-external-contracts = [
     "denshokan_token::denshokan::Denshokan",
     "denshokan_registry::minigame_registry::MinigameRegistry",
     "denshokan_renderer::default_renderer::DefaultRenderer",
+    "denshokan_renderer::metadata_lib::DenshokanMetadataLib",
 ]
 
 [lib]

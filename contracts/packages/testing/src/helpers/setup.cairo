@@ -93,6 +93,11 @@ pub fn deploy_denshokan(
     // Serialize default_renderer_address (required)
     constructor_calldata.append(default_renderer_address.into());
 
+    // token_uri assembles metadata via a library call, so the class must be
+    // declared and its hash passed in. It is never deployed.
+    let metadata_lib = declare("DenshokanMetadataLib").unwrap().contract_class();
+    constructor_calldata.append((*metadata_lib.class_hash).into());
+
     let (contract_address, _) = contract.deploy(@constructor_calldata).unwrap();
 
     let erc721 = IERC721Dispatcher { contract_address };
