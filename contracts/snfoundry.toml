@@ -23,7 +23,9 @@ show-explorer-links = true
 # Mainnet profile
 [sncast.mainnet]
 url = "https://api.cartridge.gg/x/starknet/mainnet"
-account = "deployer"
+# "deployer" is an alpha-sepolia account; mainnet declares must use the
+# mainnet-funded account or they fail confusingly.
+account = "mainnet-deployer"
 wait-params = { timeout = 500, retry-interval = 10 }
 block-explorer = "Voyager"
 show-explorer-links = true
