@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useAccount } from "@starknet-react/core";
+import { useAccount } from "@starknet-start/react";
 import { getDefaultChainId, CHAIN_ID_FELTS } from "../networks";
 import { useSwitchNetwork } from "./useSwitchNetwork";
 

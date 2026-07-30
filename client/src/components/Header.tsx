@@ -19,7 +19,7 @@ import {
 import MenuIcon from "@mui/icons-material/Menu";
 import MoreVert from "@mui/icons-material/MoreVert";
 import { useNavigate, useLocation } from "react-router-dom";
-import { useAccount } from "@starknet-react/core";
+import { useAccount } from "@starknet-start/react";
 import WalletButton from "./WalletButton";
 import { useChainConfig } from "../contexts/NetworkContext";
 import { useSwitchNetwork } from "../hooks/useSwitchNetwork";

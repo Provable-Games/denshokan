@@ -3,7 +3,7 @@ import {
   useAccount,
   useContract,
   useSendTransaction,
-} from "@starknet-react/core";
+} from "@starknet-start/react";
 import {
   useSettings,
   useObjectives,

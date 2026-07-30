@@ -6,7 +6,7 @@ import {
   useAccount,
   useContract,
   useSendTransaction,
-} from "@starknet-react/core";
+} from "@starknet-start/react";
 import { RpcProvider, CairoOption, CairoOptionVariant, TransactionFinalityStatus } from "starknet";
 import {
   useNumberGuess,
