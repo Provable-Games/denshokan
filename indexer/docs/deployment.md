@@ -9,6 +9,21 @@ database. The retired denshokan's data is not carried over, and this code
 cannot read it (the two token-id layouts share no field offsets). To read that
 generation, pin an earlier release.
 
+## This must be a NEW environment
+
+Deploy this to its own Railway service with its own database. Do not point it
+at production's.
+
+That is enforced, not just advised: migration `0014` opens with a guard that
+aborts if `tokens` or `minters` already holds rows, naming the fix in the
+error. A mistyped `DATABASE_URL` therefore stops the deploy instead of
+rewriting the production schema — the tables are left exactly as they were.
+
+The production stack keeps running untouched on its existing service,
+database and release. Nothing in this branch writes to it, and nothing about
+this deployment requires taking it down. Switching traffic over is a separate,
+later decision.
+
 ## Configuration
 
 | Variable | Value | Notes |
