@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { eq, desc, asc, and, or, sql, inArray } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { tokens, scoreHistory, minters, games } from "../db/schema.js";
+import { tokens, minters, games } from "../db/schema.js";
 import { parseTokenId, parseGameId, parseAddress, parseNonNegativeInt, parseOptionalNonNegativeInt } from "../utils/validation.js";
 import {
   parseRankScope,
@@ -519,31 +519,6 @@ app.get("/:id/rank", async (c) => {
   });
 });
 
-// GET /tokens/:id/scores - Score history for a token
-app.get("/:id/scores", async (c) => {
-  const tokenId = parseTokenId(c.req.param("id"));
-  if (tokenId === null) {
-    return c.json({ error: "Invalid token ID" }, 400);
-  }
-
-  const limit = parseNonNegativeInt(c.req.query("limit"), 100);
-
-  const results = await db
-    .select()
-    .from(scoreHistory)
-    .where(eq(scoreHistory.tokenId, tokenId))
-    .orderBy(desc(scoreHistory.blockNumber))
-    .limit(Math.min(limit, 500));
-
-  return c.json({
-    data: results.map((r) => ({
-      ...r,
-      tokenId: r.tokenId.toString(),
-      score: r.score.toString(),
-      blockNumber: r.blockNumber.toString(),
-    })),
-  });
-});
 
 function serializeToken(t: typeof tokens.$inferSelect, includeUri = true) {
   // tokenUriFetched / metadataUpdateBlock are internal fetcher bookkeeping and

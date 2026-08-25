@@ -12,7 +12,6 @@ import {
   games,
   minters,
   tokens,
-  scoreHistory,
   objectives,
   settings,
 } from "../src/db/schema.js";
@@ -184,24 +183,6 @@ interface TokenRow {
   lastUpdatedAt: Date;
 }
 
-function generateScoreHistory(tokenRows: TokenRow[]) {
-  const rows = [];
-  for (const t of tokenRows) {
-    const count = randomInt(3, 5);
-    for (let j = 0; j < count; j++) {
-      const ts = new Date(t.lastUpdatedAt.getTime() - j * randomInt(60000, 3600000));
-      rows.push({
-        tokenId: t.tokenId,
-        score: BigInt(Math.max(0, Number(t.currentScore) - randomInt(0, 5000) * j)),
-        blockNumber: BigInt(randomInt(100000, 300000)),
-        blockTimestamp: ts,
-        transactionHash: randomHex(32),
-        eventIndex: j,
-      });
-    }
-  }
-  return rows;
-}
 
 // ---------------------------------------------------------------------------
 // Main
@@ -214,7 +195,6 @@ async function main() {
   if (CLEAN) {
     console.log("Cleaning existing data...");
     // Truncate in reverse dependency order
-    await db.delete(scoreHistory);
     await db.delete(tokens);
     await db.delete(objectives);
     await db.delete(settings);
@@ -239,11 +219,6 @@ async function main() {
   const tokenRows = generateTokens(TOKEN_COUNT, owners, minterRows);
   await batchInsert(tokens, tokenRows, 500);
   console.log(`  tokens: ${tokenRows.length}`);
-
-  // 4. Score history
-  const scoreRows = generateScoreHistory(tokenRows);
-  await batchInsert(scoreHistory, scoreRows, 1000);
-  console.log(`  score_history: ${scoreRows.length}`);
 
   const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
   console.log(`\nSeeding complete in ${elapsed}s.`);

@@ -8,7 +8,6 @@
  *
  * Tables:
  * 1. tokens - current state of each token with decoded packed ID data
- * 2. score_history - historical score snapshots for charts/analytics
  * 3. games - per-game metadata, parsed from token URIs
  * 4. minters - minter registry cache
  * 5. objectives - game objective definitions
@@ -162,37 +161,6 @@ export const tokens = pgTable(
 );
 
 /**
- * Score History table - historical score snapshots
- *
- * Tracks score changes over time for analytics and charts.
- * Each ScoreUpdate event creates a new record.
- */
-export const scoreHistory = pgTable(
-  "score_history",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    tokenId: numeric("token_id").notNull(),
-    score: bigint("score", { mode: "bigint" }).notNull(),
-    blockNumber: bigint("block_number", { mode: "bigint" }).notNull(),
-    blockTimestamp: timestamp("block_timestamp").notNull(),
-    transactionHash: text("transaction_hash").notNull(),
-    eventIndex: integer("event_index").notNull(),
-  },
-  (table) => [
-    // Unique constraint for idempotent re-indexing
-    uniqueIndex("score_history_block_tx_event_idx").on(
-      table.blockNumber,
-      table.transactionHash,
-      table.eventIndex
-    ),
-    // Token score history query
-    index("score_history_token_block_idx").on(table.tokenId, table.blockNumber),
-    // Time-based queries
-    index("score_history_token_time_idx").on(table.tokenId, table.blockTimestamp),
-  ]
-);
-
-/**
  * Games table - game metadata cache
  *
  * Caches game information from the game registry.
@@ -318,7 +286,6 @@ export const settings = pgTable(
 // Export all schema tables for Drizzle
 export const schema = {
   tokens,
-  scoreHistory,
   games,
   minters,
   objectives,

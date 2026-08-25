@@ -111,6 +111,18 @@ CREATE UNIQUE INDEX IF NOT EXISTS "games_contract_address_idx"
   ON "games" ("contract_address");
 
 -- ---------------------------------------------------------------------------
+-- score_history
+-- ---------------------------------------------------------------------------
+
+-- Dropped. Nothing has written this table since 0009 removed the score-update
+-- events that fed it, so on a fresh database it can only ever be empty — and
+-- an endpoint that always returns [] is worse than no endpoint. It was also
+-- the last table still keyed on token_id alone, which is no longer an
+-- identity. Score lives on `tokens.current_score`, refreshed from the token
+-- URI.
+DROP TABLE IF EXISTS "score_history";
+
+-- ---------------------------------------------------------------------------
 -- WebSocket NOTIFY payloads
 -- ---------------------------------------------------------------------------
 
