@@ -1,67 +1,14 @@
-import { and, eq, or } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { db } from "../db/client.js";
-import { tokens, games } from "../db/schema.js";
+import { tokens } from "../db/schema.js";
 
 /**
- * Scoping token queries to "one game", across both generations.
+ * Scope token queries to one game.
  *
- * The two generations name a game differently, and neither name works for the
- * other:
- *
- *   * A legacy token carries a numeric `game_id` from the registry, and no
- *     contract address of its own — every one of them was minted by the single
- *     denshokan.
- *   * A self-bound token has no `game_id` at all. The game IS the contract, so
- *     its identity is `contract_address`.
- *
- * That is why `game_id` alone is not a sufficient filter any more: an equality
- * test on it silently excludes every self-bound token, returning a confidently
- * short list rather than an error. Callers should prefer `game_address`, which
- * resolves against both.
+ * A game IS its contract — every game is its own ERC721 — so this is a plain
+ * equality on the issuing address. There is no registry and no numeric game
+ * id to resolve through.
  */
-
-// game address -> legacy game id, for addresses that are in the registry.
-let addressToGameId = new Map<string, number>();
-let cacheReady = false;
-
-async function loadCache() {
-  const rows = await db
-    .select({ gameId: games.gameId, contractAddress: games.contractAddress })
-    .from(games);
-  addressToGameId = new Map(rows.map((r) => [r.contractAddress, r.gameId]));
-  cacheReady = true;
-}
-
-async function legacyGameIdFor(address: string): Promise<number | null> {
-  if (!cacheReady) await loadCache();
-  const hit = addressToGameId.get(address);
-  if (hit !== undefined) return hit;
-  // Cache miss — refresh and retry once, in case the game registered after
-  // this process last loaded.
-  await loadCache();
-  return addressToGameId.get(address) ?? null;
-}
-
-/**
- * A condition matching every token belonging to the game at `address`,
- * whichever generation minted it.
- *
- * Matches self-bound tokens on contract_address, and — if the address is also
- * a registered legacy game — that game's legacy tokens on game_id. A game that
- * exists in only one generation simply contributes no rows from the other.
- */
-export async function gameAddressCondition(address: string): Promise<SQL> {
-  const legacyId = await legacyGameIdFor(address);
-  // Restricted to standard rows on purpose. Legacy rows carry the denshokan's
-  // address in contract_address too, so an unrestricted match would make
-  // `game_address=<DENSHOKAN_ADDRESS>` select every legacy game's tokens at
-  // once — contaminating lists and rank scopes with tokens from games the
-  // caller did not ask for. Only self-bound tokens are identified BY their
-  // contract; for legacy ones the contract is just where they live.
-  const selfBound = and(
-    eq(tokens.generation, "standard"),
-    eq(tokens.contractAddress, address),
-  )!;
-  return legacyId === null ? selfBound : or(selfBound, eq(tokens.gameId, legacyId))!;
+export function gameAddressCondition(address: string): SQL {
+  return eq(tokens.contractAddress, address);
 }

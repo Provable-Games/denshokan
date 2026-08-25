@@ -46,36 +46,6 @@ async function resolveMinterAddress(
   return minterCache.get(key) ?? null;
 }
 
-// In-memory game cache (game_id -> contract_address)
-let gameCache = new Map<number, string>();
-let gameCacheReady = false;
-
-async function loadGameCache() {
-  const rows = await db.select({ gameId: games.gameId, contractAddress: games.contractAddress }).from(games);
-  gameCache = new Map(rows.map((r) => [r.gameId, r.contractAddress]));
-  gameCacheReady = true;
-}
-
-/**
- * The contract address of the game a token belongs to.
- *
- * Legacy tokens carry a numeric game_id that resolves through the registry
- * cache. Self-bound tokens have no game_id at all — the game IS the contract
- * that minted them — so the address is already on the row and no lookup
- * exists to do.
- */
-async function resolveGameAddress(
-  gameId: number | null,
-  contractAddress?: string | null,
-): Promise<string | null> {
-  if (gameId === null) return contractAddress ?? null;
-  if (!gameCacheReady) await loadGameCache();
-  const cached = gameCache.get(gameId);
-  if (cached !== undefined) return cached;
-  await loadGameCache();
-  return gameCache.get(gameId) ?? null;
-}
-
 const app = new Hono();
 
 // GET /players/:address/tokens - Player's tokens with filtering
@@ -85,7 +55,6 @@ app.get("/:address/tokens", async (c) => {
     return c.json({ error: "Invalid address" }, 400);
   }
 
-  const gameId = parseGameId(c.req.query("game_id"));
   const gameAddress = parseAddress(c.req.query("game_address"));
   const gameOver = c.req.query("game_over");
   const sortBy = c.req.query("sort_by");
@@ -94,9 +63,7 @@ app.get("/:address/tokens", async (c) => {
   const offset = parseNonNegativeInt(c.req.query("offset"), 0);
 
   const conditions = [eq(tokens.ownerAddress, address)];
-  if (gameId !== null) conditions.push(eq(tokens.gameId, gameId));
-  // Both generations — see utils/gameScope.ts.
-  if (gameAddress !== null) conditions.push(await gameAddressCondition(gameAddress));
+  if (gameAddress !== null) conditions.push(gameAddressCondition(gameAddress));
   if (gameOver === "true") conditions.push(eq(tokens.gameOver, true));
   if (gameOver === "false") conditions.push(eq(tokens.gameOver, false));
 
@@ -135,7 +102,8 @@ app.get("/:address/tokens", async (c) => {
     data: await Promise.all(results.map(async (t) => ({
       ...serializeToken(t, includeUri),
       minterAddress: await resolveMinterAddress(t.contractAddress, t.mintedBy.toString()),
-      gameAddress: await resolveGameAddress(t.gameId, t.contractAddress),
+      // The issuing contract IS the game.
+      gameAddress: t.contractAddress,
     }))),
     total: countResult[0]?.count ?? 0,
     limit,
@@ -198,14 +166,8 @@ app.get("/:address/stats", async (c) => {
   const result = await db
     .select({
       totalTokens: sql<number>`count(*)::int`,
-      // A game's identity differs by generation: a legacy token names it with
-      // game_id, a self-bound one IS its contract. Counting distinct game_id
-      // alone reports 0 games played for a player who only holds self-bound
-      // tokens, since every one of those rows has game_id null.
-      gamesPlayed: sql<number>`count(DISTINCT CASE
-        WHEN ${tokens.gameId} IS NOT NULL THEN 'legacy:' || ${tokens.gameId}
-        ELSE 'standard:' || ${tokens.contractAddress}
-      END)::int`,
+      // A game IS its contract, so distinct contracts is distinct games.
+      gamesPlayed: sql<number>`count(DISTINCT ${tokens.contractAddress})::int`,
       completedGames: sql<number>`count(*) filter (where ${tokens.gameOver} = true)::int`,
       activeGames: sql<number>`count(*) filter (where ${tokens.gameOver} = false)::int`,
       totalScore: sql<string>`coalesce(sum(${tokens.currentScore}), 0)`,

@@ -60,36 +60,6 @@ async function loadMinterCache() {
   minterCacheReady = true;
 }
 
-// In-memory game cache (game_id -> contract_address)
-let gameCache = new Map<number, string>();
-let gameCacheReady = false;
-
-async function loadGameCache() {
-  const rows = await db.select({ gameId: games.gameId, contractAddress: games.contractAddress }).from(games);
-  gameCache = new Map(rows.map((r) => [r.gameId, r.contractAddress]));
-  gameCacheReady = true;
-}
-
-/**
- * The contract address of the game a token belongs to.
- *
- * Legacy tokens carry a numeric game_id that resolves through the registry
- * cache. Self-bound tokens have no game_id at all — the game IS the contract
- * that minted them — so the address is already on the row and no lookup
- * exists to do.
- */
-async function resolveGameAddress(
-  gameId: number | null,
-  contractAddress?: string | null,
-): Promise<string | null> {
-  if (gameId === null) return contractAddress ?? null;
-  if (!gameCacheReady) await loadGameCache();
-  const cached = gameCache.get(gameId);
-  if (cached !== undefined) return cached;
-  await loadGameCache();
-  return gameCache.get(gameId) ?? null;
-}
-
 async function resolveMinterAddress(
   tokenContract: string | null,
   mintedBy: string
@@ -151,7 +121,6 @@ function byIdConditions(tokenId: string, contractAddress: string | null) {
 
 // GET /tokens - List tokens (paginated, filterable)
 app.get("/", async (c) => {
-  const gameId = parseGameId(c.req.query("game_id"));
   const gameAddress = parseAddress(c.req.query("game_address"));
   const owner = parseAddress(c.req.query("owner"));
   const gameOver = c.req.query("game_over");
@@ -169,10 +138,7 @@ app.get("/", async (c) => {
   const offset = parseNonNegativeInt(c.req.query("offset"), 0);
 
   const conditions = [];
-  if (gameId !== null) conditions.push(eq(tokens.gameId, gameId));
-  // Scopes across both generations — see utils/gameScope.ts. `game_id` alone
-  // silently excludes self-bound tokens, which have none.
-  if (gameAddress !== null) conditions.push(await gameAddressCondition(gameAddress));
+  if (gameAddress !== null) conditions.push(gameAddressCondition(gameAddress));
   if (owner !== null) conditions.push(eq(tokens.ownerAddress, owner));
   if (gameOver === "true") conditions.push(eq(tokens.gameOver, true));
   if (gameOver === "false") conditions.push(eq(tokens.gameOver, false));
@@ -227,7 +193,8 @@ app.get("/", async (c) => {
     data: await Promise.all(results.map(async (t) => ({
       ...serializeToken(t, includeUri),
       minterAddress: await resolveMinterAddress(t.contractAddress, t.mintedBy.toString()),
-      gameAddress: await resolveGameAddress(t.gameId, t.contractAddress),
+      // The issuing contract IS the game.
+      gameAddress: t.contractAddress,
     }))),
     total: countResult[0]?.count ?? 0,
     limit,
@@ -246,7 +213,6 @@ app.get("/", async (c) => {
 app.post("/query", async (c) => {
   type Body = {
     tokenIds?: unknown;
-    gameId?: unknown;
     gameAddress?: unknown;
     owner?: unknown;
     gameOver?: unknown;
@@ -294,15 +260,10 @@ app.post("/query", async (c) => {
   }
 
   const conditions = [inArray(tokens.tokenId, ids)];
-  const gameId = parseGameId(
-    body.gameId != null ? String(body.gameId) : undefined,
-  );
-  if (gameId !== null) conditions.push(eq(tokens.gameId, gameId));
   const gameAddress = parseAddress(
     body.gameAddress != null ? String(body.gameAddress) : undefined,
   );
-  // Both generations — see utils/gameScope.ts.
-  if (gameAddress !== null) conditions.push(await gameAddressCondition(gameAddress));
+  if (gameAddress !== null) conditions.push(gameAddressCondition(gameAddress));
   const owner = parseAddress(body.owner != null ? String(body.owner) : undefined);
   if (owner !== null) conditions.push(eq(tokens.ownerAddress, owner));
   if (body.gameOver === true) conditions.push(eq(tokens.gameOver, true));
@@ -371,7 +332,8 @@ app.post("/query", async (c) => {
       results.map(async (t) => ({
         ...serializeToken(t, includeUri),
         minterAddress: await resolveMinterAddress(t.contractAddress, t.mintedBy.toString()),
-        gameAddress: await resolveGameAddress(t.gameId, t.contractAddress),
+        // The issuing contract IS the game.
+      gameAddress: t.contractAddress,
       })),
     ),
     total: countResult[0]?.count ?? 0,
@@ -424,7 +386,7 @@ app.get("/:id", async (c) => {
     data: {
       ...serializeToken(result[0], includeUri),
       minterAddress: await resolveMinterAddress(result[0].contractAddress, result[0].mintedBy.toString()),
-      gameAddress: await resolveGameAddress(result[0].gameId, result[0].contractAddress),
+      gameAddress: result[0].contractAddress,
     },
   });
 });
@@ -446,7 +408,7 @@ app.post("/rank", async (c) => {
   type Body = {
     tokenIds?: unknown;
     gameId?: unknown;
-    /** Scopes across both generations — the only way to scope a self-bound game. */
+    /** Scope to one game, by contract address. */
     gameAddress?: unknown;
     settingsId?: unknown;
     objectiveId?: unknown;

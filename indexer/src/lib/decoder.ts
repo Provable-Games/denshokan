@@ -129,79 +129,17 @@ export function feltToString(felt: string | undefined | null): string {
 // ============ Packed Token ID ============
 
 /**
- * Which contract generation minted a token, and therefore which bit layout its
- * id uses.
+ * Bit masks for the packed token ID (game-components v2.x).
  *
- * There is NO in-band marker. A legacy id and a standard id are both just
- * felts, and every field sits at a different offset and a different width
- * between them. Decoding one with the other's layout does not throw — it
- * yields plausible-looking timestamps and ids that are silently wrong. So the
- * generation must be derived from the CONTRACT the event arrived from, never
- * sniffed from the id.
- *
- * - `legacy`   — the registry-backed denshokan. One token contract serving
- *                many games, hence `game_id` in the layout.
- * - `standard` — game-components v2.x. Self-bound: the game contract IS the
- *                token, so there is no game id to pack.
- */
-export type TokenGeneration = "legacy" | "standard";
-
-/**
- * Bit masks for the LEGACY packed token ID.
- *
- * Matches `token_legacy::structs` in game-components, which is frozen —
- * deployed contracts still mint with this layout, so these values must not
- * change. Pin game-components v2.0.0 to read that source.
- */
-const PACKED_TOKEN_ID_MASKS = {
-  GAME_ID_MASK: 0x3FFFFFFFn, // 30 bits
-  MINTED_BY_MASK: 0xFFFFFFFFFFn, // 40 bits
-  SETTINGS_ID_MASK: 0x3FFFFFFFn, // 30 bits
-  MINTED_AT_MASK: 0x7FFFFFFFFn, // 35 bits
-  START_DELAY_MASK: 0x1FFFFFFn, // 25 bits
-  END_DELAY_MASK: 0x1FFFFFFn, // 25 bits
-  OBJECTIVE_ID_MASK: 0x3FFFFFFFn, // 30 bits
-  SOULBOUND_MASK: 0x1n, // 1 bit
-  HAS_CONTEXT_MASK: 0x1n, // 1 bit
-  PAYMASTER_MASK: 0x1n, // 1 bit
-  TX_HASH_MASK: 0x3FFn, // 10 bits
-  SALT_MASK: 0x3FFn, // 10 bits
-  METADATA_MASK: 0x1FFFn, // 13 bits
-} as const;
-
-/**
- * Bit offsets for the LEGACY packed token ID.
- */
-const PACKED_TOKEN_ID_OFFSETS = {
-  GAME_ID: 0n,
-  MINTED_BY: 30n,
-  SETTINGS_ID: 70n,
-  START_DELAY: 100n,
-  SOULBOUND: 125n,
-  HAS_CONTEXT: 126n,
-  PAYMASTER: 127n,
-  MINTED_AT: 128n,
-  END_DELAY: 163n,
-  OBJECTIVE_ID: 188n,
-  TX_HASH: 218n,
-  SALT: 228n,
-  METADATA: 238n,
-} as const;
-
-/**
- * Bit masks for the STANDARD packed token ID (game-components v2.x).
- *
- * Matches `token::packing` in game-components. Note how little this shares
- * with the legacy layout: `minted_at` moves from bit 128 to bit 0, `metadata`
- * widens from 13 bits to 65, `salt` from 10 to 16, `settings_id` narrows from
- * 30 to 16, and `game_id` disappears entirely.
+ * Matches `token::packing` upstream. Every game IS its own ERC721, so there is
+ * no `game_id` in the layout: a token's game is the contract that issued it.
  *
  * Low u128:  minted_at(35) | start_delay(25) | end_delay(25) | settings_id(16)
  *            | minted_by(26) | soulbound(1)
  * High u128: tx_hash(10) | salt(16) | paymaster(1) | has_context(1)
  *            | objective_id(30) | metadata(65)
  */
-const STANDARD_TOKEN_ID_MASKS = {
+const TOKEN_ID_MASKS = {
   MINTED_AT_MASK: 0x7FFFFFFFFn, // 35 bits
   START_DELAY_MASK: 0x1FFFFFFn, // 25 bits
   END_DELAY_MASK: 0x1FFFFFFn, // 25 bits
@@ -217,12 +155,12 @@ const STANDARD_TOKEN_ID_MASKS = {
 } as const;
 
 /**
- * Bit offsets for the STANDARD packed token ID.
+ * Bit offsets for the packed token ID.
  *
  * The high-half fields are offset by 128 here because we decode from the whole
  * felt rather than splitting it into two u128 words as the Cairo does.
  */
-const STANDARD_TOKEN_ID_OFFSETS = {
+const TOKEN_ID_OFFSETS = {
   MINTED_AT: 0n,
   START_DELAY: 35n,
   END_DELAY: 60n,
@@ -243,19 +181,12 @@ const STANDARD_TOKEN_ID_OFFSETS = {
 export interface PackedTokenId {
   /** Raw token ID as bigint */
   tokenId: bigint;
-  /** Which layout decoded this id. Recorded so a row can be re-read later. */
-  generation: TokenGeneration;
   /**
-   * Game ID — LEGACY ONLY, `null` on standard tokens.
-   *
-   * The standard token is self-bound: the game contract IS the token, so the
-   * game's identity is the contract address the event came from, not a field
-   * in the id.
+   * Minter ID (26 bits) — an index into the ISSUING CONTRACT's own minter
+   * counter, not an address, and meaningless outside that contract.
    */
-  gameId: number | null;
-  /** Minter ID (legacy 40 bits, standard 26 bits) */
   mintedBy: bigint;
-  /** Settings ID (legacy 30 bits, standard 16 bits) */
+  /** Settings ID (16 bits) */
   settingsId: number;
   /** Mint timestamp as Date (35 bits Unix timestamp) */
   mintedAt: Date;
@@ -273,12 +204,11 @@ export interface PackedTokenId {
   paymaster: boolean;
   /** TX hash fragment (10 bits) */
   txHash: number;
-  /** Salt value (legacy 10 bits, standard 16 bits) */
+  /** Salt value (16 bits) */
   salt: number;
   /**
-   * Inert game-interpreted data. Legacy packs 13 bits, standard 65 — the
-   * latter exceeds Number.MAX_SAFE_INTEGER, so this is a bigint for both
-   * rather than silently losing precision on wide standard values.
+   * Inert game-interpreted data, 65 bits — past Number.MAX_SAFE_INTEGER, so a
+   * bigint rather than a silently rounded number.
    */
   metadata: bigint;
 }
@@ -287,76 +217,25 @@ export interface PackedTokenId {
  * Decode a packed token ID from a single felt252.
  *
  * The token_id is a felt252 (not u256), so we decode from a single value.
- *
- * `generation` MUST come from the contract the event arrived from. It cannot
- * be inferred from the id — see {@link TokenGeneration}. Defaulting to
- * `legacy` keeps every existing call site correct: the denshokan contract this
- * indexer was built for is legacy, and its rows were decoded with this layout.
  */
-export function decodePackedTokenId(
-  tokenIdFelt: string | bigint,
-  generation: TokenGeneration = "legacy",
-): PackedTokenId {
+export function decodePackedTokenId(tokenIdFelt: string | bigint): PackedTokenId {
   const packed = typeof tokenIdFelt === "string" ? hexToBigInt(tokenIdFelt) : tokenIdFelt;
 
-  return generation === "standard"
-    ? decodeStandardTokenId(packed)
-    : decodeLegacyTokenId(packed);
-}
-
-function decodeLegacyTokenId(packed: bigint): PackedTokenId {
-  const gameId = Number((packed >> PACKED_TOKEN_ID_OFFSETS.GAME_ID) & PACKED_TOKEN_ID_MASKS.GAME_ID_MASK);
-  const mintedBy = (packed >> PACKED_TOKEN_ID_OFFSETS.MINTED_BY) & PACKED_TOKEN_ID_MASKS.MINTED_BY_MASK;
-  const settingsId = Number((packed >> PACKED_TOKEN_ID_OFFSETS.SETTINGS_ID) & PACKED_TOKEN_ID_MASKS.SETTINGS_ID_MASK);
-  const mintedAtRaw = Number((packed >> PACKED_TOKEN_ID_OFFSETS.MINTED_AT) & PACKED_TOKEN_ID_MASKS.MINTED_AT_MASK);
-  const startDelay = Number((packed >> PACKED_TOKEN_ID_OFFSETS.START_DELAY) & PACKED_TOKEN_ID_MASKS.START_DELAY_MASK);
-  const endDelay = Number((packed >> PACKED_TOKEN_ID_OFFSETS.END_DELAY) & PACKED_TOKEN_ID_MASKS.END_DELAY_MASK);
-  const objectiveId = Number((packed >> PACKED_TOKEN_ID_OFFSETS.OBJECTIVE_ID) & PACKED_TOKEN_ID_MASKS.OBJECTIVE_ID_MASK);
-  const soulbound = ((packed >> PACKED_TOKEN_ID_OFFSETS.SOULBOUND) & PACKED_TOKEN_ID_MASKS.SOULBOUND_MASK) === 1n;
-  const hasContext = ((packed >> PACKED_TOKEN_ID_OFFSETS.HAS_CONTEXT) & PACKED_TOKEN_ID_MASKS.HAS_CONTEXT_MASK) === 1n;
-  const paymaster = ((packed >> PACKED_TOKEN_ID_OFFSETS.PAYMASTER) & PACKED_TOKEN_ID_MASKS.PAYMASTER_MASK) === 1n;
-  const txHash = Number((packed >> PACKED_TOKEN_ID_OFFSETS.TX_HASH) & PACKED_TOKEN_ID_MASKS.TX_HASH_MASK);
-  const salt = Number((packed >> PACKED_TOKEN_ID_OFFSETS.SALT) & PACKED_TOKEN_ID_MASKS.SALT_MASK);
-  const metadata = (packed >> PACKED_TOKEN_ID_OFFSETS.METADATA) & PACKED_TOKEN_ID_MASKS.METADATA_MASK;
+  const mintedAtRaw = Number((packed >> TOKEN_ID_OFFSETS.MINTED_AT) & TOKEN_ID_MASKS.MINTED_AT_MASK);
+  const startDelay = Number((packed >> TOKEN_ID_OFFSETS.START_DELAY) & TOKEN_ID_MASKS.START_DELAY_MASK);
+  const endDelay = Number((packed >> TOKEN_ID_OFFSETS.END_DELAY) & TOKEN_ID_MASKS.END_DELAY_MASK);
+  const settingsId = Number((packed >> TOKEN_ID_OFFSETS.SETTINGS_ID) & TOKEN_ID_MASKS.SETTINGS_ID_MASK);
+  const mintedBy = (packed >> TOKEN_ID_OFFSETS.MINTED_BY) & TOKEN_ID_MASKS.MINTED_BY_MASK;
+  const soulbound = ((packed >> TOKEN_ID_OFFSETS.SOULBOUND) & TOKEN_ID_MASKS.SOULBOUND_MASK) === 1n;
+  const txHash = Number((packed >> TOKEN_ID_OFFSETS.TX_HASH) & TOKEN_ID_MASKS.TX_HASH_MASK);
+  const salt = Number((packed >> TOKEN_ID_OFFSETS.SALT) & TOKEN_ID_MASKS.SALT_MASK);
+  const paymaster = ((packed >> TOKEN_ID_OFFSETS.PAYMASTER) & TOKEN_ID_MASKS.PAYMASTER_MASK) === 1n;
+  const hasContext = ((packed >> TOKEN_ID_OFFSETS.HAS_CONTEXT) & TOKEN_ID_MASKS.HAS_CONTEXT_MASK) === 1n;
+  const objectiveId = Number((packed >> TOKEN_ID_OFFSETS.OBJECTIVE_ID) & TOKEN_ID_MASKS.OBJECTIVE_ID_MASK);
+  const metadata = (packed >> TOKEN_ID_OFFSETS.METADATA) & TOKEN_ID_MASKS.METADATA_MASK;
 
   return {
     tokenId: packed,
-    generation: "legacy",
-    gameId,
-    mintedBy,
-    settingsId,
-    mintedAt: new Date(mintedAtRaw * 1000),
-    startDelay,
-    endDelay,
-    objectiveId,
-    soulbound,
-    hasContext,
-    paymaster,
-    txHash,
-    salt,
-    metadata,
-  };
-}
-
-function decodeStandardTokenId(packed: bigint): PackedTokenId {
-  const mintedAtRaw = Number((packed >> STANDARD_TOKEN_ID_OFFSETS.MINTED_AT) & STANDARD_TOKEN_ID_MASKS.MINTED_AT_MASK);
-  const startDelay = Number((packed >> STANDARD_TOKEN_ID_OFFSETS.START_DELAY) & STANDARD_TOKEN_ID_MASKS.START_DELAY_MASK);
-  const endDelay = Number((packed >> STANDARD_TOKEN_ID_OFFSETS.END_DELAY) & STANDARD_TOKEN_ID_MASKS.END_DELAY_MASK);
-  const settingsId = Number((packed >> STANDARD_TOKEN_ID_OFFSETS.SETTINGS_ID) & STANDARD_TOKEN_ID_MASKS.SETTINGS_ID_MASK);
-  const mintedBy = (packed >> STANDARD_TOKEN_ID_OFFSETS.MINTED_BY) & STANDARD_TOKEN_ID_MASKS.MINTED_BY_MASK;
-  const soulbound = ((packed >> STANDARD_TOKEN_ID_OFFSETS.SOULBOUND) & STANDARD_TOKEN_ID_MASKS.SOULBOUND_MASK) === 1n;
-  const txHash = Number((packed >> STANDARD_TOKEN_ID_OFFSETS.TX_HASH) & STANDARD_TOKEN_ID_MASKS.TX_HASH_MASK);
-  const salt = Number((packed >> STANDARD_TOKEN_ID_OFFSETS.SALT) & STANDARD_TOKEN_ID_MASKS.SALT_MASK);
-  const paymaster = ((packed >> STANDARD_TOKEN_ID_OFFSETS.PAYMASTER) & STANDARD_TOKEN_ID_MASKS.PAYMASTER_MASK) === 1n;
-  const hasContext = ((packed >> STANDARD_TOKEN_ID_OFFSETS.HAS_CONTEXT) & STANDARD_TOKEN_ID_MASKS.HAS_CONTEXT_MASK) === 1n;
-  const objectiveId = Number((packed >> STANDARD_TOKEN_ID_OFFSETS.OBJECTIVE_ID) & STANDARD_TOKEN_ID_MASKS.OBJECTIVE_ID_MASK);
-  const metadata = (packed >> STANDARD_TOKEN_ID_OFFSETS.METADATA) & STANDARD_TOKEN_ID_MASKS.METADATA_MASK;
-
-  return {
-    tokenId: packed,
-    generation: "standard",
-    // Self-bound: the game is the contract address, not a packed field.
-    gameId: null,
     mintedBy,
     settingsId,
     mintedAt: new Date(mintedAtRaw * 1000),
@@ -791,6 +670,19 @@ export function decodeDefaultGameFeeUpdate(_keys: readonly string[], data: reado
  * Null values indicate the attribute was not found in the URI.
  */
 export interface TokenUriAttributes {
+  /**
+   * Game-level metadata, identical across every token a game issues.
+   *
+   * v2.x has no registry and no `game_metadata()` entrypoint — upstream,
+   * GameMetadata is only ever a renderer input — so the token URI is the sole
+   * place these are exposed. The fetcher upserts them into `games`.
+   */
+  gameName: string | null;
+  gameDeveloper: string | null;
+  gamePublisher: string | null;
+  gameGenre: string | null;
+  /** Top-level `image` from the metadata JSON, not an attribute. */
+  gameImage: string | null;
   score: bigint | null;
   gameOver: boolean | null;
   completedObjectives: boolean | null;
@@ -809,10 +701,17 @@ export interface TokenUriAttributes {
  * Handles both data:application/json;base64,... URIs and plain JSON strings.
  *
  * Attributes extracted:
- *   Score, Game Over, Objectives Completed, Player Name, Context Name, Context ID
+ *   Score, Game Over, Objectives Completed, Player Name, Context Name,
+ *   Context ID, and the game-level Game Name / Game Developer / Publisher /
+ *   Genre (plus the top-level image).
  */
 export function parseTokenUriAttributes(uri: string): TokenUriAttributes {
   const result: TokenUriAttributes = {
+    gameName: null,
+    gameDeveloper: null,
+    gamePublisher: null,
+    gameGenre: null,
+    gameImage: null,
     score: null,
     gameOver: null,
     completedObjectives: null,
@@ -839,12 +738,32 @@ export function parseTokenUriAttributes(uri: string): TokenUriAttributes {
     }
 
     const metadata = JSON.parse(json);
+
+    // Top-level, not an attribute.
+    if (typeof metadata.image === "string" && metadata.image.length > 0) {
+      result.gameImage = metadata.image;
+    }
+
     const attributes: Array<{ trait_type?: string; trait?: string; value: string }> = metadata.attributes;
     if (!Array.isArray(attributes)) return result;
 
     for (const attr of attributes) {
       const traitName = attr.trait_type ?? attr.trait;
       switch (traitName) {
+        // Game-level traits. Written by the renderer from GameMetadata, so
+        // they are the same on every token the game issues.
+        case "Game Name":
+          result.gameName = attr.value || null;
+          break;
+        case "Game Developer":
+          result.gameDeveloper = attr.value || null;
+          break;
+        case "Publisher":
+          result.gamePublisher = attr.value || null;
+          break;
+        case "Genre":
+          result.gameGenre = attr.value || null;
+          break;
         case "Score":
           result.score = BigInt(attr.value);
           break;

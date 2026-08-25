@@ -3,29 +3,24 @@ import { defineConfig } from "apibara/config";
 export default defineConfig({
   runtimeConfig: {
     denshokan: {
-      // Denshokan token contract address
-      contractAddress: (process.env.DENSHOKAN_ADDRESS ?? "0x0").trim(),
-      // Minigame registry contract address
-      registryAddress: (process.env.REGISTRY_ADDRESS ?? "0x0").trim(),
       // Starknet DNA stream URL (mainnet or sepolia)
       streamUrl: (process.env.STREAM_URL ?? "https://mainnet.starknet.a5a.ch").trim(),
-      // Starting block - set to contract deployment block for full history
-      // or use a recent block for faster initial sync
+      // Starting block - set to the earliest game's deployment block for full
+      // history, or a recent block for a faster initial sync.
       startingBlock: (process.env.STARTING_BLOCK ?? "0").trim(),
       // PostgreSQL connection string
       databaseUrl: (process.env.DATABASE_URL ?? "postgres://postgres:postgres@localhost:5432/denshokan").trim(),
-      // Game contracts to index, comma-separated (game-components v2.x).
+      // Game contracts to index, comma-separated.
       //
-      // Each game IS its own token, so these are game addresses, full stop —
-      // not a token contract plus a registry of games, which is what the
-      // legacy denshokan above is. Empty by default: a deployment indexing
-      // only the legacy denshokan needs no change and behaves as before.
+      // Every game IS its own ERC721, so this is the entire subscription: there
+      // is no shared token contract and no registry to discover games through.
+      // Required — an empty list would subscribe to nothing, so the indexer
+      // refuses to start rather than silently indexing no data.
       //
-      // An address listed here is decoded with the `standard` token-id layout
-      // (`token::packing` upstream); anything else gets `legacy`
-      // (`token_legacy::structs`). Getting that wrong is SILENT — the layouts
-      // share no offsets and ids carry no marker — so only list contracts you
-      // have confirmed are v2.x.
+      // An address must be listed BEFORE the game's first mint. The indexer
+      // resumes from a persisted cursor, so adding an address later widens the
+      // filter from that point forward only and silently skips the game's
+      // earlier history.
       gameAddresses: (process.env.GAME_ADDRESSES ?? "")
         .split(",")
         .map((a) => a.trim())

@@ -7,36 +7,26 @@ import { parseGameId, parseNonNegativeInt } from "../utils/validation.js";
 const app = new Hono();
 
 /**
- * Resolve a raw path param (numeric gameId or hex address) to gameId + gameAddress.
+ * Resolve a path param to a game address.
+ *
+ * A game IS its contract, so the only identifier is an address — the numeric
+ * registry ids this used to also accept no longer exist.
  */
-async function resolveGameId(rawId: string): Promise<{ gameId: number; gameAddress: string } | null> {
-  let where;
-  if (rawId.startsWith("0x")) {
-    // Hex address — skip parseGameId which would return 0 for "0x..."
-    try {
-      const normalized = `0x${BigInt(rawId).toString(16)}`;
-      where = eq(games.contractAddress, normalized);
-    } catch {
-      return null;
-    }
-  } else {
-    const numericId = parseGameId(rawId);
-    if (numericId !== null) {
-      where = eq(games.gameId, numericId);
-    } else {
-      return null;
-    }
+async function resolveGameAddress(rawId: string): Promise<{ gameAddress: string } | null> {
+  let normalized: string;
+  try {
+    normalized = `0x${BigInt(rawId).toString(16)}`;
+  } catch {
+    return null;
   }
 
   const result = await db
-    .select({ gameId: games.gameId, contractAddress: games.contractAddress })
+    .select({ contractAddress: games.contractAddress })
     .from(games)
-    .where(where)
+    .where(eq(games.contractAddress, normalized))
     .limit(1);
 
-  return result.length
-    ? { gameId: result[0].gameId, gameAddress: result[0].contractAddress.toLowerCase() }
-    : null;
+  return result.length ? { gameAddress: result[0].contractAddress.toLowerCase() } : null;
 }
 
 // GET /games - List games (paginated, with optional filters)
@@ -96,7 +86,6 @@ app.get("/", async (c) => {
     db
       .select({
         id: games.id,
-        gameId: games.gameId,
         contractAddress: games.contractAddress,
         name: games.name,
         description: games.description,
@@ -142,7 +131,7 @@ app.get("/", async (c) => {
 
 // GET /games/:id/objectives/:objectiveId - Single objective
 app.get("/:id/objectives/:objectiveId", async (c) => {
-  const resolved = await resolveGameId(c.req.param("id"));
+  const resolved = await resolveGameAddress(c.req.param("id"));
   if (!resolved) {
     return c.json({ error: "Game not found" }, 404);
   }
@@ -177,7 +166,7 @@ app.get("/:id/objectives/:objectiveId", async (c) => {
 
 // GET /games/:id/objectives - Objectives for a game (paginated)
 app.get("/:id/objectives", async (c) => {
-  const resolved = await resolveGameId(c.req.param("id"));
+  const resolved = await resolveGameAddress(c.req.param("id"));
   if (!resolved) {
     return c.json({ error: "Game not found" }, 404);
   }
@@ -213,7 +202,7 @@ app.get("/:id/objectives", async (c) => {
 
 // GET /games/:id/settings/:settingsId - Single setting
 app.get("/:id/settings/:settingsId", async (c) => {
-  const resolved = await resolveGameId(c.req.param("id"));
+  const resolved = await resolveGameAddress(c.req.param("id"));
   if (!resolved) {
     return c.json({ error: "Game not found" }, 404);
   }
@@ -248,7 +237,7 @@ app.get("/:id/settings/:settingsId", async (c) => {
 
 // GET /games/:id/settings - Settings for a game (paginated)
 app.get("/:id/settings", async (c) => {
-  const resolved = await resolveGameId(c.req.param("id"));
+  const resolved = await resolveGameAddress(c.req.param("id"));
   if (!resolved) {
     return c.json({ error: "Game not found" }, 404);
   }
@@ -284,7 +273,7 @@ app.get("/:id/settings", async (c) => {
 
 // GET /games/:id - Single game detail (MUST be last - catch-all)
 app.get("/:id", async (c) => {
-  const resolved = await resolveGameId(c.req.param("id"));
+  const resolved = await resolveGameAddress(c.req.param("id"));
   if (!resolved) {
     return c.json({ error: "Game not found" }, 404);
   }
@@ -301,7 +290,6 @@ app.get("/:id", async (c) => {
   const result = await db
     .select({
       id: games.id,
-      gameId: games.gameId,
       contractAddress: games.contractAddress,
       name: games.name,
       description: games.description,
@@ -324,7 +312,7 @@ app.get("/:id", async (c) => {
       settingsCount: settingsCount,
     })
     .from(games)
-    .where(eq(games.gameId, resolved.gameId))
+    .where(eq(games.contractAddress, resolved.gameAddress))
     .limit(1);
 
   if (result.length === 0) {

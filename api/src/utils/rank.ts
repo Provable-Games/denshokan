@@ -88,7 +88,6 @@ export async function parseRankScopeFromGetter(
   get: (key: string) => string | undefined,
   opts: { includeOwner: boolean },
 ): Promise<RankScope> {
-  const gameId = parseGameId(get("game_id"));
   const gameAddress = parseAddress(get("game_address"));
   const settingsId = parseOptionalNonNegativeInt(get("settings_id"));
   const objectiveId = parseOptionalNonNegativeInt(get("objective_id"));
@@ -110,10 +109,7 @@ export async function parseRankScopeFromGetter(
   }
 
   const conditions: SQL[] = [];
-  if (gameId !== null) conditions.push(eq(tokens.gameId, gameId));
-  // A leaderboard scoped by game_id alone would silently omit every
-  // self-bound token — see utils/gameScope.ts.
-  if (gameAddress !== null) conditions.push(await gameAddressCondition(gameAddress));
+  if (gameAddress !== null) conditions.push(gameAddressCondition(gameAddress));
   if (settingsId !== null) conditions.push(eq(tokens.settingsId, settingsId));
   if (objectiveId !== null) conditions.push(eq(tokens.objectiveId, objectiveId));
   if (contextId !== null) conditions.push(eq(tokens.contextId, contextId));

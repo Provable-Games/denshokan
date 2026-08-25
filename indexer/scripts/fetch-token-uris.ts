@@ -53,7 +53,6 @@ const DATABASE_URL =
 const RPC_URL =
   process.env.RPC_URL ?? "https://rpc.provable.games/rpc";
 const RPC_API_KEY = process.env.RPC_API_KEY ?? "";
-const DENSHOKAN_ADDRESS = (process.env.DENSHOKAN_ADDRESS ?? "0x0").trim();
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -84,12 +83,11 @@ const abi = JSON.parse(
  * surface, so only the address differs.
  */
 const contracts = new Map<string, Contract>();
-function contractFor(address: string | null): Contract {
-  const key = address || DENSHOKAN_ADDRESS;
-  let c = contracts.get(key);
+function contractFor(address: string): Contract {
+  let c = contracts.get(address);
   if (!c) {
-    c = new Contract({ abi, address: key, providerOrAccount: provider });
-    contracts.set(key, c);
+    c = new Contract({ abi, address, providerOrAccount: provider });
+    contracts.set(address, c);
   }
   return c;
 }
@@ -104,9 +102,9 @@ const toId = (id: bigint) => id.toString();
  * its issuing ERC721. Updating by id alone could write one game's fetched
  * state onto another game's token.
  */
-const tokenRow = (contractAddress: string | null, tokenId: bigint) =>
+const tokenRow = (contractAddress: string, tokenId: bigint) =>
   and(
-    eq(schema.tokens.contractAddress, contractAddress ?? DENSHOKAN_ADDRESS),
+    eq(schema.tokens.contractAddress, contractAddress),
     eq(schema.tokens.tokenId, toId(tokenId)),
   );
 
@@ -115,7 +113,7 @@ const tokenRow = (contractAddress: string | null, tokenId: bigint) =>
 // ---------------------------------------------------------------------------
 
 async function fetchAndStore(
-  contractAddress: string | null,
+  contractAddress: string,
   tokenId: bigint,
   seenBlock: bigint,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -158,13 +156,65 @@ async function fetchAndStore(
       .set(tokenUpdate)
       .where(tokenRow(contractAddress, tokenId));
 
+    await upsertGame(contractAddress, parsed);
+
     return { ok: true };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     console.warn(
-      `[URI] Failed for token ${tokenId} on ${contractAddress ?? DENSHOKAN_ADDRESS}: ${msg}`,
+      `[URI] Failed for token ${tokenId} on ${contractAddress}: ${msg}`,
     );
     return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Record the game behind a token, from the metadata embedded in its URI.
+ *
+ * There is no registry in v2.x and no `game_metadata()` entrypoint — upstream,
+ * GameMetadata is only ever a renderer input — so a token's URI is the only
+ * place a game's name, developer, publisher, genre and image are exposed. They
+ * are identical on every token a game issues, so the last write simply wins;
+ * a game that renames itself is picked up by the next token fetched.
+ *
+ * Best-effort: a game row is a convenience for `/games`, and failing to write
+ * one must not fail the token fetch that produced it.
+ */
+async function upsertGame(
+  contractAddress: string,
+  parsed: ReturnType<typeof parseTokenUriAttributes>,
+): Promise<void> {
+  // Nothing to record — an older or minimal renderer.
+  if (
+    parsed.gameName === null &&
+    parsed.gameDeveloper === null &&
+    parsed.gamePublisher === null &&
+    parsed.gameGenre === null &&
+    parsed.gameImage === null
+  ) {
+    return;
+  }
+
+  const fields = {
+    name: parsed.gameName,
+    developer: parsed.gameDeveloper,
+    publisher: parsed.gamePublisher,
+    genre: parsed.gameGenre,
+    image: parsed.gameImage,
+    clientUrl: parsed.clientUrl,
+    rendererAddress: parsed.rendererAddress,
+    skillsAddress: parsed.skillsAddress,
+    lastUpdatedAt: new Date(),
+  };
+
+  try {
+    await db
+      .insert(schema.games)
+      .values({ contractAddress, ...fields })
+      .onConflictDoUpdate({ target: schema.games.contractAddress, set: fields });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.warn(`[URI] Could not upsert game ${contractAddress}: ${msg}`);
   }
 }
 
@@ -175,7 +225,7 @@ async function fetchAndStore(
  * when the underlying issue is fixed (e.g. game contract upgrade).
  */
 async function markFailed(
-  contractAddress: string | null,
+  contractAddress: string,
   tokenId: bigint,
   error: string,
 ): Promise<void> {
@@ -266,7 +316,6 @@ async function processUnfetched(): Promise<number> {
 async function main(): Promise<void> {
   console.log(`[URI Fetcher] Starting (concurrency=${CONCURRENCY}, poll=${POLL_INTERVAL_MS}ms, watch=${WATCH})`);
   console.log(`[URI Fetcher] RPC: ${RPC_URL}`);
-  console.log(`[URI Fetcher] Contract: ${DENSHOKAN_ADDRESS}`);
 
   if (WATCH) {
     // Continuous mode: poll for unfetched tokens

@@ -5,206 +5,166 @@ import { decodePackedTokenId } from "./decoder.js";
 /**
  * Token-id decoding is the one thing in this indexer that fails SILENTLY.
  *
- * Both generations pack a felt252. Neither carries a marker saying which
- * layout it uses. Decode a standard id with the legacy layout and nothing
- * throws — you get a timestamp, a settings id, a minter id, all plausible and
- * all wrong, written straight into the database.
+ * An id is a felt252 with no framing: get an offset wrong by a bit and nothing
+ * throws — you get a timestamp, a settings id and a minter id, all plausible
+ * and all wrong, written straight into the database.
  *
- * So these tests pack the bits independently of the decoder's own constants.
- * If an offset in decoder.ts is wrong by even one bit, the round trip fails
- * here rather than in production six months later.
+ * So these tests pack the bits from the documented layout rather than
+ * importing the decoder's own constants. A test that reused TOKEN_ID_OFFSETS
+ * would agree with any typo those constants contained.
+ *
+ *     0–34  minted_at  |  35–59  start_delay  |  60–84  end_delay
+ *   85–100  settings_id| 101–126 minted_by    | 127     soulbound
+ *  128–137  tx_hash    | 138–153 salt         | 154     paymaster
+ *  155      has_context| 156–185 objective_id | 186–250 metadata
  */
-
-/** Pack a legacy id from its documented bit positions. */
-function packLegacy(f: {
-  gameId: bigint;
-  mintedBy: bigint;
-  settingsId: bigint;
-  startDelay: bigint;
-  soulbound: boolean;
-  hasContext: boolean;
-  paymaster: boolean;
+function pack(f: {
   mintedAt: bigint;
+  startDelay: bigint;
   endDelay: bigint;
-  objectiveId: bigint;
+  settingsId: bigint;
+  mintedBy: bigint;
+  soulbound: boolean;
   txHash: bigint;
   salt: bigint;
+  paymaster: boolean;
+  hasContext: boolean;
+  objectiveId: bigint;
   metadata: bigint;
 }): bigint {
   return (
-    f.gameId |
-    (f.mintedBy << 30n) |
-    (f.settingsId << 70n) |
-    (f.startDelay << 100n) |
-    (BigInt(f.soulbound) << 125n) |
-    (BigInt(f.hasContext) << 126n) |
-    (BigInt(f.paymaster) << 127n) |
-    (f.mintedAt << 128n) |
-    (f.endDelay << 163n) |
-    (f.objectiveId << 188n) |
-    (f.txHash << 218n) |
-    (f.salt << 228n) |
-    (f.metadata << 238n)
-  );
-}
-
-/** Pack a standard id from its documented bit positions. */
-function packStandard(f: {
-  mintedAt: bigint;
-  startDelay: bigint;
-  endDelay: bigint;
-  settingsId: bigint;
-  mintedBy: bigint;
-  soulbound: boolean;
-  txHash: bigint;
-  salt: bigint;
-  paymaster: boolean;
-  hasContext: boolean;
-  objectiveId: bigint;
-  metadata: bigint;
-}): bigint {
-  const low =
     f.mintedAt |
     (f.startDelay << 35n) |
     (f.endDelay << 60n) |
     (f.settingsId << 85n) |
     (f.mintedBy << 101n) |
-    (BigInt(f.soulbound) << 127n);
-  const high =
-    f.txHash |
-    (f.salt << 10n) |
-    (BigInt(f.paymaster) << 26n) |
-    (BigInt(f.hasContext) << 27n) |
-    (f.objectiveId << 28n) |
-    (f.metadata << 58n);
-  return low | (high << 128n);
+    (BigInt(f.soulbound) << 127n) |
+    (f.txHash << 128n) |
+    (f.salt << 138n) |
+    (BigInt(f.paymaster) << 154n) |
+    (BigInt(f.hasContext) << 155n) |
+    (f.objectiveId << 156n) |
+    (f.metadata << 186n)
+  );
 }
 
-describe("decodePackedTokenId — legacy layout", () => {
-  const fields = {
-    gameId: 7n,
-    mintedBy: 1234n,
-    settingsId: 42n,
-    startDelay: 60n,
-    soulbound: true,
-    hasContext: true,
-    paymaster: false,
-    mintedAt: 1_700_000_000n,
-    endDelay: 3600n,
-    objectiveId: 9n,
-    txHash: 0x2ffn,
-    salt: 5n,
-    metadata: 0x1abcn & 0x1fffn,
-  };
+const ZERO = {
+  mintedAt: 0n,
+  startDelay: 0n,
+  endDelay: 0n,
+  settingsId: 0n,
+  mintedBy: 0n,
+  soulbound: false,
+  txHash: 0n,
+  salt: 0n,
+  paymaster: false,
+  hasContext: false,
+  objectiveId: 0n,
+  metadata: 0n,
+};
 
-  it("round-trips every field", () => {
-    const decoded = decodePackedTokenId(packLegacy(fields), "legacy");
-
-    expect(decoded.generation).toBe("legacy");
-    expect(decoded.gameId).toBe(7);
-    expect(decoded.mintedBy).toBe(1234n);
-    expect(decoded.settingsId).toBe(42);
-    expect(decoded.mintedAt.getTime()).toBe(1_700_000_000 * 1000);
-    expect(decoded.startDelay).toBe(60);
-    expect(decoded.endDelay).toBe(3600);
-    expect(decoded.objectiveId).toBe(9);
-    expect(decoded.soulbound).toBe(true);
-    expect(decoded.hasContext).toBe(true);
-    expect(decoded.paymaster).toBe(false);
-    expect(decoded.txHash).toBe(0x2ff);
-    expect(decoded.salt).toBe(5);
-    expect(decoded.metadata).toBe(fields.metadata);
-  });
-
-  it("defaults to legacy, so existing call sites keep their meaning", () => {
-    const packed = packLegacy(fields);
-    expect(decodePackedTokenId(packed)).toEqual(decodePackedTokenId(packed, "legacy"));
-  });
-});
-
-describe("decodePackedTokenId — standard layout", () => {
-  const fields = {
-    mintedAt: 1_700_000_000n,
-    startDelay: 60n,
-    endDelay: 3600n,
-    settingsId: 42n,
-    mintedBy: 1234n,
-    soulbound: true,
-    txHash: 0x2ffn,
-    salt: 40_000n, // needs the widened 16-bit field; would not fit legacy's 10
-    paymaster: true,
-    hasContext: true,
-    objectiveId: 9n,
-    metadata: 0n,
-  };
-
-  it("round-trips every field", () => {
-    const decoded = decodePackedTokenId(packStandard(fields), "standard");
-
-    expect(decoded.generation).toBe("standard");
-    expect(decoded.mintedBy).toBe(1234n);
-    expect(decoded.settingsId).toBe(42);
-    expect(decoded.mintedAt.getTime()).toBe(1_700_000_000 * 1000);
-    expect(decoded.startDelay).toBe(60);
-    expect(decoded.endDelay).toBe(3600);
-    expect(decoded.objectiveId).toBe(9);
-    expect(decoded.soulbound).toBe(true);
-    expect(decoded.hasContext).toBe(true);
-    expect(decoded.paymaster).toBe(true);
-    expect(decoded.txHash).toBe(0x2ff);
-    expect(decoded.salt).toBe(40_000);
-  });
-
-  it("has no game id — the game is the contract address", () => {
-    const decoded = decodePackedTokenId(packStandard(fields), "standard");
-    expect(decoded.gameId).toBe(null);
-  });
-
-  it("carries metadata wider than Number.MAX_SAFE_INTEGER without losing precision", () => {
-    // 65 bits. As a JS number this would round; the field is a bigint for
-    // exactly this reason.
-    const wide = (1n << 64n) | 12345n;
-    const decoded = decodePackedTokenId(packStandard({ ...fields, metadata: wide }), "standard");
-
-    expect(decoded.metadata).toBe(wide);
-    expect(decoded.metadata > BigInt(Number.MAX_SAFE_INTEGER)).toBe(true);
-  });
-
-  it("accepts the full 16-bit salt range that legacy could not hold", () => {
-    const decoded = decodePackedTokenId(packStandard({ ...fields, salt: 0xffffn }), "standard");
-    expect(decoded.salt).toBe(0xffff);
-  });
-});
-
-describe("the generations are not interchangeable", () => {
-  /**
-   * This is the regression this whole change exists for. It asserts the
-   * FAILURE mode, not the success one: reading a standard id with the legacy
-   * layout must be visibly wrong, so nobody is tempted to skip passing the
-   * generation through.
-   */
-  it("decoding a standard id as legacy yields wrong values, not an error", () => {
-    const packed = packStandard({
-      mintedAt: 1_700_000_000n,
-      startDelay: 0n,
-      endDelay: 0n,
-      settingsId: 42n,
-      mintedBy: 1234n,
-      soulbound: false,
-      txHash: 0n,
-      salt: 0n,
-      paymaster: false,
-      hasContext: false,
-      objectiveId: 0n,
-      metadata: 0n,
+describe("decodePackedTokenId", () => {
+  it("round-trips every field at once", () => {
+    const packed = pack({
+      mintedAt: 1_800_000_000n,
+      startDelay: 3_600n,
+      endDelay: 86_400n,
+      settingsId: 0xbeefn, // fills all 16 bits
+      mintedBy: 0x3ff_ffffn, // fills all 26 bits
+      soulbound: true,
+      txHash: 0x3ffn, // 10 bits
+      salt: 0xffffn, // 16 bits
+      paymaster: true,
+      hasContext: true,
+      objectiveId: 0x3fff_ffffn, // 30 bits
+      metadata: 0x1_ffff_ffff_ffff_ffffn, // 65 bits
     });
 
-    const asStandard = decodePackedTokenId(packed, "standard");
-    const asLegacy = decodePackedTokenId(packed, "legacy");
+    const d = decodePackedTokenId(packed);
+    expect(d.mintedAt.getTime()).toBe(1_800_000_000 * 1000);
+    expect(d.startDelay).toBe(3_600);
+    expect(d.endDelay).toBe(86_400);
+    expect(d.settingsId).toBe(0xbeef);
+    expect(d.mintedBy).toBe(0x3ff_ffffn);
+    expect(d.soulbound).toBe(true);
+    expect(d.txHash).toBe(0x3ff);
+    expect(d.salt).toBe(0xffff);
+    expect(d.paymaster).toBe(true);
+    expect(d.hasContext).toBe(true);
+    expect(d.objectiveId).toBe(0x3fff_ffff);
+    expect(d.metadata).toBe(0x1_ffff_ffff_ffff_ffffn);
+  });
 
-    // No throw — that is the hazard.
-    expect(asStandard.mintedAt.getTime()).toBe(1_700_000_000 * 1000);
-    expect(asLegacy.mintedAt.getTime()).not.toBe(asStandard.mintedAt.getTime());
-    expect(asLegacy.settingsId).not.toBe(asStandard.settingsId);
+  it("decodes an all-zero id to zeroes", () => {
+    const d = decodePackedTokenId(pack(ZERO));
+    expect(d.mintedBy).toBe(0n);
+    expect(d.settingsId).toBe(0);
+    expect(d.objectiveId).toBe(0);
+    expect(d.soulbound).toBe(false);
+    expect(d.hasContext).toBe(false);
+    expect(d.paymaster).toBe(false);
+    expect(d.txHash).toBe(0);
+    expect(d.salt).toBe(0);
+    expect(d.metadata).toBe(0n);
+  });
+
+  it("keeps the three flags independent across the u128 boundary", () => {
+    const soulbound = decodePackedTokenId(pack({ ...ZERO, soulbound: true }));
+    expect(soulbound.soulbound).toBe(true);
+    expect(soulbound.paymaster).toBe(false);
+    expect(soulbound.hasContext).toBe(false);
+
+    const paymaster = decodePackedTokenId(pack({ ...ZERO, paymaster: true }));
+    expect(paymaster.paymaster).toBe(true);
+    expect(paymaster.soulbound).toBe(false);
+    expect(paymaster.hasContext).toBe(false);
+
+    const hasContext = decodePackedTokenId(pack({ ...ZERO, hasContext: true }));
+    expect(hasContext.hasContext).toBe(true);
+    expect(hasContext.soulbound).toBe(false);
+    expect(hasContext.paymaster).toBe(false);
+  });
+
+  it("does not bleed a saturated field into its neighbours", () => {
+    // settings_id saturated: the 25-bit end_delay below it and the 26-bit
+    // minted_by above it must both stay zero.
+    const d = decodePackedTokenId(pack({ ...ZERO, settingsId: 0xffffn }));
+    expect(d.settingsId).toBe(0xffff);
+    expect(d.endDelay).toBe(0);
+    expect(d.mintedBy).toBe(0n);
+    expect(d.soulbound).toBe(false);
+  });
+
+  it("holds metadata beyond Number.MAX_SAFE_INTEGER", () => {
+    // 65 bits does not fit a JS number — this is why the column and the field
+    // are both arbitrary-precision.
+    const metadata = 0x1_ffff_ffff_ffff_ffffn;
+    expect(metadata).toBeGreaterThan(BigInt(Number.MAX_SAFE_INTEGER));
+    const d = decodePackedTokenId(pack({ ...ZERO, metadata }));
+    expect(d.metadata).toBe(metadata);
+  });
+
+  it("accepts a hex string id", () => {
+    const packed = pack({ ...ZERO, mintedAt: 1_700_000_000n });
+    const d = decodePackedTokenId(`0x${packed.toString(16)}`);
+    expect(d.mintedAt.getTime()).toBe(1_700_000_000 * 1000);
+  });
+
+  it("decodes a realistic mint", () => {
+    const packed = pack({
+      ...ZERO,
+      mintedAt: 1_770_000_000n,
+      settingsId: 3n,
+      mintedBy: 1n,
+      objectiveId: 7n,
+      salt: 2n,
+    });
+    const d = decodePackedTokenId(packed);
+    expect(d.mintedAt.getTime()).toBe(1_770_000_000 * 1000);
+    expect(d.settingsId).toBe(3);
+    expect(d.mintedBy).toBe(1n);
+    expect(d.objectiveId).toBe(7);
+    expect(d.salt).toBe(2);
+    expect(d.soulbound).toBe(false);
   });
 });
