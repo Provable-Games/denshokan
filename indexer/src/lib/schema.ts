@@ -8,8 +8,7 @@
  *
  * Tables:
  * 1. tokens - current state of each token with decoded packed ID data
- * 2. score_history - historical score snapshots for charts/analytics
- * 3. games - game registry cache
+ * 3. games - per-game metadata, parsed from token URIs
  * 4. minters - minter registry cache
  * 5. objectives - game objective definitions
  * 6. settings - game settings definitions
@@ -32,7 +31,7 @@ import {
 /**
  * Tokens table - stores token state with decoded packed ID fields
  *
- * The packed token ID embeds immutable data (game_id, minted_by, settings_id, etc.)
+ * The packed token ID embeds immutable data (minted_by, settings_id, etc.)
  * directly in the token_id felt252. These fields are decoded and stored for
  * efficient querying without needing to decode on every read.
  *
@@ -43,11 +42,24 @@ export const tokens = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
 
-    // Token ID - stored as numeric for felt252 precision (251 bits)
-    tokenId: numeric("token_id").notNull().unique(),
+    /**
+     * Token ID - stored as numeric for felt252 precision (251 bits).
+     *
+     * NOT unique on its own. A token id is unique only within the ERC721 that
+     * issued it, and every game is its own ERC721: the layout carries no
+     * game_id, and its collision protection (10-bit tx_hash + 16-bit salt) is
+     * transaction-scoped, so two games minting in one multicall can pack
+     * byte-identical ids. Identity is `(contract_address, token_id)`.
+     */
+    tokenId: numeric("token_id").notNull(),
+
+    /**
+     * The contract that issued this token, which IS its game — every game is
+     * its own ERC721. Half of the token's identity, hence NOT NULL.
+     */
+    contractAddress: text("contract_address").notNull(),
 
     // Decoded from packed token_id (immutable)
-    gameId: integer("game_id").notNull(),
     mintedBy: bigint("minted_by", { mode: "bigint" }).notNull(),
     settingsId: integer("settings_id").notNull(),
     mintedAt: timestamp("minted_at").notNull(),
@@ -59,7 +71,11 @@ export const tokens = pgTable(
     paymaster: boolean("paymaster").notNull().default(false),
     txHash: integer("tx_hash").notNull().default(0),
     salt: integer("salt").notNull().default(0),
-    metadata: integer("metadata").notNull().default(0),
+    /**
+     * numeric, not integer: the layout packs 65 bits here, which overflows
+     * int4 and exceeds Number.MAX_SAFE_INTEGER.
+     */
+    metadata: numeric("metadata").notNull().default("0"),
 
     // Mutable fields (from events)
     gameOver: boolean("game_over").notNull().default(false),
@@ -119,12 +135,16 @@ export const tokens = pgTable(
   },
   (table) => [
     // Leaderboard queries: top scores per game
-    index("tokens_game_score_idx").on(table.gameId, table.currentScore),
+    index("tokens_game_score_idx").on(table.contractAddress, table.currentScore),
     // Filter by game + game_over, sorted by lastUpdatedAt (covers GET /tokens?game_id=X&game_over=Y)
-    index("tokens_game_over_updated_idx").on(table.gameId, table.gameOver, table.lastUpdatedAt),
+    index("tokens_game_over_updated_idx").on(
+      table.contractAddress,
+      table.gameOver,
+      table.lastUpdatedAt
+    ),
     // Player portfolio sorted by lastUpdatedAt (covers GET /players/:address/tokens)
     index("tokens_owner_updated_idx").on(table.ownerAddress, table.lastUpdatedAt),
-    index("tokens_owner_game_idx").on(table.ownerAddress, table.gameId),
+    index("tokens_owner_game_idx").on(table.ownerAddress, table.contractAddress),
     // Objective queries
     index("tokens_objective_idx").on(table.objectiveId),
     // Minter queries
@@ -135,37 +155,8 @@ export const tokens = pgTable(
     index("tokens_context_id_idx").on(table.contextId),
     // Completion timestamp queries
     index("tokens_completed_at_idx").on(table.completedAt),
-  ]
-);
-
-/**
- * Score History table - historical score snapshots
- *
- * Tracks score changes over time for analytics and charts.
- * Each ScoreUpdate event creates a new record.
- */
-export const scoreHistory = pgTable(
-  "score_history",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    tokenId: numeric("token_id").notNull(),
-    score: bigint("score", { mode: "bigint" }).notNull(),
-    blockNumber: bigint("block_number", { mode: "bigint" }).notNull(),
-    blockTimestamp: timestamp("block_timestamp").notNull(),
-    transactionHash: text("transaction_hash").notNull(),
-    eventIndex: integer("event_index").notNull(),
-  },
-  (table) => [
-    // Unique constraint for idempotent re-indexing
-    uniqueIndex("score_history_block_tx_event_idx").on(
-      table.blockNumber,
-      table.transactionHash,
-      table.eventIndex
-    ),
-    // Token score history query
-    index("score_history_token_block_idx").on(table.tokenId, table.blockNumber),
-    // Time-based queries
-    index("score_history_token_time_idx").on(table.tokenId, table.blockTimestamp),
+    /** Token identity: an id is unique only within its issuing contract. */
+    uniqueIndex("tokens_contract_token_idx").on(table.contractAddress, table.tokenId),
   ]
 );
 
@@ -179,8 +170,11 @@ export const games = pgTable(
   "games",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    gameId: integer("game_id").notNull().unique(),
-    contractAddress: text("contract_address").notNull(),
+    /**
+     * A game IS its contract, so this is its identity. There is no registry
+     * and therefore no numeric game id any more.
+     */
+    contractAddress: text("contract_address").notNull().unique(),
     name: text("name"),
     description: text("description"),
     image: text("image"),
@@ -213,7 +207,15 @@ export const minters = pgTable(
   "minters",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    minterId: bigint("minter_id", { mode: "bigint" }).notNull().unique(),
+    /** NOT unique on its own — see the constraint below. */
+    minterId: bigint("minter_id", { mode: "bigint" }).notNull(),
+    /**
+     * The game contract that emitted the registration. This is the namespace
+     * minter ids live in, and it is NOT the same thing as `contract_address`
+     * below, which is the minter's own address.
+     */
+    tokenContractAddress: text("token_contract_address").notNull(),
+    /** The minter's address (what a minter_id resolves to). */
     contractAddress: text("contract_address").notNull(),
     name: text("name"),
     createdAt: timestamp("created_at").defaultNow(),
@@ -221,6 +223,14 @@ export const minters = pgTable(
   },
   (table) => [
     index("minters_contract_idx").on(table.contractAddress),
+    /**
+     * Minter identity. `minter_counter` is per-contract storage upstream, so
+     * every game hands out minter_id 1 to its own first minter.
+     */
+    uniqueIndex("minters_token_contract_minter_idx").on(
+      table.tokenContractAddress,
+      table.minterId
+    ),
   ]
 );
 
@@ -276,7 +286,6 @@ export const settings = pgTable(
 // Export all schema tables for Drizzle
 export const schema = {
   tokens,
-  scoreHistory,
   games,
   minters,
   objectives,

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
-import { eq, desc, asc, and, sql, inArray } from "drizzle-orm";
+import { eq, desc, asc, and, or, sql, inArray } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { tokens, scoreHistory, minters, games } from "../db/schema.js";
+import { tokens, minters, games } from "../db/schema.js";
 import { parseTokenId, parseGameId, parseAddress, parseNonNegativeInt, parseOptionalNonNegativeInt } from "../utils/validation.js";
 import {
   parseRankScope,
@@ -10,6 +10,7 @@ import {
   computeRanksBulk,
 } from "../utils/rank.js";
 import { resolveUriAccess } from "../utils/uriAccess.js";
+import { gameAddressCondition } from "../utils/gameScope.js";
 
 const MAX_BULK_RANK_TOKENS = 500;
 // Cap for the by-ids fetch (POST /tokens/query). Matches the bulk-rank cap — a
@@ -29,60 +30,98 @@ const SORT_FIELDS: Record<string, any> = {
 
 const app = new Hono();
 
-// In-memory minter cache (minter_id -> contract_address)
-// Refreshed on first request and when a cache miss occurs
+/**
+ * In-memory minter cache, keyed `<token contract>:<minter id>`.
+ *
+ * The token contract is part of the key because `minter_counter` is
+ * per-contract storage upstream: every self-bound game assigns minter_id 1 to
+ * its own first minter, so an id alone resolves to the wrong address as soon
+ * as a second token contract is indexed.
+ *
+ * Refreshed on first request and when a cache miss occurs.
+ */
 let minterCache = new Map<string, string>();
 let minterCacheReady = false;
 
+const minterKey = (tokenContract: string | null, minterId: bigint | string) =>
+  `${tokenContract ?? ""}:${minterId.toString()}`;
+
 async function loadMinterCache() {
-  const rows = await db.select({ minterId: minters.minterId, contractAddress: minters.contractAddress }).from(minters);
-  minterCache = new Map(rows.map((r) => [r.minterId.toString(), r.contractAddress]));
+  const rows = await db
+    .select({
+      minterId: minters.minterId,
+      tokenContractAddress: minters.tokenContractAddress,
+      contractAddress: minters.contractAddress,
+    })
+    .from(minters);
+  minterCache = new Map(
+    rows.map((r) => [minterKey(r.tokenContractAddress, r.minterId), r.contractAddress])
+  );
   minterCacheReady = true;
 }
 
-// In-memory game cache (game_id -> contract_address)
-let gameCache = new Map<number, string>();
-let gameCacheReady = false;
-
-async function loadGameCache() {
-  const rows = await db.select({ gameId: games.gameId, contractAddress: games.contractAddress }).from(games);
-  gameCache = new Map(rows.map((r) => [r.gameId, r.contractAddress]));
-  gameCacheReady = true;
-}
-
-async function resolveGameAddress(gameId: number): Promise<string | null> {
-  if (!gameCacheReady) await loadGameCache();
-  const cached = gameCache.get(gameId);
-  if (cached !== undefined) return cached;
-  await loadGameCache();
-  return gameCache.get(gameId) ?? null;
-}
-
-async function resolveMinterAddress(mintedBy: string): Promise<string | null> {
+async function resolveMinterAddress(
+  tokenContract: string | null,
+  mintedBy: string
+): Promise<string | null> {
+  const key = minterKey(tokenContract, mintedBy);
   if (!minterCacheReady) await loadMinterCache();
-  const cached = minterCache.get(mintedBy);
+  const cached = minterCache.get(key);
   if (cached !== undefined) return cached;
   // Cache miss — refresh and retry once
   await loadMinterCache();
-  return minterCache.get(mintedBy) ?? null;
+  return minterCache.get(key) ?? null;
 }
 
-async function resolveMinterId(address: string): Promise<bigint | null> {
+/**
+ * Every (token contract, minter id) pair a minter address was registered under.
+ *
+ * A list rather than one id: the same minter can be registered by several
+ * token contracts and receive a *different* id from each, so filtering tokens
+ * by minter address means matching any of those pairs — never an id alone,
+ * which would sweep in other contracts' tokens that happen to share it.
+ */
+async function resolveMinterScopes(
+  address: string
+): Promise<Array<{ tokenContract: string; minterId: bigint }>> {
+  const collect = () => {
+    const found: Array<{ tokenContract: string; minterId: bigint }> = [];
+    for (const [key, addr] of minterCache) {
+      if (addr !== address) continue;
+      const sep = key.lastIndexOf(":");
+      found.push({
+        tokenContract: key.slice(0, sep),
+        minterId: BigInt(key.slice(sep + 1)),
+      });
+    }
+    return found;
+  };
+
   if (!minterCacheReady) await loadMinterCache();
-  for (const [id, addr] of minterCache) {
-    if (addr === address) return BigInt(id);
-  }
+  const hit = collect();
+  if (hit.length > 0) return hit;
   // Cache miss — refresh and retry once
   await loadMinterCache();
-  for (const [id, addr] of minterCache) {
-    if (addr === address) return BigInt(id);
-  }
-  return null;
+  return collect();
+}
+
+/**
+ * Conditions selecting a token by id, optionally narrowed to one contract.
+ *
+ * Identity is (contract_address, token_id): an id is unique only within the
+ * ERC721 that issued it, and standard ids carry nothing that separates one
+ * game from another. Callers that know the contract should say so; callers
+ * that don't get an explicit ambiguity error instead of an arbitrary row.
+ */
+function byIdConditions(tokenId: string, contractAddress: string | null) {
+  return contractAddress === null
+    ? eq(tokens.tokenId, tokenId)
+    : and(eq(tokens.tokenId, tokenId), eq(tokens.contractAddress, contractAddress))!;
 }
 
 // GET /tokens - List tokens (paginated, filterable)
 app.get("/", async (c) => {
-  const gameId = parseGameId(c.req.query("game_id"));
+  const gameAddress = parseAddress(c.req.query("game_address"));
   const owner = parseAddress(c.req.query("owner"));
   const gameOver = c.req.query("game_over");
   const contextId = parseOptionalNonNegativeInt(c.req.query("context_id"));
@@ -99,7 +138,7 @@ app.get("/", async (c) => {
   const offset = parseNonNegativeInt(c.req.query("offset"), 0);
 
   const conditions = [];
-  if (gameId !== null) conditions.push(eq(tokens.gameId, gameId));
+  if (gameAddress !== null) conditions.push(gameAddressCondition(gameAddress));
   if (owner !== null) conditions.push(eq(tokens.ownerAddress, owner));
   if (gameOver === "true") conditions.push(eq(tokens.gameOver, true));
   if (gameOver === "false") conditions.push(eq(tokens.gameOver, false));
@@ -108,9 +147,17 @@ app.get("/", async (c) => {
   if (hasContext === "false") conditions.push(eq(tokens.hasContext, false));
   if (contextName) conditions.push(eq(tokens.contextName, contextName));
   if (minterAddress) {
-    const minterId = await resolveMinterId(minterAddress);
-    if (minterId !== null) {
-      conditions.push(eq(tokens.mintedBy, minterId));
+    const scopes = await resolveMinterScopes(minterAddress);
+    if (scopes.length > 0) {
+      // Match the minter id only within the contract that issued it — the
+      // same id means a different minter in another contract.
+      conditions.push(
+        or(
+          ...scopes.map((s) =>
+            and(eq(tokens.contractAddress, s.tokenContract), eq(tokens.mintedBy, s.minterId))
+          )
+        )!
+      );
     } else {
       // Minter not found — return empty
       return c.json({ data: [], total: 0, limit, offset: Math.max(offset, 0) });
@@ -145,8 +192,9 @@ app.get("/", async (c) => {
   return c.json({
     data: await Promise.all(results.map(async (t) => ({
       ...serializeToken(t, includeUri),
-      minterAddress: await resolveMinterAddress(t.mintedBy.toString()),
-      gameAddress: await resolveGameAddress(t.gameId),
+      minterAddress: await resolveMinterAddress(t.contractAddress, t.mintedBy.toString()),
+      // The issuing contract IS the game.
+      gameAddress: t.contractAddress,
     }))),
     total: countResult[0]?.count ?? 0,
     limit,
@@ -165,7 +213,7 @@ app.get("/", async (c) => {
 app.post("/query", async (c) => {
   type Body = {
     tokenIds?: unknown;
-    gameId?: unknown;
+    gameAddress?: unknown;
     owner?: unknown;
     gameOver?: unknown;
     minterAddress?: unknown;
@@ -212,10 +260,10 @@ app.post("/query", async (c) => {
   }
 
   const conditions = [inArray(tokens.tokenId, ids)];
-  const gameId = parseGameId(
-    body.gameId != null ? String(body.gameId) : undefined,
+  const gameAddress = parseAddress(
+    body.gameAddress != null ? String(body.gameAddress) : undefined,
   );
-  if (gameId !== null) conditions.push(eq(tokens.gameId, gameId));
+  if (gameAddress !== null) conditions.push(gameAddressCondition(gameAddress));
   const owner = parseAddress(body.owner != null ? String(body.owner) : undefined);
   if (owner !== null) conditions.push(eq(tokens.ownerAddress, owner));
   if (body.gameOver === true) conditions.push(eq(tokens.gameOver, true));
@@ -234,11 +282,18 @@ app.post("/query", async (c) => {
     body.minterAddress != null ? String(body.minterAddress) : undefined,
   );
   if (minterAddress) {
-    const minterId = await resolveMinterId(minterAddress);
-    if (minterId === null) {
+    const scopes = await resolveMinterScopes(minterAddress);
+    if (scopes.length === 0) {
       return c.json({ data: [], total: 0, limit: ids.length, offset });
     }
-    conditions.push(eq(tokens.mintedBy, minterId));
+    // Per-contract minter ids — see resolveMinterScopes.
+    conditions.push(
+      or(
+        ...scopes.map((s) =>
+          and(eq(tokens.contractAddress, s.tokenContract), eq(tokens.mintedBy, s.minterId))
+        )
+      )!
+    );
   }
 
   const where = and(...conditions);
@@ -276,8 +331,9 @@ app.post("/query", async (c) => {
     data: await Promise.all(
       results.map(async (t) => ({
         ...serializeToken(t, includeUri),
-        minterAddress: await resolveMinterAddress(t.mintedBy.toString()),
-        gameAddress: await resolveGameAddress(t.gameId),
+        minterAddress: await resolveMinterAddress(t.contractAddress, t.mintedBy.toString()),
+        // The issuing contract IS the game.
+      gameAddress: t.contractAddress,
       })),
     ),
     total: countResult[0]?.count ?? 0,
@@ -287,20 +343,38 @@ app.post("/query", async (c) => {
 });
 
 // GET /tokens/:id - Single token
+//
+// A token id identifies a row only together with its issuing contract, so an
+// optional `?contract_address=` disambiguates. Without it a shared id is
+// reported as ambiguous rather than silently resolved to an arbitrary row —
+// see byIdConditions.
 app.get("/:id", async (c) => {
   const tokenId = parseTokenId(c.req.param("id"));
   if (tokenId === null) {
     return c.json({ error: "Invalid token ID" }, 400);
   }
+  const contractAddress = parseAddress(c.req.query("contract_address"));
 
   const result = await db
     .select()
     .from(tokens)
-    .where(eq(tokens.tokenId, tokenId))
-    .limit(1);
+    .where(byIdConditions(tokenId, contractAddress))
+    // Two, not one: a second row means the id is ambiguous and the caller has
+    // to say which contract they meant.
+    .limit(2);
 
   if (result.length === 0) {
     return c.json({ error: "Token not found" }, 404);
+  }
+  if (result.length > 1) {
+    return c.json(
+      {
+        error:
+          "Ambiguous token ID: more than one contract has issued this id. " +
+          "Retry with ?contract_address=<address>.",
+      },
+      409,
+    );
   }
 
   // Single token — one URI, not a page of them, so this stays opt-out
@@ -311,8 +385,8 @@ app.get("/:id", async (c) => {
   return c.json({
     data: {
       ...serializeToken(result[0], includeUri),
-      minterAddress: await resolveMinterAddress(result[0].mintedBy.toString()),
-      gameAddress: await resolveGameAddress(result[0].gameId),
+      minterAddress: await resolveMinterAddress(result[0].contractAddress, result[0].mintedBy.toString()),
+      gameAddress: result[0].contractAddress,
     },
   });
 });
@@ -334,6 +408,8 @@ app.post("/rank", async (c) => {
   type Body = {
     tokenIds?: unknown;
     gameId?: unknown;
+    /** Scope to one game, by contract address. */
+    gameAddress?: unknown;
     settingsId?: unknown;
     objectiveId?: unknown;
     contextId?: unknown;
@@ -406,11 +482,26 @@ app.get("/:id/rank", async (c) => {
   const scope = await parseRankScope(c, { includeOwner: true });
   if (scope.error) return c.json(scope.error.body, scope.error.status);
 
-  const [target] = await db
+  const contractAddress = parseAddress(c.req.query("contract_address"));
+  const targets = await db
     .select({ score: tokens.currentScore, mintedAt: tokens.mintedAt })
     .from(tokens)
-    .where(and(eq(tokens.tokenId, tokenId), ...scope.conditions))
-    .limit(1);
+    .where(and(byIdConditions(tokenId, contractAddress), ...scope.conditions))
+    // See GET /:id — a second row means the id alone is ambiguous. Ranking an
+    // arbitrary one of them would return a confident, wrong number.
+    .limit(2);
+
+  if (targets.length > 1) {
+    return c.json(
+      {
+        error:
+          "Ambiguous token ID: more than one contract has issued this id. " +
+          "Retry with ?contract_address=<address>, or narrow the scope.",
+      },
+      409,
+    );
+  }
+  const target = targets[0];
 
   if (!target) {
     return c.json({ error: "Token not found in scope" }, 404);
@@ -428,31 +519,6 @@ app.get("/:id/rank", async (c) => {
   });
 });
 
-// GET /tokens/:id/scores - Score history for a token
-app.get("/:id/scores", async (c) => {
-  const tokenId = parseTokenId(c.req.param("id"));
-  if (tokenId === null) {
-    return c.json({ error: "Invalid token ID" }, 400);
-  }
-
-  const limit = parseNonNegativeInt(c.req.query("limit"), 100);
-
-  const results = await db
-    .select()
-    .from(scoreHistory)
-    .where(eq(scoreHistory.tokenId, tokenId))
-    .orderBy(desc(scoreHistory.blockNumber))
-    .limit(Math.min(limit, 500));
-
-  return c.json({
-    data: results.map((r) => ({
-      ...r,
-      tokenId: r.tokenId.toString(),
-      score: r.score.toString(),
-      blockNumber: r.blockNumber.toString(),
-    })),
-  });
-});
 
 function serializeToken(t: typeof tokens.$inferSelect, includeUri = true) {
   // tokenUriFetched / metadataUpdateBlock are internal fetcher bookkeeping and
@@ -479,6 +545,17 @@ function serializeToken(t: typeof tokens.$inferSelect, includeUri = true) {
     currentScore: rest.currentScore.toString(),
     createdAtBlock: rest.createdAtBlock.toString(),
     lastUpdatedBlock: rest.lastUpdatedBlock.toString(),
+    /**
+     * Serialized explicitly, and as a STRING.
+     *
+     * The column widened from int4 to numeric for the standard layout's 65
+     * bits, and node-postgres hands numeric back as a string to preserve
+     * precision — so spreading `...rest` would have silently flipped this
+     * field's JSON type from number to string for every row, legacy included.
+     * Stating it here makes the string contract the deliberate one: 65 bits
+     * does not survive a JS number, so a numeric type here would be lossy.
+     */
+    metadata: rest.metadata?.toString() ?? "0",
   };
   return includeUri
     ? { ...base, tokenUri, tokenUriFetchFailed, tokenUriFetchLastError }

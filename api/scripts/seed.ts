@@ -12,7 +12,6 @@ import {
   games,
   minters,
   tokens,
-  scoreHistory,
   objectives,
   settings,
 } from "../src/db/schema.js";
@@ -103,7 +102,7 @@ function generateGames() {
     "Pixel Arena",
   ];
   return Array.from({ length: GAME_COUNT }, (_, i) => ({
-    gameId: i + 1,
+    // A game IS its contract — there is no separate registry id.
     contractAddress: randomAddress(),
     name: gameNames[i],
     description: `${gameNames[i]} - an on-chain game`,
@@ -116,9 +115,12 @@ function generateGames() {
   }));
 }
 
-function generateMinters() {
+function generateMinters(gameAddresses: string[]) {
+  // Minter ids are per game contract, so a minter is only meaningful paired
+  // with the game that registered it.
   return Array.from({ length: MINTER_COUNT }, (_, i) => ({
     minterId: BigInt(i + 1),
+    tokenContractAddress: randomPick(gameAddresses),
     contractAddress: randomAddress(),
     name: `Minter_${i + 1}`,
     blockNumber: BigInt(randomInt(50000, 100000)),
@@ -132,12 +134,13 @@ function generateOwners(): string[] {
 function generateTokens(
   count: number,
   owners: string[],
-  gameIds: number[],
-  minterIds: bigint[],
+  minters: Array<{ tokenContractAddress: string; minterId: bigint }>,
 ) {
   const rows = [];
   for (let i = 0; i < count; i++) {
-    const gameId = randomPick(gameIds);
+    // The token has to come from the same contract as its minter, or the
+    // (contract, minter_id) pair the API resolves through would not exist.
+    const minter = randomPick(minters);
     const mintedAt = randomDate(365, 0);
     const isGameOver = Math.random() < 0.4;
     const score = isGameOver ? BigInt(randomInt(100, 100000)) : BigInt(randomInt(0, 50000));
@@ -145,8 +148,8 @@ function generateTokens(
 
     rows.push({
       tokenId: (BigInt(i + 1) * 1000000007n + BigInt(randomInt(0, 999999))).toString(),
-      gameId,
-      mintedBy: randomPick(minterIds),
+      contractAddress: minter.tokenContractAddress,
+      mintedBy: minter.minterId,
       settingsId: randomInt(0, 3),
       mintedAt,
       startDelay: randomInt(0, 10),
@@ -173,31 +176,13 @@ function generateTokens(
 
 interface TokenRow {
   tokenId: string;
-  gameId: number;
+  contractAddress: string;
   gameOver: boolean;
   currentScore: bigint;
   ownerAddress: string;
   lastUpdatedAt: Date;
 }
 
-function generateScoreHistory(tokenRows: TokenRow[]) {
-  const rows = [];
-  for (const t of tokenRows) {
-    const count = randomInt(3, 5);
-    for (let j = 0; j < count; j++) {
-      const ts = new Date(t.lastUpdatedAt.getTime() - j * randomInt(60000, 3600000));
-      rows.push({
-        tokenId: t.tokenId,
-        score: BigInt(Math.max(0, Number(t.currentScore) - randomInt(0, 5000) * j)),
-        blockNumber: BigInt(randomInt(100000, 300000)),
-        blockTimestamp: ts,
-        transactionHash: randomHex(32),
-        eventIndex: j,
-      });
-    }
-  }
-  return rows;
-}
 
 // ---------------------------------------------------------------------------
 // Main
@@ -210,7 +195,6 @@ async function main() {
   if (CLEAN) {
     console.log("Cleaning existing data...");
     // Truncate in reverse dependency order
-    await db.delete(scoreHistory);
     await db.delete(tokens);
     await db.delete(objectives);
     await db.delete(settings);
@@ -225,22 +209,16 @@ async function main() {
   console.log(`  games: ${gameRows.length}`);
 
   // 2. Minters
-  const minterRows = generateMinters();
+  const minterRows = generateMinters(gameRows.map((g) => g.contractAddress));
   await db.insert(minters).values(minterRows);
   console.log(`  minters: ${minterRows.length}`);
 
   // 3. Tokens
-  const gameIds = gameRows.map((g) => g.gameId);
-  const minterIds = minterRows.map((m) => m.minterId);
+
   const owners = generateOwners();
-  const tokenRows = generateTokens(TOKEN_COUNT, owners, gameIds, minterIds);
+  const tokenRows = generateTokens(TOKEN_COUNT, owners, minterRows);
   await batchInsert(tokens, tokenRows, 500);
   console.log(`  tokens: ${tokenRows.length}`);
-
-  // 4. Score history
-  const scoreRows = generateScoreHistory(tokenRows);
-  await batchInsert(scoreHistory, scoreRows, 1000);
-  console.log(`  score_history: ${scoreRows.length}`);
 
   const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
   console.log(`\nSeeding complete in ${elapsed}s.`);

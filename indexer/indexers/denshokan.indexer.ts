@@ -33,7 +33,7 @@ import {
   drizzleStorage,
   useDrizzleStorage,
 } from "@apibara/plugin-drizzle";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import type { ApibaraRuntimeConfig } from "apibara/types";
 import * as schema from "../src/lib/schema.js";
 import {
@@ -56,32 +56,55 @@ import {
 const toId = (id: bigint) => id.toString();
 
 interface DenshokanConfig {
-  contractAddress: string;
-  registryAddress: string;
   streamUrl: string;
   startingBlock: string;
   databaseUrl: string;
+  /**
+   * The game contracts to index. Each game IS its own ERC721 — there is no
+   * shared token contract and no registry — so this is the whole subscription
+   * list, not an addition to one.
+   */
+  gameAddresses?: string[];
 }
 
 export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
   const config = runtimeConfig.denshokan as DenshokanConfig;
-  const {
-    contractAddress,
-    registryAddress,
-    streamUrl,
-    startingBlock: startBlockStr,
-    databaseUrl,
-  } = config;
+  const { streamUrl, startingBlock: startBlockStr, databaseUrl } = config;
   const startingBlock = BigInt(startBlockStr);
 
   const normalizeAddress = (addr: string) =>
     `0x${BigInt(addr).toString(16)}`;
 
-  const normalizedAddress = normalizeAddress(contractAddress);
-  const normalizedRegistryAddress = normalizeAddress(registryAddress);
+  const normalizedGames = (config.gameAddresses ?? []).map(normalizeAddress);
+  const gameSet = new Set(normalizedGames);
 
-  console.log("[Denshokan Indexer] Contract:", contractAddress);
-  console.log("[Denshokan Indexer] Registry:", registryAddress);
+  if (normalizedGames.length === 0) {
+    // Every event this indexer handles comes from a game contract, so an
+    // empty list would subscribe to nothing and silently index no data.
+    throw new Error(
+      "[Denshokan Indexer] GAME_ADDRESSES is empty — nothing to index. " +
+        "Set it to the comma-separated game contract addresses.",
+    );
+  }
+
+  /** True for contracts we subscribed to. Guards against stray events. */
+  const isTokenContract = (address: string): boolean => gameSet.has(address);
+
+  /**
+   * Matches exactly one token row.
+   *
+   * A token id identifies a row only together with the contract that issued
+   * it — see the `tokens_contract_token_idx` constraint. An unscoped
+   * `eq(tokenId)` would let an event from one game mutate another game's
+   * token whenever the two ids coincide, which the layout permits.
+   */
+  const tokenRow = (eventAddress: string, tokenId: bigint) =>
+    and(
+      eq(schema.tokens.contractAddress, eventAddress),
+      eq(schema.tokens.tokenId, toId(tokenId)),
+    );
+
+  console.log("[Denshokan Indexer] Games:", normalizedGames.join(", "));
   console.log("[Denshokan Indexer] Stream:", streamUrl);
   console.log("[Denshokan Indexer] Starting Block:", startingBlock.toString());
 
@@ -97,12 +120,13 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
     startingBlock,
     filter: {
       events: [
-        {
-          address: normalizedAddress as `0x${string}`,
-        },
-        {
-          address: normalizedRegistryAddress as `0x${string}`,
-        },
+        // Each game emits its own Transfer / MetadataUpdate /
+        // MinterRegistryUpdate / ObjectiveCreated / SettingsCreated. There is
+        // no registry counterpart: game metadata is not emitted on-chain at
+        // all, and is parsed out of token URIs by the fetcher instead.
+        ...normalizedGames.map((address) => ({
+          address: address as `0x${string}`,
+        })),
       ],
     },
     plugins: [
@@ -166,22 +190,27 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
         try {
           switch (selector) {
             case EVENT_SELECTORS.Transfer: {
-              // Only process Transfer events from the Denshokan token contract
-              if (eventAddress && eventAddress !== normalizedAddress) break;
+              // Token contracts only: the legacy denshokan, or any declared
+              // self-bound game. The registry also sits in the event filter
+              // and must not be read as a token.
+              if (eventAddress && !isTokenContract(eventAddress)) break;
 
               const decoded = decodeTransfer(keys, data);
               const isMint = decoded.from === "0x0";
 
               if (isMint) {
-                // Mint: decode packed token ID for immutable fields
+                // Mint: decode the packed id using THIS contract's layout.
+                // The id carries no generation marker, so the address is the
+                // only thing that can tell us which one to use.
                 const packed = decodePackedTokenId(decoded.tokenId);
                 logger.info(
-                  `${blk} Transfer (mint): token_id=${decoded.tokenId}, to=${decoded.to}, game_id=${packed.gameId}`
+                  `${blk} Transfer (mint): token_id=${decoded.tokenId}, ` +
+                  `to=${decoded.to}, game=${eventAddress}`
                 );
 
                 await db.insert(schema.tokens).values({
                   tokenId: toId(decoded.tokenId),
-                  gameId: packed.gameId,
+                  contractAddress: eventAddress,
                   mintedBy: packed.mintedBy,
                   settingsId: packed.settingsId,
                   mintedAt: packed.mintedAt,
@@ -193,14 +222,17 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                   paymaster: packed.paymaster,
                   txHash: packed.txHash,
                   salt: packed.salt,
-                  metadata: packed.metadata,
+                  metadata: packed.metadata.toString(),
                   ownerAddress: decoded.to,
                   mintedTo: decoded.to,
                   createdAtBlock: blockNumber,
                   lastUpdatedBlock: blockNumber,
                   lastUpdatedAt: blockTimestamp,
                 }).onConflictDoUpdate({
-                  target: schema.tokens.tokenId,
+                  // Identity is (contract, id): a token id is only unique
+                  // within the ERC721 that issued it, and standard ids carry
+                  // nothing that separates one game from another.
+                  target: [schema.tokens.contractAddress, schema.tokens.tokenId],
                   set: {
                     ownerAddress: decoded.to,
                     // Conflict on a mint = replay/re-org of the mint event
@@ -224,24 +256,37 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                     lastUpdatedBlock: blockNumber,
                     lastUpdatedAt: blockTimestamp,
                   })
-                  .where(eq(schema.tokens.tokenId, toId(decoded.tokenId)));
+                  // Scoped to the emitting contract — without it, a transfer
+                  // in one game could move ownership on another game's token
+                  // that happens to share the id.
+                  .where(tokenRow(eventAddress, decoded.tokenId));
               }
 
               break;
             }
 
             case EVENT_SELECTORS.MinterRegistryUpdate: {
+              // Token contracts only — the registry shares this event filter
+              // and never emits minter registrations.
+              if (eventAddress && !isTokenContract(eventAddress)) break;
+
               const decoded = decodeMinterRegistryUpdate(keys, data);
+              const tokenContract = eventAddress;
               logger.info(
-                `${blk} MinterRegistryUpdate: minter_id=${decoded.minterId}, address=${decoded.minterAddress}`
+                `${blk} MinterRegistryUpdate: token_contract=${tokenContract}, ` +
+                `minter_id=${decoded.minterId}, address=${decoded.minterAddress}`
               );
 
               await db.insert(schema.minters).values({
                 minterId: decoded.minterId,
+                // `minter_counter` is per-contract storage upstream, so this
+                // id means nothing without the contract that issued it: every
+                // game assigns minter_id 1 to its own first minter.
+                tokenContractAddress: tokenContract,
                 contractAddress: decoded.minterAddress,
                 blockNumber,
               }).onConflictDoUpdate({
-                target: schema.minters.minterId,
+                target: [schema.minters.tokenContractAddress, schema.minters.minterId],
                 set: {
                   contractAddress: decoded.minterAddress,
                   blockNumber,
@@ -312,125 +357,8 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
               break;
             }
 
-            case EVENT_SELECTORS.GameRegistryUpdate: {
-              const decoded = decodeGameRegistryUpdate(keys, data);
-              logger.info(
-                `${blk} GameRegistryUpdate: game_id=${decoded.gameId}, contract=${decoded.contractAddress}`
-              );
-
-              await db.insert(schema.games).values({
-                gameId: decoded.gameId,
-                contractAddress: decoded.contractAddress,
-                lastUpdatedBlock: blockNumber,
-                lastUpdatedAt: blockTimestamp,
-              }).onConflictDoUpdate({
-                target: schema.games.gameId,
-                set: {
-                  contractAddress: decoded.contractAddress,
-                  lastUpdatedBlock: blockNumber,
-                  lastUpdatedAt: blockTimestamp,
-                },
-              });
-
-              break;
-            }
-
-            case EVENT_SELECTORS.GameMetadataUpdate: {
-              const decoded = decodeGameMetadataUpdate(keys, data);
-              logger.info(
-                `${blk} GameMetadataUpdate: game_id=${decoded.gameId}, name=${decoded.name}`
-              );
-
-              await db.insert(schema.games).values({
-                gameId: decoded.gameId,
-                contractAddress: decoded.contractAddress,
-                name: decoded.name,
-                description: decoded.description,
-                image: decoded.image,
-                developer: decoded.developer,
-                publisher: decoded.publisher,
-                genre: decoded.genre,
-                color: decoded.color,
-                clientUrl: decoded.clientUrl,
-                rendererAddress: decoded.rendererAddress,
-                royaltyFraction: decoded.royaltyFraction,
-                skillsAddress: decoded.skillsAddress,
-                version: decoded.version,
-                lastUpdatedBlock: blockNumber,
-                lastUpdatedAt: blockTimestamp,
-              }).onConflictDoUpdate({
-                target: schema.games.gameId,
-                set: {
-                  contractAddress: decoded.contractAddress,
-                  name: decoded.name,
-                  description: decoded.description,
-                  image: decoded.image,
-                  developer: decoded.developer,
-                  publisher: decoded.publisher,
-                  genre: decoded.genre,
-                  color: decoded.color,
-                  clientUrl: decoded.clientUrl,
-                  rendererAddress: decoded.rendererAddress,
-                  royaltyFraction: decoded.royaltyFraction,
-                  skillsAddress: decoded.skillsAddress,
-                  version: decoded.version,
-                  lastUpdatedBlock: blockNumber,
-                  lastUpdatedAt: blockTimestamp,
-                },
-              });
-
-              break;
-            }
-
-            case EVENT_SELECTORS.GameRoyaltyUpdate: {
-              const decoded = decodeGameRoyaltyUpdate(keys, data);
-              logger.info(
-                `${blk} GameRoyaltyUpdate: game_id=${decoded.gameId}, fraction=${decoded.royaltyFraction}`
-              );
-
-              await db
-                .update(schema.games)
-                .set({
-                  royaltyFraction: decoded.royaltyFraction,
-                  lastUpdatedBlock: blockNumber,
-                  lastUpdatedAt: blockTimestamp,
-                })
-                .where(eq(schema.games.gameId, decoded.gameId));
-
-              break;
-            }
-
-            case EVENT_SELECTORS.GameFeeUpdate: {
-              const decoded = decodeGameFeeUpdate(keys, data);
-              logger.info(
-                `${blk} GameFeeUpdate: game_id=${decoded.gameId}, license=${decoded.license}, fee=${decoded.feeNumerator}`
-              );
-
-              await db
-                .update(schema.games)
-                .set({
-                  license: decoded.license,
-                  gameFeeBps: decoded.feeNumerator,
-                  lastUpdatedBlock: blockNumber,
-                  lastUpdatedAt: blockTimestamp,
-                })
-                .where(eq(schema.games.gameId, decoded.gameId));
-
-              break;
-            }
-
-            case EVENT_SELECTORS.DefaultGameFeeUpdate: {
-              const decoded = decodeDefaultGameFeeUpdate(keys, data);
-              logger.info(
-                `${blk} DefaultGameFeeUpdate: license=${decoded.license}, fee=${decoded.feeNumerator}`
-              );
-              // Default fee is not persisted per-game — SDK uses RPC fallback.
-              // Games with explicit per-game fees are unaffected.
-              break;
-            }
-
             case EVENT_SELECTORS.MetadataUpdate: {
-              if (eventAddress && eventAddress !== normalizedAddress) break;
+              if (eventAddress && !isTokenContract(eventAddress)) break;
 
               const decoded = decodeMetadataUpdate(keys);
               logger.info(`${blk} MetadataUpdate: token_id=${decoded.tokenId}`);
@@ -456,7 +384,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                   // a newer update arrived while its RPC call was in flight.
                   metadataUpdateBlock: blockNumber,
                 })
-                .where(eq(schema.tokens.tokenId, toId(decoded.tokenId)));
+                .where(tokenRow(eventAddress, decoded.tokenId));
               break;
             }
 
