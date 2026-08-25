@@ -64,9 +64,14 @@ knowing:
   absent from `/games`.
 - The values are identical on every token a game issues, so the last write
   wins. A game that renames itself is picked up by the next token fetched.
-- The URI's `Game ID` and `Metadata` traits are always `0` in v2.x — a
-  compatibility shim in the upstream `TokenMetadata` struct. Do not read them;
-  the real 65-bit mint metadata comes from the packed token id.
+- Do not read the URI's `Game ID` or `Metadata` traits. Their behaviour
+  differs by the game-components version a game was built against:
+  game-components 2.1.0 emitted both as a permanent `0` (a shim in the
+  upstream `TokenMetadata` struct), and 2.1.1 removed `Game ID` outright and
+  made `Metadata` carry its real 65-bit value. The indexer sidesteps the
+  difference entirely — it reads metadata from the packed token id, and never
+  parses either trait — so it is correct against games built on either
+  version.
 
 ## Identity: (contract, id), never id alone
 
