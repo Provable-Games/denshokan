@@ -51,6 +51,7 @@ import {
   decodePackedTokenId,
   feltToHex,
 } from "../src/lib/decoder.js";
+import type { TokenGeneration } from "../src/lib/decoder.js";
 
 /** Convert bigint token ID to string for numeric column storage */
 const toId = (id: bigint) => id.toString();
@@ -61,6 +62,16 @@ interface DenshokanConfig {
   streamUrl: string;
   startingBlock: string;
   databaseUrl: string;
+  /**
+   * Self-bound game contracts to index alongside the legacy denshokan
+   * (game-components v2.x). Each game IS its own token — there is no shared
+   * token contract and no registry — so this is a list of games, not one
+   * address.
+   *
+   * Optional and empty by default, so a deployment indexing only the legacy
+   * denshokan keeps working with no config change.
+   */
+  gameAddresses?: string[];
 }
 
 export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
@@ -79,9 +90,34 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
 
   const normalizedAddress = normalizeAddress(contractAddress);
   const normalizedRegistryAddress = normalizeAddress(registryAddress);
+  const normalizedGames = (config.gameAddresses ?? []).map(normalizeAddress);
+
+  /**
+   * Maps a contract address to the token-id layout it mints with.
+   *
+   * This lookup is the ONLY safe way to pick a layout: the ids themselves
+   * carry no generation marker, and decoding with the wrong one silently
+   * produces plausible-but-wrong values rather than failing. Anything not
+   * declared as a standard game is legacy — the conservative default, and
+   * correct for every contract this indexer saw before v2.x.
+   */
+  const gameSet = new Set(normalizedGames);
+  const generationFor = (address: string): TokenGeneration =>
+    gameSet.has(address) ? "standard" : "legacy";
+
+  /**
+   * True for contracts that mint tokens. The registry is in the same event
+   * filter but is not a token contract — its events must not be read as one.
+   */
+  const isTokenContract = (address: string): boolean =>
+    address === normalizedAddress || gameSet.has(address);
 
   console.log("[Denshokan Indexer] Contract:", contractAddress);
   console.log("[Denshokan Indexer] Registry:", registryAddress);
+  console.log(
+    "[Denshokan Indexer] Standard games:",
+    normalizedGames.length > 0 ? normalizedGames.join(", ") : "(none)",
+  );
   console.log("[Denshokan Indexer] Stream:", streamUrl);
   console.log("[Denshokan Indexer] Starting Block:", startingBlock.toString());
 
@@ -103,6 +139,14 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
         {
           address: normalizedRegistryAddress as `0x${string}`,
         },
+        // Self-bound games. Each emits its own Transfer / MetadataUpdate /
+        // MinterRegistryUpdate — the last of which kept the legacy event
+        // shape when the minter was absorbed into the token, so it decodes
+        // unchanged. There is no registry counterpart: game metadata is no
+        // longer emitted on-chain for this generation.
+        ...normalizedGames.map((address) => ({
+          address: address as `0x${string}`,
+        })),
       ],
     },
     plugins: [
@@ -166,21 +210,29 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
         try {
           switch (selector) {
             case EVENT_SELECTORS.Transfer: {
-              // Only process Transfer events from the Denshokan token contract
-              if (eventAddress && eventAddress !== normalizedAddress) break;
+              // Token contracts only: the legacy denshokan, or any declared
+              // self-bound game. The registry also sits in the event filter
+              // and must not be read as a token.
+              if (eventAddress && !isTokenContract(eventAddress)) break;
 
               const decoded = decodeTransfer(keys, data);
               const isMint = decoded.from === "0x0";
 
               if (isMint) {
-                // Mint: decode packed token ID for immutable fields
-                const packed = decodePackedTokenId(decoded.tokenId);
+                // Mint: decode the packed id using THIS contract's layout.
+                // The id carries no generation marker, so the address is the
+                // only thing that can tell us which one to use.
+                const packed = decodePackedTokenId(decoded.tokenId, generationFor(eventAddress));
                 logger.info(
-                  `${blk} Transfer (mint): token_id=${decoded.tokenId}, to=${decoded.to}, game_id=${packed.gameId}`
+                  `${blk} Transfer (mint): token_id=${decoded.tokenId}, to=${decoded.to}, ` +
+                  `generation=${packed.generation}, ` +
+                  `${packed.gameId === null ? `game=${eventAddress}` : `game_id=${packed.gameId}`}`
                 );
 
                 await db.insert(schema.tokens).values({
                   tokenId: toId(decoded.tokenId),
+                  generation: packed.generation,
+                  contractAddress: eventAddress || normalizedAddress,
                   gameId: packed.gameId,
                   mintedBy: packed.mintedBy,
                   settingsId: packed.settingsId,
@@ -193,7 +245,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                   paymaster: packed.paymaster,
                   txHash: packed.txHash,
                   salt: packed.salt,
-                  metadata: packed.metadata,
+                  metadata: packed.metadata.toString(),
                   ownerAddress: decoded.to,
                   mintedTo: decoded.to,
                   createdAtBlock: blockNumber,
@@ -430,7 +482,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
             }
 
             case EVENT_SELECTORS.MetadataUpdate: {
-              if (eventAddress && eventAddress !== normalizedAddress) break;
+              if (eventAddress && !isTokenContract(eventAddress)) break;
 
               const decoded = decodeMetadataUpdate(keys);
               logger.info(`${blk} MetadataUpdate: token_id=${decoded.tokenId}`);

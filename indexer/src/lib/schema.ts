@@ -46,8 +46,27 @@ export const tokens = pgTable(
     // Token ID - stored as numeric for felt252 precision (251 bits)
     tokenId: numeric("token_id").notNull().unique(),
 
+    /**
+     * Which contract generation minted this token, and therefore which bit
+     * layout decoded the fields below.
+     *
+     * Stored per row because the two layouts share no offsets and the id
+     * itself carries no marker — without this column a row cannot be re-read
+     * or re-derived later. Existing rows default to `legacy`, which is
+     * correct: it is the only generation this indexer could see before v2.x.
+     */
+    generation: text("generation").notNull().default("legacy"),
+
+    /**
+     * The contract that emitted the mint. For legacy this is the single
+     * denshokan; for standard tokens the game IS the token, so this is the
+     * game's identity — which is why `game_id` can be null.
+     */
+    contractAddress: text("contract_address"),
+
     // Decoded from packed token_id (immutable)
-    gameId: integer("game_id").notNull(),
+    /** LEGACY ONLY — null on standard tokens, which are self-bound. */
+    gameId: integer("game_id"),
     mintedBy: bigint("minted_by", { mode: "bigint" }).notNull(),
     settingsId: integer("settings_id").notNull(),
     mintedAt: timestamp("minted_at").notNull(),
@@ -59,7 +78,12 @@ export const tokens = pgTable(
     paymaster: boolean("paymaster").notNull().default(false),
     txHash: integer("tx_hash").notNull().default(0),
     salt: integer("salt").notNull().default(0),
-    metadata: integer("metadata").notNull().default(0),
+    /**
+     * numeric, not integer: the standard layout packs 65 bits here, which
+     * overflows int4 and exceeds Number.MAX_SAFE_INTEGER. Legacy values are
+     * 13 bits and unaffected by the widening.
+     */
+    metadata: numeric("metadata").notNull().default("0"),
 
     // Mutable fields (from events)
     gameOver: boolean("game_over").notNull().default(false),
