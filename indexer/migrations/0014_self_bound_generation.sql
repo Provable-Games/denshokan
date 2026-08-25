@@ -7,14 +7,42 @@
 -- The new deployment starts from an empty database, so there is no data to
 -- preserve and no backfill: these statements exist to bring a database created
 -- by 0000–0013 to the shape the indexer now writes.
+--
+-- It therefore REFUSES to run against a populated legacy database. The two
+-- token-id layouts share no field offsets, so legacy rows cannot be
+-- reinterpreted under the current one — there is no correct backfill, only a
+-- silent corruption or a silent deletion. Aborting is the honest outcome:
+-- point DATABASE_URL at a new database, or read the retired generation with an
+-- earlier release.
 
 -- ---------------------------------------------------------------------------
 -- tokens
 -- ---------------------------------------------------------------------------
 
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM "tokens" LIMIT 1) THEN
+        RAISE EXCEPTION USING
+            MESSAGE = 'Refusing to migrate: "tokens" is not empty.',
+            DETAIL  = 'This migration retargets the schema at the self-bound '
+                      'generation, whose token-id layout shares no field offsets '
+                      'with the legacy one. Existing rows cannot be reinterpreted '
+                      'or backfilled correctly.',
+            HINT    = 'Point DATABASE_URL at a fresh database. To read the '
+                      'retired generation, deploy an earlier release instead.';
+    END IF;
+    IF EXISTS (SELECT 1 FROM "minters" LIMIT 1) THEN
+        RAISE EXCEPTION USING
+            MESSAGE = 'Refusing to migrate: "minters" is not empty.',
+            DETAIL  = 'Minter ids are per game contract in this generation; '
+                      'existing rows have no contract to attribute them to.',
+            HINT    = 'Point DATABASE_URL at a fresh database.';
+    END IF;
+END $$;--> statement-breakpoint
+
 -- The issuing contract IS the game, and is half the token's identity.
+-- NOT NULL is safe unconditionally: the guard above proved the table empty.
 ALTER TABLE "tokens" ADD COLUMN IF NOT EXISTS "contract_address" text;
-DELETE FROM "tokens" WHERE "contract_address" IS NULL;
 ALTER TABLE "tokens" ALTER COLUMN "contract_address" SET NOT NULL;
 
 -- game_id was a registry id packed into the legacy layout. The current layout
@@ -60,7 +88,6 @@ CREATE INDEX IF NOT EXISTS "tokens_owner_game_idx"
 -- Note this is NOT the same column as contract_address, which is the minter's
 -- own address — the one it is easily confused with.
 ALTER TABLE "minters" ADD COLUMN IF NOT EXISTS "token_contract_address" text;
-DELETE FROM "minters" WHERE "token_contract_address" IS NULL;
 ALTER TABLE "minters" ALTER COLUMN "token_contract_address" SET NOT NULL;
 
 ALTER TABLE "minters" DROP CONSTRAINT IF EXISTS "minters_minter_id_unique";
