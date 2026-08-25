@@ -70,25 +70,57 @@ const provider = new RpcProvider({
 const abi = JSON.parse(
   readFileSync(resolve(process.cwd(), "src/lib/abi/denshokan.json"), "utf-8"),
 );
-const contract = new Contract({
-  abi,
-  address: DENSHOKAN_ADDRESS,
-  providerOrAccount: provider,
-});
+/**
+ * `token_uri` has to be called on the contract that ISSUED the token.
+ *
+ * The legacy denshokan was the only token contract, so a single instance
+ * sufficed. A self-bound game is its own ERC721 and knows only its own
+ * tokens — asking the denshokan for one of them fails, and the row would be
+ * quarantined as a permanent fetch failure, leaving score, game_over and
+ * player_name unset forever. That is the entire mutable-state pipeline for
+ * the standard generation.
+ *
+ * The ABI is shared: a self-bound token exposes the same ERC721 + token_uri
+ * surface, so only the address differs.
+ */
+const contracts = new Map<string, Contract>();
+function contractFor(address: string | null): Contract {
+  const key = address || DENSHOKAN_ADDRESS;
+  let c = contracts.get(key);
+  if (!c) {
+    c = new Contract({ abi, address: key, providerOrAccount: provider });
+    contracts.set(key, c);
+  }
+  return c;
+}
 
 /** Convert bigint token ID to string for numeric column storage */
 const toId = (id: bigint) => id.toString();
+
+/**
+ * Matches exactly one token row.
+ *
+ * Identity is (contract_address, token_id) — a token id is unique only within
+ * its issuing ERC721. Updating by id alone could write one game's fetched
+ * state onto another game's token.
+ */
+const tokenRow = (contractAddress: string | null, tokenId: bigint) =>
+  and(
+    eq(schema.tokens.contractAddress, contractAddress ?? DENSHOKAN_ADDRESS),
+    eq(schema.tokens.tokenId, toId(tokenId)),
+  );
 
 // ---------------------------------------------------------------------------
 // Fetch logic
 // ---------------------------------------------------------------------------
 
 async function fetchAndStore(
+  contractAddress: string | null,
   tokenId: bigint,
   seenBlock: bigint,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    const result = await contract.call("token_uri", [tokenId]);
+    const result = await contractFor(contractAddress).call("token_uri", [tokenId]);
     const uri = result.toString();
 
     const parsed = parseTokenUriAttributes(uri);
@@ -124,12 +156,14 @@ async function fetchAndStore(
     await db
       .update(schema.tokens)
       .set(tokenUpdate)
-      .where(eq(schema.tokens.tokenId, toId(tokenId)));
+      .where(tokenRow(contractAddress, tokenId));
 
     return { ok: true };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    console.warn(`[URI] Failed for token ${tokenId}: ${msg}`);
+    console.warn(
+      `[URI] Failed for token ${tokenId} on ${contractAddress ?? DENSHOKAN_ADDRESS}: ${msg}`,
+    );
     return { ok: false, error: msg };
   }
 }
@@ -140,7 +174,11 @@ async function fetchAndStore(
  * queue. Reset manually (UPDATE ... SET token_uri_fetch_failed = false)
  * when the underlying issue is fixed (e.g. game contract upgrade).
  */
-async function markFailed(tokenId: bigint, error: string): Promise<void> {
+async function markFailed(
+  contractAddress: string | null,
+  tokenId: bigint,
+  error: string,
+): Promise<void> {
   // PG text columns reject NUL bytes; truncate huge errors to a sensible
   // length so triage stays readable.
   const truncated = error.replace(/\0/g, "").slice(0, 2000);
@@ -151,7 +189,7 @@ async function markFailed(tokenId: bigint, error: string): Promise<void> {
       tokenUriFetchLastError: truncated,
       lastUpdatedAt: new Date(),
     })
-    .where(eq(schema.tokens.tokenId, toId(tokenId)));
+    .where(tokenRow(contractAddress, tokenId));
 }
 
 async function processUnfetched(): Promise<number> {
@@ -160,6 +198,8 @@ async function processUnfetched(): Promise<number> {
   const unfetched = await db
     .select({
       tokenId: schema.tokens.tokenId,
+      // The issuing contract: both the RPC target and half the row identity.
+      contractAddress: schema.tokens.contractAddress,
       // Snapshot the dirty marker now; fetchAndStore only marks the token clean
       // if it hasn't advanced by the time the RPC result is written back.
       metadataUpdateBlock: schema.tokens.metadataUpdateBlock,
@@ -185,10 +225,11 @@ async function processUnfetched(): Promise<number> {
     const results = await Promise.allSettled(
       batch.map(async (row) => {
         const tokenId = BigInt(row.tokenId);
+        const contractAddress = row.contractAddress;
         const seenBlock = row.metadataUpdateBlock ?? 0n;
         let lastError = "no attempts";
         for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-          const result = await fetchAndStore(tokenId, seenBlock);
+          const result = await fetchAndStore(contractAddress, tokenId, seenBlock);
           if (result.ok) return true;
           lastError = result.error;
           const delay = RETRY_BASE_DELAY_MS * 2 ** attempt;
@@ -196,7 +237,7 @@ async function processUnfetched(): Promise<number> {
         }
         // In-process burst exhausted: quarantine permanently so the next
         // poll cycle skips this token.
-        await markFailed(tokenId, lastError);
+        await markFailed(contractAddress, tokenId, lastError);
         return false;
       }),
     );

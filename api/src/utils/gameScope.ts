@@ -1,4 +1,4 @@
-import { eq, or } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { tokens, games } from "../db/schema.js";
@@ -53,6 +53,15 @@ async function legacyGameIdFor(address: string): Promise<number | null> {
  */
 export async function gameAddressCondition(address: string): Promise<SQL> {
   const legacyId = await legacyGameIdFor(address);
-  const selfBound = eq(tokens.contractAddress, address);
+  // Restricted to standard rows on purpose. Legacy rows carry the denshokan's
+  // address in contract_address too, so an unrestricted match would make
+  // `game_address=<DENSHOKAN_ADDRESS>` select every legacy game's tokens at
+  // once — contaminating lists and rank scopes with tokens from games the
+  // caller did not ask for. Only self-bound tokens are identified BY their
+  // contract; for legacy ones the contract is just where they live.
+  const selfBound = and(
+    eq(tokens.generation, "standard"),
+    eq(tokens.contractAddress, address),
+  )!;
   return legacyId === null ? selfBound : or(selfBound, eq(tokens.gameId, legacyId))!;
 }

@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { eq, and, desc, asc, sql, countDistinct } from "drizzle-orm";
+import { eq, and, desc, asc, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { tokens, minters, games } from "../db/schema.js";
 import { parseAddress, parseGameId, parseNonNegativeInt } from "../utils/validation.js";
@@ -198,7 +198,14 @@ app.get("/:address/stats", async (c) => {
   const result = await db
     .select({
       totalTokens: sql<number>`count(*)::int`,
-      gamesPlayed: countDistinct(tokens.gameId),
+      // A game's identity differs by generation: a legacy token names it with
+      // game_id, a self-bound one IS its contract. Counting distinct game_id
+      // alone reports 0 games played for a player who only holds self-bound
+      // tokens, since every one of those rows has game_id null.
+      gamesPlayed: sql<number>`count(DISTINCT CASE
+        WHEN ${tokens.gameId} IS NOT NULL THEN 'legacy:' || ${tokens.gameId}
+        ELSE 'standard:' || ${tokens.contractAddress}
+      END)::int`,
       completedGames: sql<number>`count(*) filter (where ${tokens.gameOver} = true)::int`,
       activeGames: sql<number>`count(*) filter (where ${tokens.gameOver} = false)::int`,
       totalScore: sql<string>`coalesce(sum(${tokens.currentScore}), 0)`,

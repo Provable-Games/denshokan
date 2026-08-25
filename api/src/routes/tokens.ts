@@ -135,6 +135,20 @@ async function resolveMinterScopes(
   return collect();
 }
 
+/**
+ * Conditions selecting a token by id, optionally narrowed to one contract.
+ *
+ * Identity is (contract_address, token_id): an id is unique only within the
+ * ERC721 that issued it, and standard ids carry nothing that separates one
+ * game from another. Callers that know the contract should say so; callers
+ * that don't get an explicit ambiguity error instead of an arbitrary row.
+ */
+function byIdConditions(tokenId: string, contractAddress: string | null) {
+  return contractAddress === null
+    ? eq(tokens.tokenId, tokenId)
+    : and(eq(tokens.tokenId, tokenId), eq(tokens.contractAddress, contractAddress))!;
+}
+
 // GET /tokens - List tokens (paginated, filterable)
 app.get("/", async (c) => {
   const gameId = parseGameId(c.req.query("game_id"));
@@ -367,20 +381,38 @@ app.post("/query", async (c) => {
 });
 
 // GET /tokens/:id - Single token
+//
+// A token id identifies a row only together with its issuing contract, so an
+// optional `?contract_address=` disambiguates. Without it a shared id is
+// reported as ambiguous rather than silently resolved to an arbitrary row —
+// see byIdConditions.
 app.get("/:id", async (c) => {
   const tokenId = parseTokenId(c.req.param("id"));
   if (tokenId === null) {
     return c.json({ error: "Invalid token ID" }, 400);
   }
+  const contractAddress = parseAddress(c.req.query("contract_address"));
 
   const result = await db
     .select()
     .from(tokens)
-    .where(eq(tokens.tokenId, tokenId))
-    .limit(1);
+    .where(byIdConditions(tokenId, contractAddress))
+    // Two, not one: a second row means the id is ambiguous and the caller has
+    // to say which contract they meant.
+    .limit(2);
 
   if (result.length === 0) {
     return c.json({ error: "Token not found" }, 404);
+  }
+  if (result.length > 1) {
+    return c.json(
+      {
+        error:
+          "Ambiguous token ID: more than one contract has issued this id. " +
+          "Retry with ?contract_address=<address>.",
+      },
+      409,
+    );
   }
 
   // Single token — one URI, not a page of them, so this stays opt-out
@@ -414,6 +446,8 @@ app.post("/rank", async (c) => {
   type Body = {
     tokenIds?: unknown;
     gameId?: unknown;
+    /** Scopes across both generations — the only way to scope a self-bound game. */
+    gameAddress?: unknown;
     settingsId?: unknown;
     objectiveId?: unknown;
     contextId?: unknown;
@@ -486,11 +520,26 @@ app.get("/:id/rank", async (c) => {
   const scope = await parseRankScope(c, { includeOwner: true });
   if (scope.error) return c.json(scope.error.body, scope.error.status);
 
-  const [target] = await db
+  const contractAddress = parseAddress(c.req.query("contract_address"));
+  const targets = await db
     .select({ score: tokens.currentScore, mintedAt: tokens.mintedAt })
     .from(tokens)
-    .where(and(eq(tokens.tokenId, tokenId), ...scope.conditions))
-    .limit(1);
+    .where(and(byIdConditions(tokenId, contractAddress), ...scope.conditions))
+    // See GET /:id — a second row means the id alone is ambiguous. Ranking an
+    // arbitrary one of them would return a confident, wrong number.
+    .limit(2);
+
+  if (targets.length > 1) {
+    return c.json(
+      {
+        error:
+          "Ambiguous token ID: more than one contract has issued this id. " +
+          "Retry with ?contract_address=<address>, or narrow the scope.",
+      },
+      409,
+    );
+  }
+  const target = targets[0];
 
   if (!target) {
     return c.json({ error: "Token not found in scope" }, 404);

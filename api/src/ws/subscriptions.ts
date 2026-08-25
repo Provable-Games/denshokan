@@ -4,6 +4,13 @@ import { pool } from "../db/client.js";
 
 interface ChannelFilter {
   gameIds: Set<string>;
+  /**
+   * Game contract addresses, matched against the payload's contract_address.
+   *
+   * The address-based counterpart to `gameIds`, and the only way to subscribe
+   * to a self-bound game: those tokens have no game id for `gameIds` to match.
+   */
+  gameAddresses: Set<string>;
   contextIds: Set<number>;
   /**
    * `<token contract>:<minter id>` pairs, not bare ids.
@@ -37,6 +44,7 @@ interface Subscription {
 function emptyFilter(): ChannelFilter {
   return {
     gameIds: new Set(),
+    gameAddresses: new Set(),
     contextIds: new Set(),
     mintedByScopes: new Set(),
     owners: new Set(),
@@ -219,7 +227,19 @@ export function shutdownWS() {
 function matchesFilters(f: ChannelFilter, data: Record<string, unknown>): boolean {
   if (f.gameIds.size > 0) {
     const gameId = data.game_id;
-    if (gameId != null && !f.gameIds.has(String(gameId))) return false;
+    // A self-bound token's game_id is null. Letting null through — as the
+    // `gameId != null` guard used to — delivers every standard-token event to
+    // a subscriber who asked for specific legacy games. A payload with no game
+    // id cannot satisfy a game-id filter, so it does not match.
+    if (gameId == null || !f.gameIds.has(String(gameId))) return false;
+  }
+  if (f.gameAddresses.size > 0) {
+    const contract = data.contract_address;
+    // Payloads predating migration 0016 carry no contract_address and cannot
+    // satisfy this filter.
+    if (contract == null || !f.gameAddresses.has(normalizeAddress(String(contract)))) {
+      return false;
+    }
   }
   if (f.contextIds.size > 0) {
     const contextId = data.context_id;
@@ -303,6 +323,8 @@ export function handleWSConnection(ws: WebSocket) {
         type: string;
         channels?: string[];
         gameIds?: string[];
+        /** Game contract addresses — required to subscribe to a self-bound game. */
+        gameAddresses?: string[];
         contextIds?: number[];
         minterAddresses?: string[];
         owners?: string[];
@@ -327,6 +349,11 @@ export function handleWSConnection(ws: WebSocket) {
           }
           if (Array.isArray(msg.gameIds)) {
             for (const gid of msg.gameIds) f.gameIds.add(String(gid));
+          }
+          if (Array.isArray(msg.gameAddresses)) {
+            for (const addr of msg.gameAddresses) {
+              f.gameAddresses.add(normalizeAddress(String(addr)));
+            }
           }
           if (Array.isArray(msg.contextIds)) {
             for (const cid of msg.contextIds) f.contextIds.add(Number(cid));
