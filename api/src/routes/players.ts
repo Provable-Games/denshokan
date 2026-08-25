@@ -5,23 +5,45 @@ import { tokens, minters, games } from "../db/schema.js";
 import { parseAddress, parseGameId, parseNonNegativeInt } from "../utils/validation.js";
 import { parseRankScope, computeRank } from "../utils/rank.js";
 import { resolveUriAccess } from "../utils/uriAccess.js";
+import { gameAddressCondition } from "../utils/gameScope.js";
 
-// In-memory minter cache (minter_id -> contract_address)
+/**
+ * In-memory minter cache, keyed `<token contract>:<minter id>`.
+ *
+ * Minter ids come from per-contract storage upstream, so every self-bound
+ * game hands out minter_id 1 to its own first minter. The id alone would
+ * resolve to whichever contract's minter happened to be cached last.
+ */
 let minterCache = new Map<string, string>();
 let minterCacheReady = false;
 
+const minterKey = (tokenContract: string | null, minterId: bigint | string) =>
+  `${tokenContract ?? ""}:${minterId.toString()}`;
+
 async function loadMinterCache() {
-  const rows = await db.select({ minterId: minters.minterId, contractAddress: minters.contractAddress }).from(minters);
-  minterCache = new Map(rows.map((r) => [r.minterId.toString(), r.contractAddress]));
+  const rows = await db
+    .select({
+      minterId: minters.minterId,
+      tokenContractAddress: minters.tokenContractAddress,
+      contractAddress: minters.contractAddress,
+    })
+    .from(minters);
+  minterCache = new Map(
+    rows.map((r) => [minterKey(r.tokenContractAddress, r.minterId), r.contractAddress])
+  );
   minterCacheReady = true;
 }
 
-async function resolveMinterAddress(mintedBy: string): Promise<string | null> {
+async function resolveMinterAddress(
+  tokenContract: string | null,
+  mintedBy: string
+): Promise<string | null> {
+  const key = minterKey(tokenContract, mintedBy);
   if (!minterCacheReady) await loadMinterCache();
-  const cached = minterCache.get(mintedBy);
+  const cached = minterCache.get(key);
   if (cached !== undefined) return cached;
   await loadMinterCache();
-  return minterCache.get(mintedBy) ?? null;
+  return minterCache.get(key) ?? null;
 }
 
 // In-memory game cache (game_id -> contract_address)
@@ -64,6 +86,7 @@ app.get("/:address/tokens", async (c) => {
   }
 
   const gameId = parseGameId(c.req.query("game_id"));
+  const gameAddress = parseAddress(c.req.query("game_address"));
   const gameOver = c.req.query("game_over");
   const sortBy = c.req.query("sort_by");
   const sortOrder = c.req.query("sort_order") === "asc" ? "asc" : "desc";
@@ -72,6 +95,8 @@ app.get("/:address/tokens", async (c) => {
 
   const conditions = [eq(tokens.ownerAddress, address)];
   if (gameId !== null) conditions.push(eq(tokens.gameId, gameId));
+  // Both generations — see utils/gameScope.ts.
+  if (gameAddress !== null) conditions.push(await gameAddressCondition(gameAddress));
   if (gameOver === "true") conditions.push(eq(tokens.gameOver, true));
   if (gameOver === "false") conditions.push(eq(tokens.gameOver, false));
 
@@ -109,7 +134,7 @@ app.get("/:address/tokens", async (c) => {
   return c.json({
     data: await Promise.all(results.map(async (t) => ({
       ...serializeToken(t, includeUri),
-      minterAddress: await resolveMinterAddress(t.mintedBy.toString()),
+      minterAddress: await resolveMinterAddress(t.contractAddress, t.mintedBy.toString()),
       gameAddress: await resolveGameAddress(t.gameId, t.contractAddress),
     }))),
     total: countResult[0]?.count ?? 0,

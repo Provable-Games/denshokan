@@ -33,7 +33,7 @@ import {
   drizzleStorage,
   useDrizzleStorage,
 } from "@apibara/plugin-drizzle";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import type { ApibaraRuntimeConfig } from "apibara/types";
 import * as schema from "../src/lib/schema.js";
 import {
@@ -112,6 +112,24 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
   const isTokenContract = (address: string): boolean =>
     address === normalizedAddress || gameSet.has(address);
 
+  /**
+   * Matches exactly one token row.
+   *
+   * A token id identifies a row only together with the contract that issued
+   * it — see the `tokens_contract_token_idx` constraint. An unscoped
+   * `eq(tokenId)` would let an event from one game mutate another game's
+   * token whenever the two ids coincide, which standard ids permit.
+   *
+   * Safe to compare contract_address strictly because the `run:before` hook
+   * backfills the legacy rows that predate the column before any event is
+   * processed.
+   */
+  const tokenRow = (eventAddress: string, tokenId: bigint) =>
+    and(
+      eq(schema.tokens.contractAddress, eventAddress || normalizedAddress),
+      eq(schema.tokens.tokenId, toId(tokenId)),
+    );
+
   console.log("[Denshokan Indexer] Contract:", contractAddress);
   console.log("[Denshokan Indexer] Registry:", registryAddress);
   console.log(
@@ -161,8 +179,38 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
       }),
     ],
     hooks: {
-      "run:before": () => {
+      "run:before": async () => {
         console.log("[Denshokan Indexer] Starting indexer...");
+
+        // Rows written before contract_address existed have NULL there. They
+        // are all legacy, all from the one denshokan — a fact only the
+        // runtime knows, since the address is an env var and a static
+        // migration cannot reference it.
+        //
+        // This runs before any event is processed, so identity comparisons in
+        // transform() can assume the column is populated. Idempotent: the
+        // second run matches nothing.
+        const filled = await database
+          .update(schema.tokens)
+          .set({ contractAddress: normalizedAddress })
+          .where(isNull(schema.tokens.contractAddress));
+        if (filled.rowCount) {
+          console.log(
+            `[Denshokan Indexer] Backfilled contract_address on ${filled.rowCount} legacy token(s).`,
+          );
+        }
+
+        // Same story for minter rows: minter ids are per token contract, and
+        // every existing registration came from the legacy denshokan.
+        const mintersFilled = await database
+          .update(schema.minters)
+          .set({ tokenContractAddress: normalizedAddress })
+          .where(isNull(schema.minters.tokenContractAddress));
+        if (mintersFilled.rowCount) {
+          console.log(
+            `[Denshokan Indexer] Backfilled token_contract_address on ${mintersFilled.rowCount} minter(s).`,
+          );
+        }
       },
       "run:after": async () => {
         console.log("[Denshokan Indexer] Indexer stopped.");
@@ -252,7 +300,10 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                   lastUpdatedBlock: blockNumber,
                   lastUpdatedAt: blockTimestamp,
                 }).onConflictDoUpdate({
-                  target: schema.tokens.tokenId,
+                  // Identity is (contract, id): a token id is only unique
+                  // within the ERC721 that issued it, and standard ids carry
+                  // nothing that separates one game from another.
+                  target: [schema.tokens.contractAddress, schema.tokens.tokenId],
                   set: {
                     ownerAddress: decoded.to,
                     // Conflict on a mint = replay/re-org of the mint event
@@ -276,24 +327,37 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                     lastUpdatedBlock: blockNumber,
                     lastUpdatedAt: blockTimestamp,
                   })
-                  .where(eq(schema.tokens.tokenId, toId(decoded.tokenId)));
+                  // Scoped to the emitting contract — without it, a transfer
+                  // in one game could move ownership on another game's token
+                  // that happens to share the id.
+                  .where(tokenRow(eventAddress, decoded.tokenId));
               }
 
               break;
             }
 
             case EVENT_SELECTORS.MinterRegistryUpdate: {
+              // Token contracts only — the registry shares this event filter
+              // and never emits minter registrations.
+              if (eventAddress && !isTokenContract(eventAddress)) break;
+
               const decoded = decodeMinterRegistryUpdate(keys, data);
+              const tokenContract = eventAddress || normalizedAddress;
               logger.info(
-                `${blk} MinterRegistryUpdate: minter_id=${decoded.minterId}, address=${decoded.minterAddress}`
+                `${blk} MinterRegistryUpdate: token_contract=${tokenContract}, ` +
+                `minter_id=${decoded.minterId}, address=${decoded.minterAddress}`
               );
 
               await db.insert(schema.minters).values({
                 minterId: decoded.minterId,
+                // `minter_counter` is per-contract storage upstream, so this
+                // id means nothing without the contract that issued it: every
+                // self-bound game assigns minter_id 1 to its first minter.
+                tokenContractAddress: tokenContract,
                 contractAddress: decoded.minterAddress,
                 blockNumber,
               }).onConflictDoUpdate({
-                target: schema.minters.minterId,
+                target: [schema.minters.tokenContractAddress, schema.minters.minterId],
                 set: {
                   contractAddress: decoded.minterAddress,
                   blockNumber,
@@ -508,7 +572,7 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                   // a newer update arrived while its RPC call was in flight.
                   metadataUpdateBlock: blockNumber,
                 })
-                .where(eq(schema.tokens.tokenId, toId(decoded.tokenId)));
+                .where(tokenRow(eventAddress, decoded.tokenId));
               break;
             }
 

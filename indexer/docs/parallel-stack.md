@@ -66,15 +66,43 @@ WHERE generation = 'standard' AND (game_id IS NOT NULL OR contract_address IS NU
 SELECT count(*) FROM tokens
 WHERE minted_at < '2024-01-01' OR minted_at > now() + interval '1 day';
 -- expect 0
+
+-- Identity is (contract, token_id), so the same id CAN legitimately appear
+-- under two games. What must never appear is the same pair twice.
+SELECT contract_address, token_id, count(*)
+FROM tokens GROUP BY 1, 2 HAVING count(*) > 1;
+-- expect no rows
+
+-- Minter ids are per token contract. Two games both using id 1 is correct;
+-- one game mapping id 1 to two addresses is not.
+SELECT token_contract_address, minter_id, count(DISTINCT contract_address)
+FROM minters GROUP BY 1, 2 HAVING count(DISTINCT contract_address) > 1;
+-- expect no rows
 ```
 
 ## Switching over
 
-Once the trial looks right, production needs `0014` applied and
-`GAME_ADDRESSES` set. Legacy rows are unaffected: they were decoded
-correctly when written, `generation` backfills to `'legacy'` by DEFAULT, and
-the legacy layout constants are untouched. This is additive — there is no
-backfill and no re-index.
+Once the trial looks right, production needs `0014`–`0016` applied and
+`GAME_ADDRESSES` set. **Existing legacy rows** are unaffected: they were
+decoded correctly when written, `generation` backfills to `'legacy'` by
+DEFAULT, and the legacy layout constants are untouched. For those rows there
+is no re-index.
+
+### A game must be listed BEFORE it mints
+
+That "no re-index" applies to history already indexed — it does **not** mean a
+newly listed game gets its past picked up.
+
+The indexer persists a cursor under `indexerName: "denshokan"` and resumes
+from it. Adding an address to `GAME_ADDRESSES` widens the filter from that
+cursor **forward only**: every mint that game emitted before the cursor is
+simply never streamed, and nothing reports a gap — the tokens just aren't
+there.
+
+So either list a game's address before it mints for the first time, or accept
+that catching up means re-indexing from that game's deploy block into a fresh
+database (which is exactly what the trial stack above does). Deploying a game
+and adding it to `GAME_ADDRESSES` afterwards is the case to avoid.
 
 The deployed legacy denshokan keeps emitting and keeps being indexed
 correctly, indefinitely. Retiring the generation upstream removed the source

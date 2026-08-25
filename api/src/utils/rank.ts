@@ -3,6 +3,7 @@ import { eq, and, or, gt, lt, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { tokens, minters } from "../db/schema.js";
+import { gameAddressCondition } from "./gameScope.js";
 import {
   parseGameId,
   parseAddress,
@@ -18,23 +19,46 @@ export interface RankScope {
   error?: { status: 400 | 404; body: { error: string } };
 }
 
-let minterCache = new Map<string, bigint>();
+/**
+ * Minter address → every (token contract, minter id) it was registered under.
+ *
+ * A list, not a single id: minter ids come from per-contract storage
+ * upstream, so one minter registered by several token contracts holds a
+ * different id in each. Matching on an id alone would pull in other
+ * contracts' tokens that happen to share the number.
+ */
+type MinterScope = { tokenContract: string; minterId: bigint };
+
+let minterCache = new Map<string, MinterScope[]>();
 let minterCacheReady = false;
 
 async function loadMinterCache() {
   const rows = await db
-    .select({ minterId: minters.minterId, contractAddress: minters.contractAddress })
+    .select({
+      minterId: minters.minterId,
+      tokenContractAddress: minters.tokenContractAddress,
+      contractAddress: minters.contractAddress,
+    })
     .from(minters);
-  minterCache = new Map(rows.map((r) => [r.contractAddress, BigInt(r.minterId.toString())]));
+  const next = new Map<string, MinterScope[]>();
+  for (const r of rows) {
+    const scopes = next.get(r.contractAddress) ?? [];
+    scopes.push({
+      tokenContract: r.tokenContractAddress ?? "",
+      minterId: BigInt(r.minterId.toString()),
+    });
+    next.set(r.contractAddress, scopes);
+  }
+  minterCache = next;
   minterCacheReady = true;
 }
 
-async function resolveMinterId(address: string): Promise<bigint | null> {
+async function resolveMinterScopes(address: string): Promise<MinterScope[]> {
   if (!minterCacheReady) await loadMinterCache();
   const cached = minterCache.get(address);
   if (cached !== undefined) return cached;
   await loadMinterCache();
-  return minterCache.get(address) ?? null;
+  return minterCache.get(address) ?? [];
 }
 
 /**
@@ -65,6 +89,7 @@ export async function parseRankScopeFromGetter(
   opts: { includeOwner: boolean },
 ): Promise<RankScope> {
   const gameId = parseGameId(get("game_id"));
+  const gameAddress = parseAddress(get("game_address"));
   const settingsId = parseOptionalNonNegativeInt(get("settings_id"));
   const objectiveId = parseOptionalNonNegativeInt(get("objective_id"));
   const contextId = parseOptionalNonNegativeInt(get("context_id"));
@@ -86,6 +111,9 @@ export async function parseRankScopeFromGetter(
 
   const conditions: SQL[] = [];
   if (gameId !== null) conditions.push(eq(tokens.gameId, gameId));
+  // A leaderboard scoped by game_id alone would silently omit every
+  // self-bound token — see utils/gameScope.ts.
+  if (gameAddress !== null) conditions.push(await gameAddressCondition(gameAddress));
   if (settingsId !== null) conditions.push(eq(tokens.settingsId, settingsId));
   if (objectiveId !== null) conditions.push(eq(tokens.objectiveId, objectiveId));
   if (contextId !== null) conditions.push(eq(tokens.contextId, contextId));
@@ -96,11 +124,18 @@ export async function parseRankScopeFromGetter(
   if (minScore !== null) conditions.push(sql`${tokens.currentScore} >= ${minScore}`);
   if (maxScore !== null) conditions.push(sql`${tokens.currentScore} <= ${maxScore}`);
   if (minterAddress) {
-    const minterId = await resolveMinterId(minterAddress);
-    if (minterId === null) {
+    const scopes = await resolveMinterScopes(minterAddress);
+    if (scopes.length === 0) {
       return { conditions: [], error: { status: 404, body: { error: "Minter not found" } } };
     }
-    conditions.push(eq(tokens.mintedBy, minterId));
+    // Each id is only meaningful inside the contract that issued it.
+    conditions.push(
+      or(
+        ...scopes.map((s) =>
+          and(eq(tokens.contractAddress, s.tokenContract), eq(tokens.mintedBy, s.minterId))
+        )
+      )!
+    );
   }
 
   return { conditions };

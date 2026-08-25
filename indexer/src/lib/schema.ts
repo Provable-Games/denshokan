@@ -43,8 +43,17 @@ export const tokens = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
 
-    // Token ID - stored as numeric for felt252 precision (251 bits)
-    tokenId: numeric("token_id").notNull().unique(),
+    /**
+     * Token ID - stored as numeric for felt252 precision (251 bits).
+     *
+     * NOT unique on its own. A token id is only unique within the ERC721 that
+     * issued it, and the self-bound generation indexes many ERC721s rather
+     * than one: the standard layout carries no game_id, and its collision
+     * protection (10-bit tx_hash + 16-bit salt) is transaction-scoped, so two
+     * game contracts minting in one multicall can pack byte-identical ids.
+     * Identity is `(contract_address, token_id)` — see the constraint below.
+     */
+    tokenId: numeric("token_id").notNull(),
 
     /**
      * Which contract generation minted this token, and therefore which bit
@@ -159,6 +168,13 @@ export const tokens = pgTable(
     index("tokens_context_id_idx").on(table.contextId),
     // Completion timestamp queries
     index("tokens_completed_at_idx").on(table.completedAt),
+    /**
+     * Token identity. NULLS NOT DISTINCT (declared in the migration, which is
+     * authoritative) so the legacy rows that predate contract_address — all
+     * of them from the one denshokan — keep colliding on token_id exactly as
+     * they did under the old single-column constraint. No backfill needed.
+     */
+    uniqueIndex("tokens_contract_token_idx").on(table.contractAddress, table.tokenId),
   ]
 );
 
@@ -237,7 +253,21 @@ export const minters = pgTable(
   "minters",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    minterId: bigint("minter_id", { mode: "bigint" }).notNull().unique(),
+    /**
+     * NOT unique on its own. `minter_counter` is per-contract storage in the
+     * token component, so every self-bound game independently hands out
+     * minter_id 1 to its first minter. Only the emitting contract
+     * disambiguates them.
+     */
+    minterId: bigint("minter_id", { mode: "bigint" }).notNull(),
+    /**
+     * The token contract that emitted the registration — the legacy
+     * denshokan, or a self-bound game. This is the namespace minter ids live
+     * in, and it is NOT the same thing as `contract_address` below, which is
+     * the minter's own address.
+     */
+    tokenContractAddress: text("token_contract_address"),
+    /** The minter's address (what a minter_id resolves to). */
     contractAddress: text("contract_address").notNull(),
     name: text("name"),
     createdAt: timestamp("created_at").defaultNow(),
@@ -245,6 +275,15 @@ export const minters = pgTable(
   },
   (table) => [
     index("minters_contract_idx").on(table.contractAddress),
+    /**
+     * Minter identity. NULLS NOT DISTINCT (see the migration) so pre-existing
+     * legacy rows, which have no token_contract_address, keep colliding on
+     * minter_id alone exactly as before.
+     */
+    uniqueIndex("minters_token_contract_minter_idx").on(
+      table.tokenContractAddress,
+      table.minterId
+    ),
   ]
 );
 

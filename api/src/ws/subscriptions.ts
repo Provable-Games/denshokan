@@ -5,7 +5,14 @@ import { pool } from "../db/client.js";
 interface ChannelFilter {
   gameIds: Set<string>;
   contextIds: Set<number>;
-  mintedByIds: Set<number>;
+  /**
+   * `<token contract>:<minter id>` pairs, not bare ids.
+   *
+   * Minter ids are per-contract upstream, so every self-bound game issues its
+   * own minter_id 1. Filtering on the number alone would deliver another
+   * game's tokens to a subscriber who asked for one specific minter.
+   */
+  mintedByScopes: Set<string>;
   owners: Set<string>;
   settingsIds: Set<number>;
   objectiveIds: Set<number>;
@@ -31,7 +38,7 @@ function emptyFilter(): ChannelFilter {
   return {
     gameIds: new Set(),
     contextIds: new Set(),
-    mintedByIds: new Set(),
+    mintedByScopes: new Set(),
     owners: new Set(),
     settingsIds: new Set(),
     objectiveIds: new Set(),
@@ -88,20 +95,33 @@ function normalizeAddress(addr: string): string {
   }
 }
 
-/** Resolve minter contract addresses to their minted_by (minter_id) integers */
-async function resolveMinterAddresses(addresses: string[]): Promise<number[]> {
+/**
+ * Resolve minter contract addresses to the `<token contract>:<minter id>`
+ * pairs they were registered under.
+ *
+ * One minter can hold a different id in each token contract that registered
+ * it, so this is a list of pairs rather than a list of ids — see
+ * ChannelFilter.mintedByScopes.
+ */
+async function resolveMinterAddresses(addresses: string[]): Promise<string[]> {
   try {
     const normalized = addresses.map(normalizeAddress);
-    const result = await pool.query<{ minter_id: string }>(
-      `SELECT minter_id FROM minters WHERE contract_address = ANY($1)`,
+    const result = await pool.query<{
+      minter_id: string;
+      token_contract_address: string | null;
+    }>(
+      `SELECT minter_id, token_contract_address FROM minters WHERE contract_address = ANY($1)`,
       [normalized],
     );
-    return result.rows.map((r) => Number(r.minter_id));
+    return result.rows.map((r) => minterScope(r.token_contract_address, r.minter_id));
   } catch (e) {
     console.error("[WebSocket] Failed to resolve minter addresses:", e);
     return [];
   }
 }
+
+const minterScope = (tokenContract: string | null | undefined, minterId: unknown) =>
+  `${tokenContract ? normalizeAddress(String(tokenContract)) : ""}:${String(minterId)}`;
 
 const clients = new Map<WebSocket, Subscription>();
 let pgClient: pg.PoolClient | null = null;
@@ -205,9 +225,19 @@ function matchesFilters(f: ChannelFilter, data: Record<string, unknown>): boolea
     const contextId = data.context_id;
     if (contextId != null && !f.contextIds.has(Number(contextId))) return false;
   }
-  if (f.mintedByIds.size > 0) {
+  if (f.mintedByScopes.size > 0) {
     const mintedBy = data.minted_by;
-    if (mintedBy != null && !f.mintedByIds.has(Number(mintedBy))) return false;
+    if (mintedBy != null) {
+      const contract = data.contract_address;
+      // Payloads emitted before 0016 carry no contract_address. Fall back to
+      // matching the id alone rather than dropping the frame — that is the
+      // pre-0016 behaviour, and those rows are all from the one denshokan.
+      const matched =
+        contract != null
+          ? f.mintedByScopes.has(minterScope(String(contract), mintedBy))
+          : [...f.mintedByScopes].some((s) => s.slice(s.lastIndexOf(":") + 1) === String(mintedBy));
+      if (!matched) return false;
+    }
   }
   if (f.owners.size > 0) {
     const owner = data.owner_address;
@@ -283,7 +313,7 @@ export function handleWSConnection(ws: WebSocket) {
 
       if (msg.type === "subscribe" && Array.isArray(msg.channels)) {
         // This message's filters apply ONLY to the channels in this message.
-        const mintedByIds =
+        const mintedByScopes =
           Array.isArray(msg.minterAddresses) && msg.minterAddresses.length > 0
             ? await resolveMinterAddresses(msg.minterAddresses)
             : [];
@@ -301,7 +331,7 @@ export function handleWSConnection(ws: WebSocket) {
           if (Array.isArray(msg.contextIds)) {
             for (const cid of msg.contextIds) f.contextIds.add(Number(cid));
           }
-          for (const id of mintedByIds) f.mintedByIds.add(id);
+          for (const scope of mintedByScopes) f.mintedByScopes.add(scope);
           if (Array.isArray(msg.owners)) {
             for (const addr of msg.owners) f.owners.add(normalizeAddress(String(addr)));
           }
