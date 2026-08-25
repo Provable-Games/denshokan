@@ -34,7 +34,19 @@ async function loadGameCache() {
   gameCacheReady = true;
 }
 
-async function resolveGameAddress(gameId: number): Promise<string | null> {
+/**
+ * The contract address of the game a token belongs to.
+ *
+ * Legacy tokens carry a numeric game_id that resolves through the registry
+ * cache. Self-bound tokens have no game_id at all — the game IS the contract
+ * that minted them — so the address is already on the row and no lookup
+ * exists to do.
+ */
+async function resolveGameAddress(
+  gameId: number | null,
+  contractAddress?: string | null,
+): Promise<string | null> {
+  if (gameId === null) return contractAddress ?? null;
   if (!gameCacheReady) await loadGameCache();
   const cached = gameCache.get(gameId);
   if (cached !== undefined) return cached;
@@ -98,7 +110,7 @@ app.get("/:address/tokens", async (c) => {
     data: await Promise.all(results.map(async (t) => ({
       ...serializeToken(t, includeUri),
       minterAddress: await resolveMinterAddress(t.mintedBy.toString()),
-      gameAddress: await resolveGameAddress(t.gameId),
+      gameAddress: await resolveGameAddress(t.gameId, t.contractAddress),
     }))),
     total: countResult[0]?.count ?? 0,
     limit,
