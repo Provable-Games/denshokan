@@ -110,7 +110,24 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
         db: database,
         persistState: true,
         indexerName: "denshokan",
-        idColumn: "id",
+        // `tokens` is keyed by token_id here, NOT by the uuid `id`.
+        //
+        // The reorg trigger snapshots each row as row_to_json(OLD.*), so a
+        // numeric token_id lands in airfoil.reorg_rollback as a JSON *number*.
+        // On rollback the plugin JSON.parses that snapshot in JS, and a
+        // felt252 is far past Number's 2^53 — so JSON.stringify feeds
+        // json_populate_record `1.0741853750193136e+68` and the row comes back
+        // with a token_id that matches nothing on chain. Same failure mode
+        // migration 0008 fixed for the NOTIFY payloads.
+        //
+        // Naming token_id as the id column is what makes that unreachable:
+        // the plugin excludes the id column from the restore SET list and puts
+        // it in the WHERE instead, where it is read with ->> (exact text,
+        // never through JS). Every other column on this table is small enough
+        // to survive the double round-trip.
+        //
+        // Requires the unique index on token_id — see schema.ts.
+        idColumn: { "*": "id", tokens: "token_id" },
         migrate: {
           migrationsFolder: "./migrations",
         },
