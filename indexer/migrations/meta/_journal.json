@@ -99,6 +99,13 @@
       "when": 1784920000000,
       "tag": "0013_minted_to",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1787788800000,
+      "tag": "0014_reorg_rollback_token_id",
+      "breakpoints": true
     }
   ]
 }
