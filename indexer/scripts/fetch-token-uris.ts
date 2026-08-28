@@ -15,7 +15,7 @@
  */
 
 import { drizzle } from "drizzle-orm/node-postgres";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, isNull } from "drizzle-orm";
 import { Pool } from "pg";
 import { RpcProvider, Contract } from "starknet";
 import { readFileSync } from "fs";
@@ -242,6 +242,166 @@ async function markFailed(
     .where(tokenRow(contractAddress, tokenId));
 }
 
+// ---------------------------------------------------------------------------
+// Context enrichment
+//
+// A token minted by a metagame (Budokan, and anything else implementing the
+// standard) belongs to a "context" — a tournament, a season, a league. The
+// token URI is NOT a reliable source for it: self-bound games render their own
+// metadata, and a game that omits the Context traits leaves the field empty
+// however correct the metagame is. So we ask the metagame directly.
+//
+// This is generic, not per-metagame. The chain is:
+//
+//   token.has_context -> minters(contract_address, minted_by) -> metagame
+//     -> supports_interface(IMETAGAME_CONTEXT_ID)
+//     -> context_details(game_address, token_id)
+//
+// identifying a metagame by SRC5 exactly as a minigame is identified, so a new
+// metagame needs no code here.
+//
+// `context_details` takes the PAIR because a token id is unique only within
+// the contract that minted it. The bare-id form of this lookup was deleted
+// upstream (game-components 3647904) for that reason: two games can mint the
+// same packed id, and a bare-id answer has to guess.
+// ---------------------------------------------------------------------------
+
+/// SRC5 id of `IMetagameContext` as of game-components v2.3.0, derived from
+/// `has_context(ContractAddress,felt252)->E((),())`.
+///
+/// A metagame built against the pre-v2.3.0 shape registers a DIFFERENT id, so
+/// it answers false here and is skipped — which is the intent. Probing the old
+/// id and dispatching the new signature would revert on argument count.
+const IMETAGAME_CONTEXT_ID =
+  "0x1619dc3272af5ae7e632e00012211abb89ee97571405c6714125b4c4eb77bb4";
+
+const SRC5_ABI = [
+  {
+    type: "function",
+    name: "supports_interface",
+    inputs: [{ name: "interface_id", type: "core::felt252" }],
+    outputs: [{ type: "core::bool" }],
+    state_mutability: "view",
+  },
+] as const;
+
+const CONTEXT_ABI = [
+  {
+    type: "function",
+    name: "context_details",
+    inputs: [
+      { name: "game_address", type: "core::starknet::contract_address::ContractAddress" },
+      { name: "token_id", type: "core::felt252" },
+    ],
+    outputs: [{ type: "(core::byte_array::ByteArray, core::byte_array::ByteArray, core::option::Option::<core::integer::u32>)" }],
+    state_mutability: "view",
+  },
+] as const;
+
+/// Per-metagame SRC5 result. Cached for the process lifetime in BOTH
+/// directions: a metagame that does not serve context would otherwise be
+/// probed once per token, forever.
+const contextCapable = new Map<string, boolean>();
+
+async function servesContext(metagame: string): Promise<boolean> {
+  const cached = contextCapable.get(metagame);
+  if (cached !== undefined) return cached;
+  let ok = false;
+  try {
+    const c = new Contract({ abi: SRC5_ABI as never, address: metagame, providerOrAccount: provider });
+    const res = await c.call("supports_interface", [IMETAGAME_CONTEXT_ID]);
+    ok = res === true || res === 1n;
+  } catch {
+    // A contract without SRC5 at all. Not an error — just not a context
+    // provider. Cached so we ask once.
+    ok = false;
+  }
+  contextCapable.set(metagame, ok);
+  return ok;
+}
+
+/**
+ * Fill `context_id` / `context_name` for tokens that carry the has_context bit
+ * but have no context recorded yet.
+ *
+ * Deliberately narrow: `has_context = true AND context_id IS NULL`. A token
+ * whose URI already carried the traits is skipped, and one whose metagame
+ * refuses the pair stays null rather than being retried into a hot loop —
+ * `context_details` panics for an unregistered pair by design.
+ */
+async function processMissingContext(): Promise<number> {
+  const rows = await db
+    .select({
+      tokenId: schema.tokens.tokenId,
+      contractAddress: schema.tokens.contractAddress,
+      mintedBy: schema.tokens.mintedBy,
+    })
+    .from(schema.tokens)
+    .where(and(eq(schema.tokens.hasContext, true), isNull(schema.tokens.contextId)));
+
+  if (rows.length === 0) return 0;
+  console.log(`[Context] ${rows.length} token(s) with context but no context_id`);
+
+  let filled = 0;
+  for (const row of rows) {
+    try {
+      // minter_id is namespaced by the issuing contract — every game hands out
+      // minter_id 1 to its own first minter — so both halves are required.
+      const [minter] = await db
+        .select({ contractAddress: schema.minters.contractAddress })
+        .from(schema.minters)
+        .where(
+          and(
+            eq(schema.minters.tokenContractAddress, row.contractAddress),
+            eq(schema.minters.minterId, row.mintedBy),
+          ),
+        )
+        .limit(1);
+      if (!minter) continue; // minter not indexed yet; next pass will retry
+
+      if (!(await servesContext(minter.contractAddress))) continue;
+
+      const c = new Contract({
+        abi: CONTEXT_ABI as never,
+        address: minter.contractAddress,
+        providerOrAccount: provider,
+      });
+      const details = (await c.call("context_details", [
+        row.contractAddress,
+        row.tokenId,
+      ])) as { name?: unknown; id?: unknown };
+
+      const name = details?.name != null ? String(details.name) : null;
+      // Option<u32>: starknet.js surfaces Some(v) as the value, None as
+      // undefined. 0 is not a valid context id upstream ("not registered"), so
+      // it is treated as absent rather than written.
+      const idRaw = details?.id;
+      const id =
+        idRaw === undefined || idRaw === null ? null : Number(idRaw as bigint | number);
+
+      const update: Record<string, unknown> = {};
+      if (id !== null && id !== 0) update.contextId = id;
+      if (name) update.contextName = name;
+      if (Object.keys(update).length === 0) continue;
+
+      await db
+        .update(schema.tokens)
+        .set(update)
+        .where(tokenRow(row.contractAddress, BigInt(row.tokenId)));
+      filled += 1;
+    } catch (err) {
+      // Expected for a token the metagame does not consider registered —
+      // context_details panics rather than returning an empty context, so a
+      // caller cannot mistake "unknown" for "context 0".
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[Context] ${row.tokenId} on ${row.contractAddress}: ${msg.slice(0, 120)}`);
+    }
+  }
+
+  if (filled > 0) console.log(`[Context] filled ${filled} token(s)`);
+  return filled;
+}
+
 async function processUnfetched(): Promise<number> {
   // Exclude tokens that have already exhausted their in-process retry
   // burst — same on-chain state next poll would just revert the same way.
@@ -321,6 +481,9 @@ async function main(): Promise<void> {
     // Continuous mode: poll for unfetched tokens
     while (true) {
       const count = await processUnfetched();
+      // Runs every poll, not only when URIs are pending: context arrives from
+      // the metagame, so a token can need it long after its URI settled.
+      await processMissingContext();
       if (count === 0) {
         console.log(
           `[URI Fetcher] No unfetched tokens, sleeping ${POLL_INTERVAL_MS / 1000}s...`,
@@ -331,6 +494,7 @@ async function main(): Promise<void> {
   } else {
     // One-shot mode
     await processUnfetched();
+    await processMissingContext();
     await pool.end();
   }
 }
