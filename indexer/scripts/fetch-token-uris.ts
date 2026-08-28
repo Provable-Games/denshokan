@@ -144,8 +144,9 @@ async function fetchAndStore(
       tokenUpdate.rendererAddress = parsed.rendererAddress;
     if (parsed.skillsAddress !== null)
       tokenUpdate.skillsAddress = parsed.skillsAddress;
-    if (parsed.score !== null) tokenUpdate.currentScore = parsed.score;
-    if (parsed.gameOver !== null) tokenUpdate.gameOver = parsed.gameOver;
+    // score / game_over deliberately NOT taken from the URI — `processTokenState`
+    // reads them from the game's typed batch entrypoints, which cannot be
+    // dropped by a renderer and cost one call per contract rather than per token.
     if (parsed.completedObjectives !== null)
       tokenUpdate.completedAllObjectives = parsed.completedObjectives;
     if (parsed.completedAt !== null)
@@ -156,7 +157,15 @@ async function fetchAndStore(
       .set(tokenUpdate)
       .where(tokenRow(contractAddress, tokenId));
 
-    await upsertGame(contractAddress, parsed);
+    // Game identity from the typed entrypoint when the game exposes it,
+    // falling back to the traits parsed out of this URI. A game whose renderer
+    // omits "Game Name" would otherwise have no name anywhere — the same
+    // omission that lost Context, one field over.
+    // MERGED, not substituted: `upsertGame` also records client_url, renderer
+    // and skills, which the typed surface does not carry. Replacing wholesale
+    // would silently drop them.
+    const declared = await tryGameMetadata(contractAddress);
+    await upsertGame(contractAddress, declared ? { ...parsed, ...declared } : parsed);
 
     return { ok: true };
   } catch (error) {
@@ -240,6 +249,176 @@ async function markFailed(
       lastUpdatedAt: new Date(),
     })
     .where(tokenRow(contractAddress, tokenId));
+}
+
+
+const GAME_METADATA_ABI = [
+  {
+    type: "function",
+    name: "game_metadata",
+    inputs: [],
+    outputs: [{ type: "core::felt252" }],
+    state_mutability: "view",
+  },
+] as const;
+
+/// Per-contract, so cached for the process lifetime in both directions.
+const gameMetadataCache = new Map<
+  string,
+  { gameName: string | null; gameDeveloper: string | null; gamePublisher: string | null; gameGenre: string | null; gameImage: string | null } | null
+>();
+
+/**
+ * A game's identity from `game_metadata()`, or null when it does not expose it.
+ *
+ * Constant per contract, hence the cache: a game that lacks the entrypoint must
+ * not be probed once per token forever.
+ */
+async function tryGameMetadata(contractAddress: string) {
+  if (gameMetadataCache.has(contractAddress)) {
+    return gameMetadataCache.get(contractAddress)!;
+  }
+  let out = null;
+  try {
+    const c = new Contract({
+      abi: GAME_METADATA_ABI as never,
+      address: contractAddress,
+      providerOrAccount: provider,
+    });
+    const res = (await c.call("game_metadata", [])) as Record<string, unknown>;
+    // An empty ByteArray means "not set", not "set to empty". Mapping it to
+    // null keeps the URI-parsed value rather than blanking a good one.
+    const str = (v: unknown): string | null => {
+      if (v == null) return null;
+      const out = String(v);
+      return out.length > 0 ? out : null;
+    };
+    out = {
+      gameName: str(res?.name),
+      gameDeveloper: str(res?.developer),
+      gamePublisher: str(res?.publisher),
+      gameGenre: str(res?.genre),
+      gameImage: str(res?.image),
+    };
+  } catch {
+    out = null;
+  }
+  gameMetadataCache.set(contractAddress, out);
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Live token state
+//
+// `score` and `game_over` are the two fields that CHANGE, and both are typed
+// entrypoints on the game — `score_batch` / `game_over_batch` for bulk reads.
+// Deriving them by parsing a rendered document was strictly worse on both
+// counts: a game that omits the traits reports a permanent score of 0, and
+// one RPC round trip per token is spent to learn what one call per contract
+// could answer.
+//
+// The URI stays the source for presentation (image) and for anything without
+// a typed alternative. It is no longer the source for state.
+// ---------------------------------------------------------------------------
+
+const SCORE_ABI = [
+  {
+    type: "function",
+    name: "score_batch",
+    inputs: [{ name: "token_ids", type: "core::array::Span::<core::felt252>" }],
+    outputs: [{ type: "core::array::Array::<core::integer::u64>" }],
+    state_mutability: "view",
+  },
+  {
+    type: "function",
+    name: "game_over_batch",
+    inputs: [{ name: "token_ids", type: "core::array::Span::<core::felt252>" }],
+    outputs: [{ type: "core::array::Array::<core::bool>" }],
+    state_mutability: "view",
+  },
+] as const;
+
+/// How many token ids to put in one batch call. Bounded so a game with many
+/// live tokens cannot build a call that exceeds the step limit — the failure
+/// would be silent (the whole batch degrades) rather than partial.
+const STATE_BATCH = 100;
+
+/**
+ * Refresh `current_score` and `game_over` from the game, in bulk.
+ *
+ * Skips tokens already recorded as game over: their score is final, so
+ * re-reading them would grow unboundedly with the table for no new
+ * information. A token whose game_over flips is caught on the pass before it
+ * flips, so nothing is missed.
+ */
+async function processTokenState(): Promise<number> {
+  const rows = await db
+    .select({
+      tokenId: schema.tokens.tokenId,
+      contractAddress: schema.tokens.contractAddress,
+    })
+    .from(schema.tokens)
+    .where(eq(schema.tokens.gameOver, false));
+
+  if (rows.length === 0) return 0;
+
+  // One call per contract, not per token — that is the point of the batch
+  // entrypoints.
+  const byContract = new Map<string, string[]>();
+  for (const r of rows) {
+    const list = byContract.get(r.contractAddress) ?? [];
+    list.push(r.tokenId);
+    byContract.set(r.contractAddress, list);
+  }
+
+  let updated = 0;
+  for (const [contractAddress, ids] of byContract) {
+    for (let i = 0; i < ids.length; i += STATE_BATCH) {
+      const chunk = ids.slice(i, i + STATE_BATCH);
+      try {
+        const c = new Contract({
+          abi: SCORE_ABI as never,
+          address: contractAddress,
+          providerOrAccount: provider,
+        });
+        const scores = (await c.call("score_batch", [chunk])) as unknown as bigint[];
+        const overs = (await c.call("game_over_batch", [chunk])) as unknown as boolean[];
+
+        // A short response would silently misalign scores with token ids, so
+        // refuse the chunk rather than write one token's score onto another.
+        if (scores.length !== chunk.length || overs.length !== chunk.length) {
+          console.warn(
+            `[State] ${contractAddress}: batch length mismatch ` +
+              `(${scores.length}/${overs.length} for ${chunk.length}); skipping chunk`,
+          );
+          continue;
+        }
+
+        for (let k = 0; k < chunk.length; k += 1) {
+          // Record<string, unknown> to match `fetchAndStore` — drizzle's
+          // inferred update type does not accept these columns in a literal.
+          const update: Record<string, unknown> = {
+            currentScore: BigInt(scores[k]!),
+            gameOver: Boolean(overs[k]),
+            lastUpdatedAt: new Date(),
+          };
+          await db
+            .update(schema.tokens)
+            .set(update)
+            .where(tokenRow(contractAddress, BigInt(chunk[k]!)));
+          updated += 1;
+        }
+      } catch (err) {
+        // A game without the batch entrypoints keeps whatever the URI pass
+        // recorded. Logged, not fatal.
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`[State] ${contractAddress}: ${msg.slice(0, 120)}`);
+      }
+    }
+  }
+
+  if (updated > 0) console.log(`[State] refreshed ${updated} token(s)`);
+  return updated;
 }
 
 // ---------------------------------------------------------------------------
@@ -484,6 +663,7 @@ async function main(): Promise<void> {
       // Runs every poll, not only when URIs are pending: context arrives from
       // the metagame, so a token can need it long after its URI settled.
       await processMissingContext();
+      await processTokenState();
       if (count === 0) {
         console.log(
           `[URI Fetcher] No unfetched tokens, sleeping ${POLL_INTERVAL_MS / 1000}s...`,
@@ -495,6 +675,7 @@ async function main(): Promise<void> {
     // One-shot mode
     await processUnfetched();
     await processMissingContext();
+    await processTokenState();
     await pool.end();
   }
 }
