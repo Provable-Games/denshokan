@@ -128,6 +128,20 @@ export const tokens = pgTable(
       .notNull()
       .default(0n),
 
+    // Block timestamp (unix seconds) of that same MetadataUpdate.
+    //
+    // Exists to recover `completed_at`. The previous generation's shared token
+    // latched a completion time during `update_game`; the self-bound token
+    // dropped that machinery and reports completed_at as 0 unconditionally, so
+    // nothing on chain records it any more.
+    //
+    // A game emits MetadataUpdate when its state changes, so the timestamp of
+    // the update that carried the completion IS the chain time of completion.
+    // Recording it costs nothing — the indexer already has the block header —
+    // and it is strictly better than stamping wall-clock at poll time, which
+    // would be late by up to a poll interval and not chain time at all.
+    metadataUpdateAt: integer("metadata_update_at"),
+
     // Indexer metadata
     createdAtBlock: bigint("created_at_block", { mode: "bigint" }).notNull(),
     lastUpdatedBlock: bigint("last_updated_block", { mode: "bigint" }).notNull(),

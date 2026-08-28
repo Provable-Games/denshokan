@@ -383,6 +383,12 @@ export default function indexer(runtimeConfig: ApibaraRuntimeConfig) {
                   // Advance the dirty marker so the fetcher can detect whether
                   // a newer update arrived while its RPC call was in flight.
                   metadataUpdateBlock: blockNumber,
+                  // Chain time of this update. When the fetcher later observes
+                  // game_over flip, this is the completion timestamp — the
+                  // game emitted this event because its state changed.
+                  metadataUpdateAt: Math.floor(
+                    new Date(blockTimestamp).getTime() / 1000,
+                  ),
                 })
                 .where(tokenRow(eventAddress, decoded.tokenId));
               break;
