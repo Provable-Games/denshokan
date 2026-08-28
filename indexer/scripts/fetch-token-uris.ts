@@ -22,7 +22,7 @@ import { readFileSync } from "fs";
 import { resolve } from "path";
 
 import * as schema from "../src/lib/schema.js";
-import { parseTokenUriAttributes } from "../src/lib/decoder.js";
+import { feltToString, parseTokenUriAttributes } from "../src/lib/decoder.js";
 
 // ---------------------------------------------------------------------------
 // Configuration (all from env vars, CLI args as fallback)
@@ -136,20 +136,14 @@ async function fetchAndStore(
       lastUpdatedAt: new Date(),
     };
 
-    if (parsed.playerName !== null) tokenUpdate.playerName = parsed.playerName;
-    if (parsed.contextId !== null) tokenUpdate.contextId = parsed.contextId;
-    if (parsed.contextName !== null) tokenUpdate.contextName = parsed.contextName;
-    if (parsed.clientUrl !== null) tokenUpdate.clientUrl = parsed.clientUrl;
-    if (parsed.rendererAddress !== null)
-      tokenUpdate.rendererAddress = parsed.rendererAddress;
-    if (parsed.skillsAddress !== null)
-      tokenUpdate.skillsAddress = parsed.skillsAddress;
-    if (parsed.score !== null) tokenUpdate.currentScore = parsed.score;
-    if (parsed.gameOver !== null) tokenUpdate.gameOver = parsed.gameOver;
-    if (parsed.completedObjectives !== null)
-      tokenUpdate.completedAllObjectives = parsed.completedObjectives;
-    if (parsed.completedAt !== null)
-      tokenUpdate.completedAt = parsed.completedAt;
+    // The URI is PRESENTATION. Only the rendered blob itself is taken from it;
+    // every field with a typed entrypoint is read from the game instead, by
+    // the passes below. A trait a renderer forgets can then cost us artwork,
+    // never data.
+    //
+    // `completed_at` is the one exception: it has no entrypoint in the
+    // standard, so it still rides the document.
+    if (parsed.completedAt !== null) tokenUpdate.completedAt = parsed.completedAt;
 
     await db
       .update(schema.tokens)
@@ -304,6 +298,192 @@ async function tryGameMetadata(contractAddress: string) {
   }
   gameMetadataCache.set(contractAddress, out);
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Token state and per-token fields, from the game's typed entrypoints
+//
+// The URI is presentation. Everything with a typed entrypoint is read from
+// the game, so a renderer that omits a trait costs us artwork and never data
+// — which is exactly how Context was lost.
+//
+// Cost is shaped deliberately, because this is ongoing work rather than a
+// one-off:
+//
+//   * MUTABLE state (score, game_over) uses the Span-taking batch
+//     entrypoints, so it is one pair of calls per CONTRACT per chunk rather
+//     than one per token, and it skips tokens already finished.
+//   * STATIC fields (player_name, client_url) are filled once, like context.
+//     They are set at mint and rarely change, so polling them would be
+//     ongoing cost for a one-time answer.
+// ---------------------------------------------------------------------------
+
+const STATE_ABI = [
+  {
+    type: "function",
+    name: "score_batch",
+    inputs: [{ name: "token_ids", type: "core::array::Span::<core::felt252>" }],
+    outputs: [{ type: "core::array::Array::<core::integer::u64>" }],
+    state_mutability: "view",
+  },
+  {
+    type: "function",
+    name: "game_over_batch",
+    inputs: [{ name: "token_ids", type: "core::array::Span::<core::felt252>" }],
+    outputs: [{ type: "core::array::Array::<core::bool>" }],
+    state_mutability: "view",
+  },
+] as const;
+
+const PER_TOKEN_ABI = [
+  {
+    type: "function",
+    name: "player_name",
+    inputs: [{ name: "token_id", type: "core::felt252" }],
+    outputs: [{ type: "core::felt252" }],
+    state_mutability: "view",
+  },
+  {
+    type: "function",
+    name: "client_url",
+    inputs: [{ name: "token_id", type: "core::felt252" }],
+    outputs: [{ type: "core::byte_array::ByteArray" }],
+    state_mutability: "view",
+  },
+] as const;
+
+/// Bounded so a game with many live tokens cannot build a call that exceeds
+/// the step limit. An oversized batch fails as a UNIT, so the whole chunk
+/// would degrade silently rather than partially.
+const STATE_BATCH = 100;
+
+/**
+ * Refresh `current_score` and `game_over` in bulk.
+ *
+ * Skips tokens already recorded game over — their score is final, so
+ * re-reading them would grow with the table for no new information. A token
+ * whose game_over flips is still caught on the pass before it flips.
+ */
+async function processTokenState(): Promise<number> {
+  const rows = await db
+    .select({
+      tokenId: schema.tokens.tokenId,
+      contractAddress: schema.tokens.contractAddress,
+    })
+    .from(schema.tokens)
+    .where(eq(schema.tokens.gameOver, false));
+
+  if (rows.length === 0) return 0;
+
+  const byContract = new Map<string, string[]>();
+  for (const r of rows) {
+    const list = byContract.get(r.contractAddress) ?? [];
+    list.push(r.tokenId);
+    byContract.set(r.contractAddress, list);
+  }
+
+  let updated = 0;
+  for (const [contractAddress, ids] of byContract) {
+    for (let i = 0; i < ids.length; i += STATE_BATCH) {
+      const chunk = ids.slice(i, i + STATE_BATCH);
+      try {
+        const c = new Contract({
+          abi: STATE_ABI as never,
+          address: contractAddress,
+          providerOrAccount: provider,
+        });
+        const scores = (await c.call("score_batch", [chunk])) as unknown as bigint[];
+        const overs = (await c.call("game_over_batch", [chunk])) as unknown as boolean[];
+
+        // A short response would misalign scores with ids, writing one token's
+        // score onto another. Refuse the chunk rather than zip blindly.
+        if (scores.length !== chunk.length || overs.length !== chunk.length) {
+          console.warn(
+            `[State] ${contractAddress}: length mismatch ` +
+              `(${scores.length}/${overs.length} vs ${chunk.length}); skipping chunk`,
+          );
+          continue;
+        }
+
+        for (let k = 0; k < chunk.length; k += 1) {
+          const update: Record<string, unknown> = {
+            currentScore: BigInt(scores[k]!),
+            gameOver: Boolean(overs[k]),
+            lastUpdatedAt: new Date(),
+          };
+          await db
+            .update(schema.tokens)
+            .set(update)
+            .where(tokenRow(contractAddress, BigInt(chunk[k]!)));
+          updated += 1;
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`[State] ${contractAddress}: ${msg.slice(0, 120)}`);
+      }
+    }
+  }
+
+  if (updated > 0) console.log(`[State] refreshed ${updated} token(s)`);
+  return updated;
+}
+
+/**
+ * Fill `player_name` and `client_url` once per token.
+ *
+ * Both are set at mint. Scanning on null keeps this a one-time cost per token
+ * rather than a poll, and a token whose name is genuinely empty is retried —
+ * cheap, since the set of such tokens does not grow.
+ */
+async function processPerTokenFields(): Promise<number> {
+  const rows = await db
+    .select({
+      tokenId: schema.tokens.tokenId,
+      contractAddress: schema.tokens.contractAddress,
+    })
+    .from(schema.tokens)
+    .where(isNull(schema.tokens.playerName))
+    .limit(500);
+
+  if (rows.length === 0) return 0;
+
+  let filled = 0;
+  for (const row of rows) {
+    try {
+      const c = new Contract({
+        abi: PER_TOKEN_ABI as never,
+        address: row.contractAddress,
+        providerOrAccount: provider,
+      });
+      const update: Record<string, unknown> = {};
+
+      const name = (await c.call("player_name", [row.tokenId])) as unknown;
+      // felt252 shortstring; 0 means unset. `feltToString` takes hex.
+      if (name != null && BigInt(name as bigint) !== 0n) {
+        const decoded = feltToString("0x" + BigInt(name as bigint).toString(16));
+        if (decoded.length > 0) update.playerName = decoded;
+      }
+      try {
+        const url = (await c.call("client_url", [row.tokenId])) as unknown;
+        if (url != null && String(url).length > 0) update.clientUrl = String(url);
+      } catch {
+        // Optional surface.
+      }
+
+      if (Object.keys(update).length === 0) continue;
+      await db
+        .update(schema.tokens)
+        .set(update)
+        .where(tokenRow(row.contractAddress, BigInt(row.tokenId)));
+      filled += 1;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[Fields] ${row.tokenId} on ${row.contractAddress}: ${msg.slice(0, 120)}`);
+    }
+  }
+
+  if (filled > 0) console.log(`[Fields] filled ${filled} token(s)`);
+  return filled;
 }
 
 // ---------------------------------------------------------------------------
@@ -548,6 +728,8 @@ async function main(): Promise<void> {
       // Runs every poll, not only when URIs are pending: context arrives from
       // the metagame, so a token can need it long after its URI settled.
       await processMissingContext();
+      await processTokenState();
+      await processPerTokenFields();
       if (count === 0) {
         console.log(
           `[URI Fetcher] No unfetched tokens, sleeping ${POLL_INTERVAL_MS / 1000}s...`,
@@ -559,6 +741,8 @@ async function main(): Promise<void> {
     // One-shot mode
     await processUnfetched();
     await processMissingContext();
+    await processTokenState();
+    await processPerTokenFields();
     await pool.end();
   }
 }
