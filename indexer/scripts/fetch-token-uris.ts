@@ -142,7 +142,13 @@ async function fetchAndStore(
     // never data.
     //
     // `completed_at` is the one exception: it has no entrypoint in the
-    // standard, so it still rides the document.
+    // standard, so it still rides the document when a game reports it.
+    //
+    // This is the AUTHORITATIVE source and takes precedence — it is the
+    // game's own record of when the run ended. `processTokenState` derives a
+    // fallback from the MetadataUpdate block for the self-bound generation,
+    // which reports completed_at as 0 unconditionally, and that fallback only
+    // writes where this left null.
     if (parsed.completedAt !== null) tokenUpdate.completedAt = parsed.completedAt;
 
     await db
@@ -481,11 +487,19 @@ async function processTokenState(): Promise<number> {
     .select({
       tokenId: schema.tokens.tokenId,
       contractAddress: schema.tokens.contractAddress,
+      // Chain time of the last MetadataUpdate — the completion timestamp for
+      // whichever of these tokens turns out to have finished.
+      metadataUpdateAt: schema.tokens.metadataUpdateAt,
+      completedAt: schema.tokens.completedAt,
     })
     .from(schema.tokens)
     .where(eq(schema.tokens.gameOver, false));
 
   if (rows.length === 0) return 0;
+
+  // Keep the row beside its id so the transition can read its timestamp.
+  const rowByKey = new Map<string, (typeof rows)[number]>();
+  for (const r of rows) rowByKey.set(`${r.contractAddress}:${r.tokenId}`, r);
 
   const byContract = new Map<string, string[]>();
   for (const r of rows) {
@@ -519,11 +533,29 @@ async function processTokenState(): Promise<number> {
     if (!scores || !overs) continue;
 
     for (let k = 0; k < ids.length; k += 1) {
+      const isOver = BigInt(overs[k]!) !== 0n;
       const update: Record<string, unknown> = {
         currentScore: BigInt(scores[k]!),
-        gameOver: BigInt(overs[k]!) !== 0n,
+        gameOver: isOver,
         lastUpdatedAt: new Date(),
       };
+
+      // This query selected only tokens with game_over = false, so a token
+      // reading true here has just TRANSITIONED. That is the one moment we
+      // can stamp a completion time, and the honest value is the chain time
+      // of the MetadataUpdate that carried it — not now(), which is poll time
+      // and could be a whole interval late.
+      //
+      // Guarded on completedAt being unset so a re-observation can never move
+      // an already-recorded completion, and on metadataUpdateAt existing:
+      // tokens that completed before this column did have no honest value,
+      // and 0 would read as the epoch rather than as "unknown".
+      if (isOver) {
+        const row = rowByKey.get(`${contract}:${ids[k]!}`);
+        if (row && row.completedAt === null && row.metadataUpdateAt !== null) {
+          update.completedAt = row.metadataUpdateAt;
+        }
+      }
       await db
         .update(schema.tokens)
         .set(update)
