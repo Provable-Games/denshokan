@@ -17,7 +17,7 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { eq, and, sql, isNull } from "drizzle-orm";
 import { Pool } from "pg";
-import { RpcProvider, Contract } from "starknet";
+import { RpcProvider, Contract, hash } from "starknet";
 import { readFileSync } from "fs";
 import { resolve } from "path";
 
@@ -300,6 +300,130 @@ async function tryGameMetadata(contractAddress: string) {
   return out;
 }
 
+
+/** Decimal-or-hex string to the 0x form the RPC expects. */
+function toHex(v: string | number | bigint): string {
+  return "0x" + BigInt(v).toString(16);
+}
+
+/**
+ * Decode a Cairo `ByteArray` response: [num_full_words, ...words, pending_word,
+ * pending_len]. Returns "" for anything malformed rather than throwing — this
+ * runs over whatever a game chose to return.
+ */
+function decodeByteArray(res: string[]): string {
+  try {
+    const numWords = Number(BigInt(res[0]!));
+    let out = "";
+    const wordToStr = (hex: string) => {
+      let h = BigInt(hex).toString(16);
+      if (h.length % 2 === 1) h = "0" + h;
+      let acc = "";
+      for (let i = 0; i < h.length; i += 2) {
+        const code = parseInt(h.slice(i, i + 2), 16);
+        if (code > 0) acc += String.fromCharCode(code);
+      }
+      return acc;
+    };
+    for (let i = 0; i < numWords; i += 1) out += wordToStr(res[1 + i]!);
+    const pendingWord = res[1 + numWords];
+    const pendingLen = res[2 + numWords];
+    if (pendingWord !== undefined && pendingLen !== undefined && BigInt(pendingLen) > 0n) {
+      out += wordToStr(pendingWord);
+    }
+    return out;
+  } catch {
+    return "";
+  }
+}
+
+// ---------------------------------------------------------------------------
+// JSON-RPC batching
+//
+// The node accepts a JSON-RPC 2.0 batch — an array of requests in one HTTP
+// body, correlated by id. So N reads cost one round trip regardless of which
+// contracts they target.
+//
+// This is why the fan-out is NOT done with a contract-side batch entrypoint.
+// Such an entrypoint would only help games built against a game-components
+// version that has it and redeployed — which is no game that exists today —
+// and it could never span contracts, so `context_details` on the metagame
+// would still need its own call. Batching at the transport layer works
+// against every already-deployed contract and crosses contracts freely.
+// ---------------------------------------------------------------------------
+
+interface RpcCall {
+  contract: string;
+  selector: string;
+  calldata: string[];
+}
+
+/// Cap on sub-requests per HTTP body. Large enough that a poll is a handful of
+/// round trips, small enough that one oversized body cannot be rejected
+/// wholesale — a rejected batch loses every read in it, not just the big one.
+const RPC_BATCH = 50;
+
+/**
+ * Run `calls` as JSON-RPC batches. Returns one entry per call, in order:
+ * the felt array on success, or null where that individual call failed.
+ *
+ * A failure is per-call, never per-batch: one reverting read (an unregistered
+ * token, an absent entrypoint) must not blind us to the other 49.
+ */
+async function rpcBatch(calls: RpcCall[]): Promise<(string[] | null)[]> {
+  const out: (string[] | null)[] = new Array(calls.length).fill(null);
+
+  for (let start = 0; start < calls.length; start += RPC_BATCH) {
+    const chunk = calls.slice(start, start + RPC_BATCH);
+    const body = chunk.map((c, i) => ({
+      jsonrpc: "2.0",
+      id: start + i,
+      method: "starknet_call",
+      params: {
+        request: {
+          contract_address: c.contract,
+          entry_point_selector: c.selector,
+          calldata: c.calldata,
+        },
+        block_id: "latest",
+      },
+    }));
+
+    try {
+      const res = await fetch(RPC_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        console.warn(`[RPC] batch HTTP ${res.status}; ${chunk.length} call(s) skipped`);
+        continue;
+      }
+      const parsed = (await res.json()) as Array<{
+        id: number;
+        result?: string[];
+        error?: unknown;
+      }>;
+      // Correlate by id, never by position: the spec permits any order, and
+      // zipping by index would attribute one token's answer to another.
+      if (!Array.isArray(parsed)) {
+        console.warn("[RPC] batch response was not an array; chunk skipped");
+        continue;
+      }
+      for (const entry of parsed) {
+        if (entry && typeof entry.id === "number" && Array.isArray(entry.result)) {
+          out[entry.id] = entry.result;
+        }
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[RPC] batch failed: ${msg.slice(0, 120)}`);
+    }
+  }
+
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Token state and per-token fields, from the game's typed entrypoints
 //
@@ -318,51 +442,39 @@ async function tryGameMetadata(contractAddress: string) {
 //     ongoing cost for a one-time answer.
 // ---------------------------------------------------------------------------
 
-const STATE_ABI = [
-  {
-    type: "function",
-    name: "score_batch",
-    inputs: [{ name: "token_ids", type: "core::array::Span::<core::felt252>" }],
-    outputs: [{ type: "core::array::Array::<core::integer::u64>" }],
-    state_mutability: "view",
-  },
-  {
-    type: "function",
-    name: "game_over_batch",
-    inputs: [{ name: "token_ids", type: "core::array::Span::<core::felt252>" }],
-    outputs: [{ type: "core::array::Array::<core::bool>" }],
-    state_mutability: "view",
-  },
-] as const;
+/// Selectors, precomputed once. `hash.getSelectorFromName` is pure, but doing
+/// it per token per poll is needless work.
+const SEL = {
+  score_batch: hash.getSelectorFromName("score_batch"),
+  game_over_batch: hash.getSelectorFromName("game_over_batch"),
+  player_name: hash.getSelectorFromName("player_name"),
+  client_url: hash.getSelectorFromName("client_url"),
+  context_details: hash.getSelectorFromName("context_details"),
+  supports_interface: hash.getSelectorFromName("supports_interface"),
+  game_metadata: hash.getSelectorFromName("game_metadata"),
+};
 
-const PER_TOKEN_ABI = [
-  {
-    type: "function",
-    name: "player_name",
-    inputs: [{ name: "token_id", type: "core::felt252" }],
-    outputs: [{ type: "core::felt252" }],
-    state_mutability: "view",
-  },
-  {
-    type: "function",
-    name: "client_url",
-    inputs: [{ name: "token_id", type: "core::felt252" }],
-    outputs: [{ type: "core::byte_array::ByteArray" }],
-    state_mutability: "view",
-  },
-] as const;
-
-/// Bounded so a game with many live tokens cannot build a call that exceeds
-/// the step limit. An oversized batch fails as a UNIT, so the whole chunk
-/// would degrade silently rather than partially.
+/// Ids per `score_batch` / `game_over_batch` call. These take a Span, so the
+/// game does the fan-out on chain — cheaper than one sub-request per token
+/// even inside a JSON-RPC batch.
 const STATE_BATCH = 100;
+
+/** Decode a Cairo Array<T> response: [len, ...items]. */
+function decodeArray(res: string[] | null, expected: number): string[] | null {
+  if (!res || res.length === 0) return null;
+  const len = Number(BigInt(res[0]!));
+  if (len !== expected) return null;
+  return res.slice(1, 1 + len);
+}
 
 /**
  * Refresh `current_score` and `game_over` in bulk.
  *
- * Skips tokens already recorded game over — their score is final, so
- * re-reading them would grow with the table for no new information. A token
- * whose game_over flips is still caught on the pass before it flips.
+ * Two layers of batching: the game's Span-taking entrypoints fan out on
+ * chain, and the resulting calls are sent as one JSON-RPC body. A poll over
+ * many contracts is therefore a handful of round trips, not one per contract.
+ *
+ * Tokens already game over are skipped — their score is final.
  */
 async function processTokenState(): Promise<number> {
   const rows = await db
@@ -382,45 +494,41 @@ async function processTokenState(): Promise<number> {
     byContract.set(r.contractAddress, list);
   }
 
-  let updated = 0;
-  for (const [contractAddress, ids] of byContract) {
+  // Build every chunk's pair of calls up front, then send them together.
+  const calls: RpcCall[] = [];
+  const chunks: { contract: string; ids: string[] }[] = [];
+  for (const [contract, ids] of byContract) {
     for (let i = 0; i < ids.length; i += STATE_BATCH) {
       const chunk = ids.slice(i, i + STATE_BATCH);
-      try {
-        const c = new Contract({
-          abi: STATE_ABI as never,
-          address: contractAddress,
-          providerOrAccount: provider,
-        });
-        const scores = (await c.call("score_batch", [chunk])) as unknown as bigint[];
-        const overs = (await c.call("game_over_batch", [chunk])) as unknown as boolean[];
+      const span = [toHex(chunk.length), ...chunk.map(toHex)];
+      calls.push({ contract, selector: SEL.score_batch, calldata: span });
+      calls.push({ contract, selector: SEL.game_over_batch, calldata: span });
+      chunks.push({ contract, ids: chunk });
+    }
+  }
 
-        // A short response would misalign scores with ids, writing one token's
-        // score onto another. Refuse the chunk rather than zip blindly.
-        if (scores.length !== chunk.length || overs.length !== chunk.length) {
-          console.warn(
-            `[State] ${contractAddress}: length mismatch ` +
-              `(${scores.length}/${overs.length} vs ${chunk.length}); skipping chunk`,
-          );
-          continue;
-        }
+  const results = await rpcBatch(calls);
 
-        for (let k = 0; k < chunk.length; k += 1) {
-          const update: Record<string, unknown> = {
-            currentScore: BigInt(scores[k]!),
-            gameOver: Boolean(overs[k]),
-            lastUpdatedAt: new Date(),
-          };
-          await db
-            .update(schema.tokens)
-            .set(update)
-            .where(tokenRow(contractAddress, BigInt(chunk[k]!)));
-          updated += 1;
-        }
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.warn(`[State] ${contractAddress}: ${msg.slice(0, 120)}`);
-      }
+  let updated = 0;
+  for (let c = 0; c < chunks.length; c += 1) {
+    const { contract, ids } = chunks[c]!;
+    const scores = decodeArray(results[c * 2] ?? null, ids.length);
+    const overs = decodeArray(results[c * 2 + 1] ?? null, ids.length);
+    // A short or missing response would misalign values with ids, writing one
+    // token's score onto another. Skip the chunk rather than zip blindly.
+    if (!scores || !overs) continue;
+
+    for (let k = 0; k < ids.length; k += 1) {
+      const update: Record<string, unknown> = {
+        currentScore: BigInt(scores[k]!),
+        gameOver: BigInt(overs[k]!) !== 0n,
+        lastUpdatedAt: new Date(),
+      };
+      await db
+        .update(schema.tokens)
+        .set(update)
+        .where(tokenRow(contract, BigInt(ids[k]!)));
+      updated += 1;
     }
   }
 
@@ -429,11 +537,11 @@ async function processTokenState(): Promise<number> {
 }
 
 /**
- * Fill `player_name` and `client_url` once per token.
+ * Fill `player_name` and `client_url` once per token, both reads for all
+ * pending tokens in one batch.
  *
- * Both are set at mint. Scanning on null keeps this a one-time cost per token
- * rather than a poll, and a token whose name is genuinely empty is retried —
- * cheap, since the set of such tokens does not grow.
+ * Set at mint, so scanning on null keeps this one-time per token rather than
+ * a poll.
  */
 async function processPerTokenFields(): Promise<number> {
   const rows = await db
@@ -447,39 +555,43 @@ async function processPerTokenFields(): Promise<number> {
 
   if (rows.length === 0) return 0;
 
+  const calls: RpcCall[] = [];
+  for (const r of rows) {
+    calls.push({
+      contract: r.contractAddress,
+      selector: SEL.player_name,
+      calldata: [toHex(r.tokenId)],
+    });
+    calls.push({
+      contract: r.contractAddress,
+      selector: SEL.client_url,
+      calldata: [toHex(r.tokenId)],
+    });
+  }
+  const results = await rpcBatch(calls);
+
   let filled = 0;
-  for (const row of rows) {
-    try {
-      const c = new Contract({
-        abi: PER_TOKEN_ABI as never,
-        address: row.contractAddress,
-        providerOrAccount: provider,
-      });
-      const update: Record<string, unknown> = {};
+  for (let i = 0; i < rows.length; i += 1) {
+    const row = rows[i]!;
+    const update: Record<string, unknown> = {};
 
-      const name = (await c.call("player_name", [row.tokenId])) as unknown;
-      // felt252 shortstring; 0 means unset. `feltToString` takes hex.
-      if (name != null && BigInt(name as bigint) !== 0n) {
-        const decoded = feltToString("0x" + BigInt(name as bigint).toString(16));
-        if (decoded.length > 0) update.playerName = decoded;
-      }
-      try {
-        const url = (await c.call("client_url", [row.tokenId])) as unknown;
-        if (url != null && String(url).length > 0) update.clientUrl = String(url);
-      } catch {
-        // Optional surface.
-      }
-
-      if (Object.keys(update).length === 0) continue;
-      await db
-        .update(schema.tokens)
-        .set(update)
-        .where(tokenRow(row.contractAddress, BigInt(row.tokenId)));
-      filled += 1;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.warn(`[Fields] ${row.tokenId} on ${row.contractAddress}: ${msg.slice(0, 120)}`);
+    const nameRes = results[i * 2];
+    if (nameRes && nameRes.length > 0 && BigInt(nameRes[0]!) !== 0n) {
+      const decoded = feltToString(nameRes[0]!);
+      if (decoded.length > 0) update.playerName = decoded;
     }
+    const urlRes = results[i * 2 + 1];
+    if (urlRes && urlRes.length > 0) {
+      const url = decodeByteArray(urlRes);
+      if (url.length > 0) update.clientUrl = url;
+    }
+
+    if (Object.keys(update).length === 0) continue;
+    await db
+      .update(schema.tokens)
+      .set(update)
+      .where(tokenRow(row.contractAddress, BigInt(row.tokenId)));
+    filled += 1;
   }
 
   if (filled > 0) console.log(`[Fields] filled ${filled} token(s)`);
@@ -586,65 +698,117 @@ async function processMissingContext(): Promise<number> {
   if (rows.length === 0) return 0;
   console.log(`[Context] ${rows.length} token(s) with context but no context_id`);
 
-  let filled = 0;
+  // Resolve minters first. minter_id is namespaced by the issuing contract —
+  // every game hands out minter_id 1 to its own first minter — so both halves
+  // of the key are required.
+  const targets: { row: (typeof rows)[number]; minter: string }[] = [];
   for (const row of rows) {
-    try {
-      // minter_id is namespaced by the issuing contract — every game hands out
-      // minter_id 1 to its own first minter — so both halves are required.
-      const [minter] = await db
-        .select({ contractAddress: schema.minters.contractAddress })
-        .from(schema.minters)
-        .where(
-          and(
-            eq(schema.minters.tokenContractAddress, row.contractAddress),
-            eq(schema.minters.minterId, row.mintedBy),
-          ),
-        )
-        .limit(1);
-      if (!minter) continue; // minter not indexed yet; next pass will retry
+    const [minter] = await db
+      .select({ contractAddress: schema.minters.contractAddress })
+      .from(schema.minters)
+      .where(
+        and(
+          eq(schema.minters.tokenContractAddress, row.contractAddress),
+          eq(schema.minters.minterId, row.mintedBy),
+        ),
+      )
+      .limit(1);
+    if (!minter) continue; // not indexed yet; a later pass retries
+    targets.push({ row, minter: minter.contractAddress });
+  }
+  if (targets.length === 0) return 0;
 
-      if (!(await servesContext(minter.contractAddress))) continue;
+  // SRC5 probe, one sub-request per DISTINCT metagame rather than per token.
+  const unknown = [...new Set(targets.map((t) => t.minter))].filter(
+    (m) => !contextCapable.has(m),
+  );
+  if (unknown.length > 0) {
+    const probes = await rpcBatch(
+      unknown.map((m) => ({
+        contract: m,
+        selector: SEL.supports_interface,
+        calldata: [IMETAGAME_CONTEXT_ID],
+      })),
+    );
+    unknown.forEach((m, i) => {
+      const r = probes[i];
+      contextCapable.set(m, !!r && r.length > 0 && BigInt(r[0]!) !== 0n);
+    });
+  }
 
-      const c = new Contract({
-        abi: CONTEXT_ABI as never,
-        address: minter.contractAddress,
-        providerOrAccount: provider,
-      });
-      const details = (await c.call("context_details", [
-        row.contractAddress,
-        row.tokenId,
-      ])) as { name?: unknown; id?: unknown };
+  const serving = targets.filter((t) => contextCapable.get(t.minter));
+  if (serving.length === 0) return 0;
 
-      const name = details?.name != null ? String(details.name) : null;
-      // Option<u32>: starknet.js surfaces Some(v) as the value, None as
-      // undefined. 0 is not a valid context id upstream ("not registered"), so
-      // it is treated as absent rather than written.
-      const idRaw = details?.id;
-      const id =
-        idRaw === undefined || idRaw === null ? null : Number(idRaw as bigint | number);
+  // `context_details(game_address, token_id)` — the PAIR, because a token id
+  // is unique only within the contract that minted it.
+  const results = await rpcBatch(
+    serving.map((t) => ({
+      contract: t.minter,
+      selector: SEL.context_details,
+      calldata: [t.row.contractAddress, toHex(t.row.tokenId)],
+    })),
+  );
 
-      const update: Record<string, unknown> = {};
-      if (id !== null && id !== 0) update.contextId = id;
-      if (name) update.contextName = name;
-      if (Object.keys(update).length === 0) continue;
+  let filled = 0;
+  for (let i = 0; i < serving.length; i += 1) {
+    const res = results[i];
+    // A pair the metagame does not recognise panics by design — Budokan
+    // refuses rather than returning context 0, so a caller authorizing on
+    // `.id` cannot read a confident-looking zero. That arrives here as a null
+    // result and is simply left unfilled.
+    if (!res) continue;
+    const parsed = parseContextDetails(res);
+    if (!parsed) continue;
 
-      await db
-        .update(schema.tokens)
-        .set(update)
-        .where(tokenRow(row.contractAddress, BigInt(row.tokenId)));
-      filled += 1;
-    } catch (err) {
-      // Expected for a token the metagame does not consider registered —
-      // context_details panics rather than returning an empty context, so a
-      // caller cannot mistake "unknown" for "context 0".
-      const msg = err instanceof Error ? err.message : String(err);
-      console.warn(`[Context] ${row.tokenId} on ${row.contractAddress}: ${msg.slice(0, 120)}`);
-    }
+    const update: Record<string, unknown> = {};
+    if (parsed.id !== null && parsed.id !== 0) update.contextId = parsed.id;
+    if (parsed.name.length > 0) update.contextName = parsed.name;
+    if (Object.keys(update).length === 0) continue;
+
+    const { row } = serving[i]!;
+    await db
+      .update(schema.tokens)
+      .set(update)
+      .where(tokenRow(row.contractAddress, BigInt(row.tokenId)));
+    filled += 1;
   }
 
   if (filled > 0) console.log(`[Context] filled ${filled} token(s)`);
   return filled;
 }
+
+/**
+ * Decode `GameContextDetails { name, description, id: Option<u32>, context }`.
+ *
+ * Hand-decoded because these are raw felts from a batched call rather than a
+ * dispatcher response. Returns null on anything unexpected — a malformed
+ * answer must leave the field null, never write a wrong context.
+ */
+function parseContextDetails(res: string[]): { name: string; id: number | null } | null {
+  try {
+    let i = 0;
+    const readByteArray = (): string => {
+      const numWords = Number(BigInt(res[i]!));
+      const slice = res.slice(i, i + numWords + 3);
+      i += numWords + 3;
+      return decodeByteArray(slice);
+    };
+    const name = readByteArray();
+    readByteArray(); // description, unused
+    // Option<u32>: 0 = Some(value), 1 = None.
+    const tag = BigInt(res[i]!);
+    i += 1;
+    let id: number | null = null;
+    if (tag === 0n) {
+      id = Number(BigInt(res[i]!));
+      i += 1;
+    }
+    return { name, id };
+  } catch {
+    return null;
+  }
+}
+
 
 async function processUnfetched(): Promise<number> {
   // Exclude tokens that have already exhausted their in-process retry
