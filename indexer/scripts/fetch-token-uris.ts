@@ -160,11 +160,22 @@ async function fetchAndStore(
     // falling back to the traits parsed out of this URI. A game whose renderer
     // omits "Game Name" would otherwise have no name anywhere — the same
     // omission that lost Context, one field over.
-    // MERGED, not substituted: `upsertGame` also records client_url, renderer
-    // and skills, which the typed surface does not carry. Replacing wholesale
-    // would silently drop them.
+    // MERGED, not substituted, and null-safe in both directions.
+    //
+    // `upsertGame` also records client_url, renderer and skills, which the
+    // typed surface does not carry — replacing wholesale would drop them. And
+    // a plain spread would let a NULL from the typed read overwrite a value
+    // the URI did supply, so a decode failure would silently discard good
+    // data rather than just failing to improve on it. Only non-null typed
+    // values override.
     const declared = await tryGameMetadata(contractAddress);
-    await upsertGame(contractAddress, declared ? { ...parsed, ...declared } : parsed);
+    const merged = { ...parsed };
+    if (declared) {
+      for (const [k, v] of Object.entries(declared)) {
+        if (v !== null) (merged as Record<string, unknown>)[k] = v;
+      }
+    }
+    await upsertGame(contractAddress, merged);
 
     return { ok: true };
   } catch (error) {
@@ -251,57 +262,69 @@ async function markFailed(
 }
 
 
-const GAME_METADATA_ABI = [
-  {
-    type: "function",
-    name: "game_metadata",
-    inputs: [],
-    outputs: [{ type: "core::felt252" }],
-    state_mutability: "view",
-  },
-] as const;
-
 /// Per-contract, so cached for the process lifetime in both directions.
 const gameMetadataCache = new Map<
   string,
-  { gameName: string | null; gameDeveloper: string | null; gamePublisher: string | null; gameGenre: string | null; gameImage: string | null } | null
+  {
+    gameName: string | null;
+    gameDeveloper: string | null;
+    gamePublisher: string | null;
+    gameGenre: string | null;
+    gameImage: string | null;
+  } | null
 >();
 
 /**
- * A game's identity from `game_metadata()`, or null when it does not expose it.
+ * A game's identity from `game_metadata()`, or null when unavailable.
  *
- * Constant per contract, hence the cache: a game that lacks the entrypoint must
- * not be probed once per token forever.
+ * Decoded by hand from raw felts rather than through a dispatcher ABI: the
+ * return is a struct of ByteArrays, whose field COUNT is not stable across
+ * game-components versions (v2.4.0 trims it from 14 fields to 9). A
+ * hand-decode that reads only the leading fields it needs survives a trailing
+ * trim; an ABI pinned to the wrong shape decodes to undefined for every field,
+ * silently.
+ *
+ * Positional, so it must be re-checked if the LEADING fields ever move:
+ *   0 name, 1 description, 2 developer, 3 publisher, 4 genre, 5 image, ...
+ *
+ * Returns null rather than an all-null object on any failure. That distinction
+ * matters at the call site — see the merge in `fetchAndStore`.
  */
 async function tryGameMetadata(contractAddress: string) {
   if (gameMetadataCache.has(contractAddress)) {
     return gameMetadataCache.get(contractAddress)!;
   }
+
   let out = null;
-  try {
-    const c = new Contract({
-      abi: GAME_METADATA_ABI as never,
-      address: contractAddress,
-      providerOrAccount: provider,
-    });
-    const res = (await c.call("game_metadata", [])) as Record<string, unknown>;
-    // An empty ByteArray means "not set", not "set to empty". Mapping it to
-    // null keeps the URI-parsed value rather than blanking a good one.
-    const str = (v: unknown): string | null => {
-      if (v == null) return null;
-      const out = String(v);
-      return out.length > 0 ? out : null;
-    };
-    out = {
-      gameName: str(res?.name),
-      gameDeveloper: str(res?.developer),
-      gamePublisher: str(res?.publisher),
-      gameGenre: str(res?.genre),
-      gameImage: str(res?.image),
-    };
-  } catch {
-    out = null;
+  const [res] = await rpcBatch([
+    { contract: contractAddress, selector: SEL.game_metadata, calldata: [] },
+  ]);
+  if (res && res.length > 0) {
+    try {
+      let i = 0;
+      const readByteArray = (): string => {
+        const numWords = Number(BigInt(res[i]!));
+        const slice = res.slice(i, i + numWords + 3);
+        i += numWords + 3;
+        return decodeByteArray(slice);
+      };
+      const fields: string[] = [];
+      for (let f = 0; f < 6; f += 1) fields.push(readByteArray());
+      // Empty means "not set", not "set to empty" — mapped to null so it
+      // cannot blank a value the URI did supply.
+      const str = (v: string | undefined) => (v && v.length > 0 ? v : null);
+      out = {
+        gameName: str(fields[0]),
+        gameDeveloper: str(fields[2]),
+        gamePublisher: str(fields[3]),
+        gameGenre: str(fields[4]),
+        gameImage: str(fields[5]),
+      };
+    } catch {
+      out = null;
+    }
   }
+
   gameMetadataCache.set(contractAddress, out);
   return out;
 }
