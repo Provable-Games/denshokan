@@ -1,5 +1,47 @@
 [
   {
+    "type": "struct",
+    "name": "game_components_interfaces::structs::minigame::GameMetadata",
+    "members": [
+      {
+        "name": "name",
+        "type": "core::byte_array::ByteArray"
+      },
+      {
+        "name": "description",
+        "type": "core::byte_array::ByteArray"
+      },
+      {
+        "name": "developer",
+        "type": "core::byte_array::ByteArray"
+      },
+      {
+        "name": "publisher",
+        "type": "core::byte_array::ByteArray"
+      },
+      {
+        "name": "genre",
+        "type": "core::byte_array::ByteArray"
+      },
+      {
+        "name": "image",
+        "type": "core::byte_array::ByteArray"
+      },
+      {
+        "name": "color",
+        "type": "core::byte_array::ByteArray"
+      },
+      {
+        "name": "client_url",
+        "type": "core::byte_array::ByteArray"
+      },
+      {
+        "name": "royalty_fraction",
+        "type": "core::integer::u128"
+      }
+    ]
+  },
+  {
     "type": "impl",
     "name": "ERC721Metadata",
     "interface_name": "openzeppelin_interfaces::token::erc721::IERC721Metadata"
@@ -1553,6 +1595,17 @@
         "outputs": [
           {
             "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "game_metadata",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "game_components_interfaces::structs::minigame::GameMetadata"
           }
         ],
         "state_mutability": "view"

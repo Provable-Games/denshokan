@@ -30,9 +30,16 @@ export interface TokenViewState {
   clientUrl: string | null;
 }
 
-/** A game-level value, identical for every token the game issues. */
+/** Game-level values, identical for every token the game issues. */
 export interface GameViewState {
   rendererAddress: string | null;
+  name: string | null;
+  description: string | null;
+  developer: string | null;
+  publisher: string | null;
+  genre: string | null;
+  image: string | null;
+  clientUrl: string | null;
 }
 
 function toAddress(value: unknown): string | null {
@@ -135,14 +142,38 @@ export async function readGameViews(
   const cached = gameViewCache.get(gameAddress);
   if (cached) return cached;
 
-  let rendererAddress: string | null = null;
-  try {
-    rendererAddress = toAddress(await game.call("get_renderer_address", []));
-  } catch {
-    // Not every game exposes a renderer; absence is not an error.
-  }
+  const [renderer, meta] = await Promise.allSettled([
+    game.call("get_renderer_address", []),
+    // `game_metadata` is the standard's per-contract identity view. A game
+    // that predates it simply reverts, which is why this is settled rather
+    // than awaited — its absence must not cost the renderer address.
+    game.call("game_metadata", []),
+  ]);
 
-  const state: GameViewState = { rendererAddress };
+  const state: GameViewState = {
+    rendererAddress:
+      renderer.status === "fulfilled" ? toAddress(renderer.value) : null,
+    name: null,
+    description: null,
+    developer: null,
+    publisher: null,
+    genre: null,
+    image: null,
+    clientUrl: null,
+  };
+
+  if (meta.status === "fulfilled") {
+    const m = meta.value as Record<string, unknown>;
+    const str = (v: unknown) =>
+      typeof v === "string" && v.length > 0 ? v : null;
+    state.name = str(m.name);
+    state.description = str(m.description);
+    state.developer = str(m.developer);
+    state.publisher = str(m.publisher);
+    state.genre = str(m.genre);
+    state.image = str(m.image);
+    state.clientUrl = str(m.client_url);
+  }
   gameViewCache.set(gameAddress, state);
   return state;
 }

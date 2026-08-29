@@ -24,7 +24,11 @@ import { resolve } from "path";
 import * as schema from "../src/lib/schema.js";
 import { parseTokenUriAttributes } from "../src/lib/decoder.js";
 import { resolveTokenContext } from "../src/lib/context.js";
-import { readTokenViews, readGameViews } from "../src/lib/tokenViews.js";
+import {
+  readTokenViews,
+  readGameViews,
+  type GameViewState,
+} from "../src/lib/tokenViews.js";
 
 // ---------------------------------------------------------------------------
 // Configuration (all from env vars, CLI args as fallback)
@@ -241,7 +245,7 @@ async function fetchAndStore(
       .set(tokenUpdate)
       .where(tokenRow(contractAddress, tokenId));
 
-    await upsertGame(contractAddress, parsed);
+    await upsertGame(contractAddress, parsed, gameViews);
 
     return { ok: true };
   } catch (error) {
@@ -268,26 +272,36 @@ async function fetchAndStore(
 async function upsertGame(
   contractAddress: string,
   parsed: ReturnType<typeof parseTokenUriAttributes>,
+  views: GameViewState,
 ): Promise<void> {
+  // `game_metadata()` is the standard's per-contract identity view and wins
+  // where it answers. The URI traits remain the fallback for games that
+  // predate it; a game serving neither leaves the row as it is.
+  const name = views.name ?? parsed.gameName;
+  const developer = views.developer ?? parsed.gameDeveloper;
+  const publisher = views.publisher ?? parsed.gamePublisher;
+  const genre = views.genre ?? parsed.gameGenre;
+  const image = views.image ?? parsed.gameImage;
+
   // Nothing to record — an older or minimal renderer.
   if (
-    parsed.gameName === null &&
-    parsed.gameDeveloper === null &&
-    parsed.gamePublisher === null &&
-    parsed.gameGenre === null &&
-    parsed.gameImage === null
+    name === null &&
+    developer === null &&
+    publisher === null &&
+    genre === null &&
+    image === null
   ) {
     return;
   }
 
   const fields = {
-    name: parsed.gameName,
-    developer: parsed.gameDeveloper,
-    publisher: parsed.gamePublisher,
-    genre: parsed.gameGenre,
-    image: parsed.gameImage,
-    clientUrl: parsed.clientUrl,
-    rendererAddress: parsed.rendererAddress,
+    name,
+    developer,
+    publisher,
+    genre,
+    image,
+    clientUrl: views.clientUrl ?? parsed.clientUrl,
+    rendererAddress: views.rendererAddress ?? parsed.rendererAddress,
     skillsAddress: parsed.skillsAddress,
     lastUpdatedAt: new Date(),
   };
