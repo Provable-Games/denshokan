@@ -23,6 +23,7 @@ import { resolve } from "path";
 
 import * as schema from "../src/lib/schema.js";
 import { parseTokenUriAttributes } from "../src/lib/decoder.js";
+import { resolveTokenContext } from "../src/lib/context.js";
 
 // ---------------------------------------------------------------------------
 // Configuration (all from env vars, CLI args as fallback)
@@ -61,8 +62,22 @@ const RPC_API_KEY = process.env.RPC_API_KEY ?? "";
 const pool = new Pool({ connectionString: DATABASE_URL });
 const db = drizzle(pool, { schema });
 
+/**
+ * `batch` coalesces every JSON-RPC request issued in the same tick into ONE
+ * HTTP call. The work queue already fans out over CONCURRENCY tokens at a
+ * time, and each token now costs several reads (token_uri, minted_by_address,
+ * has_context, context_details) — without batching that is
+ * CONCURRENCY x N separate round trips per cycle against a rate-limited node.
+ *
+ * It batches ACROSS tokens, not within one: a single token's reads are
+ * genuinely sequential (the minter address is needed before the metagame can
+ * be asked anything). The win scales with CONCURRENCY.
+ */
+const RPC_BATCH_MS = parseInt(process.env.URI_FETCHER_RPC_BATCH_MS ?? "0", 10);
+
 const provider = new RpcProvider({
   nodeUrl: RPC_URL,
+  batch: RPC_BATCH_MS,
   ...(RPC_API_KEY && { headers: { Authorization: `Bearer ${RPC_API_KEY}` } }),
 });
 
@@ -90,6 +105,28 @@ function contractFor(address: string): Contract {
     contracts.set(address, c);
   }
   return c;
+}
+
+/**
+ * The metagame that minted a token, or null if the game cannot say.
+ *
+ * `minted_by` returns a minter ID, not an address; `minted_by_address`
+ * resolves it in one call. A game that predates the entrypoint simply yields
+ * null, which resolves to "no context" rather than an error.
+ */
+async function mintedByAddress(
+  contractAddress: string,
+  tokenId: bigint,
+): Promise<string | null> {
+  try {
+    const result = await contractFor(contractAddress).call("minted_by_address", [
+      tokenId,
+    ]);
+    const addr = BigInt(result as unknown as string | bigint);
+    return addr === 0n ? null : `0x${addr.toString(16).padStart(64, "0")}`;
+  } catch {
+    return null;
+  }
 }
 
 /** Convert bigint token ID to string for numeric column storage */
@@ -137,8 +174,29 @@ async function fetchAndStore(
     };
 
     if (parsed.playerName !== null) tokenUpdate.playerName = parsed.playerName;
-    if (parsed.contextId !== null) tokenUpdate.contextId = parsed.contextId;
-    if (parsed.contextName !== null) tokenUpdate.contextName = parsed.contextName;
+
+    // Context comes from the METAGAME, not from the token's metadata.
+    //
+    // The URI's "Context ID" attribute is still honoured when present, because
+    // a game that renders the full attribute set is not wrong — but it is no
+    // longer the source of truth, and it is absent entirely on games built
+    // against the stripped standard. Asking the tournament contract is the
+    // only thing that works for both.
+    //
+    // A failed or absent context leaves the columns untouched rather than
+    // writing null: a token that was in a tournament yesterday is still in it
+    // today, and a transient RPC failure must not erase that.
+    const minter = await mintedByAddress(contractAddress, tokenId);
+    const context = await resolveTokenContext(
+      provider,
+      contractAddress,
+      tokenId,
+      minter,
+    );
+    const contextId = context.contextId ?? parsed.contextId;
+    const contextName = context.contextName ?? parsed.contextName;
+    if (contextId !== null) tokenUpdate.contextId = contextId;
+    if (contextName !== null) tokenUpdate.contextName = contextName;
     if (parsed.clientUrl !== null) tokenUpdate.clientUrl = parsed.clientUrl;
     if (parsed.rendererAddress !== null)
       tokenUpdate.rendererAddress = parsed.rendererAddress;

@@ -942,6 +942,22 @@
       },
       {
         "type": "function",
+        "name": "minted_by_address",
+        "inputs": [
+          {
+            "name": "token_id",
+            "type": "core::felt252"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
         "name": "game_address",
         "inputs": [],
         "outputs": [
