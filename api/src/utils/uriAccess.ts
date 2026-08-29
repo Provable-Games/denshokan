@@ -1,5 +1,7 @@
 import type { Context } from "hono";
 
+import { getCaller } from "../middleware/apiKey.js";
+
 /**
  * Access control for the `tokenUri` blob (~40 KB of base64 SVG per token).
  *
@@ -7,9 +9,12 @@ import type { Context } from "hono";
  * — 1.5 TB of egress in 16 days, peaking at 338 GB/day. Two things bound it now:
  *
  *   1. On list endpoints it is opt-in (`?include_uri=true` / `{ includeUri: true }`)
- *      rather than opt-out. A caller that says nothing gets ~100 B/token.
- *   2. Even an explicit request only gets the URI if the request's `Origin` is
- *      in `URI_ALLOWED_ORIGINS`.
+ *      rather than opt-out. A caller that says nothing gets ~1 KB/token — still
+ *      the dominant cost at high poll rates, which is what the API-key tiers in
+ *      `middleware/apiKey.ts` and the rate limits in `middleware/rateLimit.ts`
+ *      are for.
+ *   2. Even an explicit request only gets the URI if the caller presents a
+ *      valid API key, or its `Origin` is in `URI_ALLOWED_ORIGINS`.
  *
  * `URI_ALLOWED_ORIGINS` is a comma-separated origin list:
  *
@@ -20,8 +25,9 @@ import type { Context } from "hono";
  *
  * Caveat worth knowing before relying on this: `Origin` is attached by browsers,
  * not by servers. A scripted client can omit or forge it. This caps egress from
- * browser apps and casual crawlers; it is NOT an authentication boundary. If you
- * need one, put an API key in front of the URI payload.
+ * browser apps and casual crawlers; it is NOT an authentication boundary — see
+ * `middleware/apiKey.ts` for that. The allowlist remains the path for browser
+ * apps, which cannot hold a secret anyway.
  *
  * SDK compatibility: denshokan-sdk ≤0.1.39 signals "I want URIs" by sending no
  * `include_uri` param at all and relying on the old server-default-includes
@@ -56,13 +62,19 @@ export function isUriOriginAllowed(origin: string | undefined): boolean {
 /**
  * Resolve whether this request should receive tokenUri, given what it asked for.
  *
- * When a caller asks but its origin is not allowlisted we omit the field rather
+ * A valid API key satisfies this on its own. That is the authentication
+ * boundary the caveat above asks for: a keyed caller is a known consumer with
+ * its own rate-limit budget, so it does not also need to be a browser on an
+ * allowlisted origin. Anonymous callers still fall back to the Origin check.
+ *
+ * When a caller asks but qualifies under neither we omit the field rather
  * than failing the request — the rest of the payload is still useful — and set
  * `X-Token-Uri-Omitted` so the omission is visible in devtools instead of
  * looking like missing data.
  */
 export function resolveUriAccess(c: Context, requested: boolean): boolean {
   if (!requested) return false;
+  if (getCaller(c).tier === "keyed") return true;
   const origin = c.req.header("Origin");
   if (isUriOriginAllowed(origin)) return true;
   c.header("X-Token-Uri-Omitted", "origin-not-allowed");

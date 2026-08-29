@@ -179,7 +179,20 @@ Hono-based REST API with WebSocket support. Supports optional TLS (auto-detects 
 - `GET /health` - Health check (includes DB status)
 - `WS /ws` - Real-time event subscriptions
 
-**Middleware:** CORS, rate limiting (100 req/window default, 30 for `/activity/stats`)
+**Middleware:** CORS, API key identification, tiered rate limiting
+
+- `identifyCaller` (`middleware/apiKey.ts`) resolves each request to a `keyed` or
+  `anonymous` caller from `X-API-Key` / `Authorization: Bearer`. Keys come from
+  `API_KEYS` (`label:secret`, comma-separated). A present-but-unknown key is a
+  401; a missing key is simply anonymous.
+- `rateLimit` (`middleware/rateLimit.ts`) is a per-minute fixed window:
+  **60/min anonymous** (bucketed by IP) and **600/min keyed** (bucketed by key).
+  State is in-process, so it resets on deploy and is per-replica — shape, not a
+  hard cap. Responses carry `RateLimit-*` headers.
+- A valid key also satisfies the `tokenUri` check in `utils/uriAccess.ts`
+  without needing an allowlisted `Origin`.
+
+**Stack:** Hono, Drizzle ORM, PostgreSQL, Node WebSocket
 
 **Stack:** Hono, Drizzle ORM, PostgreSQL, Node WebSocket
 

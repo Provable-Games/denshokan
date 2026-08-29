@@ -7,6 +7,7 @@ import { createNodeWebSocket } from "@hono/node-ws";
 
 import { healthCheck, getLatestIndexedBlock, shutdown } from "./db/client.js";
 import { rateLimit, cleanupTimer } from "./middleware/rateLimit.js";
+import { identifyCaller, describeKeyPolicy } from "./middleware/apiKey.js";
 import { handleWSConnection, shutdownWS } from "./ws/subscriptions.js";
 import { describeUriPolicy } from "./utils/uriAccess.js";
 
@@ -31,8 +32,36 @@ const corsOrigins = (process.env.CORS_ORIGIN ?? "")
   .filter(Boolean);
 const corsAllowsAll = corsOrigins.length === 0 || corsOrigins.includes("*");
 
-app.use("*", corsAllowsAll ? cors() : cors({ origin: corsOrigins }));
-app.use("*", rateLimit(300));
+// `X-API-Key` and `Authorization` must be allowed explicitly or a browser
+// preflight will strip them and every keyed request from the client silently
+// falls back to the anonymous tier. The exposed headers let a browser app read
+// its own budget and see when a tokenUri was withheld rather than missing.
+const corsOptions = {
+  allowMethods: ["GET", "POST", "OPTIONS"],
+  allowHeaders: ["Content-Type", "X-API-Key", "Authorization"],
+  exposeHeaders: [
+    "X-Token-Uri-Omitted",
+    "RateLimit-Limit",
+    "RateLimit-Remaining",
+    "RateLimit-Reset",
+    "Retry-After",
+  ],
+  maxAge: 86_400,
+};
+
+app.use(
+  "*",
+  cors({ ...corsOptions, origin: corsAllowsAll ? "*" : corsOrigins }),
+);
+
+// Identify before limiting: the rate limiter buckets keyed callers by key and
+// anonymous ones by IP, so it needs the caller resolved first.
+app.use("*", identifyCaller);
+
+// A page of tokens is ~1 KB/row, so an anonymous caller pinned to this limit
+// still moves real bandwidth. 60/min is enough for a browsing user and well
+// under what a scraper wants; bulk consumers should take a key.
+app.use("*", rateLimit({ anonymous: 60, keyed: 600 }));
 
 // Health
 app.get("/health", async (c) => {
@@ -81,6 +110,7 @@ const server = serve(serverOptions, (info) => {
     `[Denshokan API] CORS: ${corsAllowsAll ? "any origin" : corsOrigins.join(", ")}`,
   );
   console.log(`[Denshokan API] ${describeUriPolicy()}`);
+  console.log(`[Denshokan API] ${describeKeyPolicy()}`);
 });
 
 injectWebSocket(server);
