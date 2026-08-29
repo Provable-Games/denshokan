@@ -24,6 +24,7 @@ import { resolve } from "path";
 import * as schema from "../src/lib/schema.js";
 import { parseTokenUriAttributes } from "../src/lib/decoder.js";
 import { resolveTokenContext } from "../src/lib/context.js";
+import { readTokenViews, readGameViews } from "../src/lib/tokenViews.js";
 
 // ---------------------------------------------------------------------------
 // Configuration (all from env vars, CLI args as fallback)
@@ -160,6 +161,23 @@ async function fetchAndStore(
 
     const parsed = parseTokenUriAttributes(uri);
 
+    // Mutable state comes from the GAME'S VIEWS, not the URI attributes.
+    //
+    // A game on the stripped standard renders no attributes at all, so
+    // `parsed` is empty for it and score/game_over/player_name would stay null
+    // forever. The views are the game's own state and cannot be dropped by a
+    // renderer change, so they win wherever they answer; the URI value is kept
+    // only as a fallback for games that still render the full set.
+    //
+    // Null still means "leave the column alone" — a game that lacks one
+    // entrypoint must not have its existing score erased.
+    const views = await readTokenViews(contractFor(contractAddress), tokenId);
+    const gameViews = await readGameViews(
+      contractFor(contractAddress),
+      contractAddress,
+    );
+
+
     const tokenUpdate: Record<string, unknown> = {
       tokenUri: uri,
       // Only mark the token clean if no newer MetadataUpdate landed while this
@@ -173,7 +191,8 @@ async function fetchAndStore(
       lastUpdatedAt: new Date(),
     };
 
-    if (parsed.playerName !== null) tokenUpdate.playerName = parsed.playerName;
+    const playerName = views.playerName ?? parsed.playerName;
+    if (playerName !== null) tokenUpdate.playerName = playerName;
 
     // Context comes from the METAGAME, not from the token's metadata.
     //
@@ -197,17 +216,25 @@ async function fetchAndStore(
     const contextName = context.contextName ?? parsed.contextName;
     if (contextId !== null) tokenUpdate.contextId = contextId;
     if (contextName !== null) tokenUpdate.contextName = contextName;
-    if (parsed.clientUrl !== null) tokenUpdate.clientUrl = parsed.clientUrl;
-    if (parsed.rendererAddress !== null)
-      tokenUpdate.rendererAddress = parsed.rendererAddress;
+    const clientUrl = views.clientUrl ?? parsed.clientUrl;
+    if (clientUrl !== null) tokenUpdate.clientUrl = clientUrl;
+    const rendererAddress =
+      gameViews.rendererAddress ?? parsed.rendererAddress;
+    if (rendererAddress !== null)
+      tokenUpdate.rendererAddress = rendererAddress;
     if (parsed.skillsAddress !== null)
       tokenUpdate.skillsAddress = parsed.skillsAddress;
-    if (parsed.score !== null) tokenUpdate.currentScore = parsed.score;
-    if (parsed.gameOver !== null) tokenUpdate.gameOver = parsed.gameOver;
-    if (parsed.completedObjectives !== null)
-      tokenUpdate.completedAllObjectives = parsed.completedObjectives;
-    if (parsed.completedAt !== null)
-      tokenUpdate.completedAt = parsed.completedAt;
+    const score = views.score ?? parsed.score;
+    const gameOver = views.gameOver ?? parsed.gameOver;
+    const completedObjectives =
+      views.completedObjectives ?? parsed.completedObjectives;
+    const completedAt = views.completedAt ?? parsed.completedAt;
+
+    if (score !== null) tokenUpdate.currentScore = score;
+    if (gameOver !== null) tokenUpdate.gameOver = gameOver;
+    if (completedObjectives !== null)
+      tokenUpdate.completedAllObjectives = completedObjectives;
+    if (completedAt !== null) tokenUpdate.completedAt = completedAt;
 
     await db
       .update(schema.tokens)
