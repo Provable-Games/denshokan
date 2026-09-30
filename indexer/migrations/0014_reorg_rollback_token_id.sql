@@ -17,4 +17,12 @@
 --
 -- Safe to re-run, and a no-op on a fresh database.
 
-DELETE FROM airfoil.reorg_rollback WHERE table_name = 'tokens';
+DO $$
+BEGIN
+  -- Apibara creates this table on indexer startup, after migrations. A fresh
+  -- API/benchmark database has never started the indexer and has no backlog.
+  IF to_regclass('airfoil.reorg_rollback') IS NOT NULL THEN
+    DELETE FROM airfoil.reorg_rollback WHERE table_name = 'tokens';
+  END IF;
+END;
+$$;

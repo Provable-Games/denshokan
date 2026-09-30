@@ -10,6 +10,7 @@ import {
   computeRanksBulk,
 } from "../utils/rank.js";
 import { resolveUriAccess } from "../utils/uriAccess.js";
+import { selectTokenColumns } from "../utils/tokenSelection.js";
 
 const MAX_BULK_RANK_TOKENS = 500;
 // Cap for the by-ids fetch (POST /tokens/query). Matches the bulk-rank cap — a
@@ -123,9 +124,10 @@ app.get("/", async (c) => {
   const sortColumn = SORT_FIELDS[sortBy ?? ""] ?? tokens.lastUpdatedAt;
   const orderBy = sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn);
 
+  const includeUri = resolveUriAccess(c, c.req.query("include_uri") === "true");
   const [results, countResult] = await Promise.all([
     db
-      .select()
+      .select(selectTokenColumns(includeUri))
       .from(tokens)
       .where(where)
       .orderBy(orderBy, asc(tokens.mintedAt))
@@ -141,7 +143,6 @@ app.get("/", async (c) => {
   // ?include_uri=true, from an origin in URI_ALLOWED_ORIGINS. A page of 1000
   // tokens is ~100 KB without it and ~40 MB with it, which is why the default
   // flipped — see utils/uriAccess.ts.
-  const includeUri = resolveUriAccess(c, c.req.query("include_uri") === "true");
   return c.json({
     data: await Promise.all(results.map(async (t) => ({
       ...serializeToken(t, includeUri),
@@ -254,9 +255,10 @@ app.post("/query", async (c) => {
     1000,
   );
 
+  const includeUri = resolveUriAccess(c, body.includeUri === true);
   const [results, countResult] = await Promise.all([
     db
-      .select()
+      .select(selectTokenColumns(includeUri))
       .from(tokens)
       .where(where)
       .orderBy(orderBy, asc(tokens.mintedAt))
@@ -271,7 +273,6 @@ app.post("/query", async (c) => {
   // Opt in to the ~40 KB tokenUri per row with { includeUri: true }, from an
   // origin in URI_ALLOWED_ORIGINS. This is the SDK's by-ids fetch path (the
   // beast-achievements poller) where it dominated egress, so it defaults off.
-  const includeUri = resolveUriAccess(c, body.includeUri === true);
   return c.json({
     data: await Promise.all(
       results.map(async (t) => ({
