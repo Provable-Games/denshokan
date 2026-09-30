@@ -5,6 +5,7 @@ import { tokens, minters, games } from "../db/schema.js";
 import { parseAddress, parseGameId, parseNonNegativeInt } from "../utils/validation.js";
 import { parseRankScope, computeRank } from "../utils/rank.js";
 import { resolveUriAccess } from "../utils/uriAccess.js";
+import { selectTokenColumns } from "../utils/tokenSelection.js";
 
 // In-memory minter cache (minter_id -> contract_address)
 let minterCache = new Map<string, string>();
@@ -76,9 +77,11 @@ app.get("/:address/tokens", async (c) => {
   const sortColumn = sortFields[sortBy ?? ""] ?? tokens.lastUpdatedAt;
   const orderBy = sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn);
 
+  // Resolve the policy before the query so denied artwork stays in Postgres.
+  const includeUri = resolveUriAccess(c, c.req.query("include_uri") === "true");
   const [results, countResult] = await Promise.all([
     db
-      .select()
+      .select(selectTokenColumns(includeUri))
       .from(tokens)
       .where(where)
       .orderBy(orderBy, asc(tokens.mintedAt))
@@ -92,8 +95,6 @@ app.get("/:address/tokens", async (c) => {
 
   // A portfolio is a list, so it follows the same opt-in rule as GET /tokens:
   // ask with ?include_uri=true from an allowlisted origin. See utils/uriAccess.ts.
-  const includeUri = resolveUriAccess(c, c.req.query("include_uri") === "true");
-
   return c.json({
     data: await Promise.all(results.map(async (t) => ({
       ...serializeToken(t, includeUri),

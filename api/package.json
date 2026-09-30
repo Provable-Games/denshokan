@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
+    "test": "tsx --test tests/*.test.ts",
     "start": "tsx src/index.ts",
     "db:seed": "tsx scripts/seed.ts",
     "stress-test": "tsx scripts/stress-test.ts"

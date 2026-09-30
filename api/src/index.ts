@@ -7,6 +7,7 @@ import { createNodeWebSocket } from "@hono/node-ws";
 
 import { healthCheck, getLatestIndexedBlock, shutdown } from "./db/client.js";
 import { rateLimit, cleanupTimer } from "./middleware/rateLimit.js";
+import { compressApiJson } from "./middleware/compress.js";
 import { handleWSConnection, shutdownWS } from "./ws/subscriptions.js";
 import { describeUriPolicy } from "./utils/uriAccess.js";
 
@@ -32,6 +33,7 @@ const corsOrigins = (process.env.CORS_ORIGIN ?? "")
 const corsAllowsAll = corsOrigins.length === 0 || corsOrigins.includes("*");
 
 app.use("*", corsAllowsAll ? cors() : cors({ origin: corsOrigins }));
+app.use("*", compressApiJson);
 app.use("*", rateLimit(300));
 
 // Health
