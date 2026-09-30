@@ -52,6 +52,27 @@ test("clients that request deflate receive a decodable response", async () => {
   assert.deepEqual(JSON.parse(inflateSync(Buffer.from(await res.arrayBuffer())).toString()), payload);
 });
 
+test("encoding negotiation honors q=0, priorities, identity and explicit wildcard exclusions", async () => {
+  for (const [accepted, expected] of [
+    ["gzip;q=0, deflate;q=1", "deflate"],
+    ["gzip;q=0, deflate;q=0, identity;q=1", null],
+    ["gzip;q=0.3, deflate;q=0.8", "deflate"],
+    ["gzip;q=0.3, identity;q=1", null],
+    ["*;q=0.5, gzip;q=0", "deflate"],
+    ["*;q=0", null],
+    ["GZIP; q=1", "gzip"],
+  ] as const) {
+    const res = await app().request("/tokens/query", {
+      method: "POST", headers: { "Accept-Encoding": accepted },
+    });
+    assert.equal(res.headers.get("Content-Encoding"), expected, accepted);
+    const bytes = Buffer.from(await res.arrayBuffer());
+    const decoded = expected === "gzip" ? gunzipSync(bytes)
+      : expected === "deflate" ? inflateSync(bytes) : bytes;
+    assert.deepEqual(JSON.parse(decoded.toString()), payload);
+  }
+});
+
 test("clients without compression support still receive plain JSON and a Vary header", async () => {
   for (const encoding of [undefined, "identity"]) {
     const res = await app().request("/tokens/query", {
