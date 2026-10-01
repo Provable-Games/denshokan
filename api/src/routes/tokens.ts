@@ -11,6 +11,7 @@ import {
 } from "../utils/rank.js";
 import { resolveUriAccess } from "../utils/uriAccess.js";
 import { gameAddressCondition } from "../utils/gameScope.js";
+import { createLeaderboardRouter } from "./leaderboard.js";
 
 const MAX_BULK_RANK_TOKENS = 500;
 // Cap for the by-ids fetch (POST /tokens/query). Matches the bulk-rank cap — a
@@ -29,6 +30,7 @@ const SORT_FIELDS: Record<string, any> = {
 };
 
 const app = new Hono();
+app.route("/leaderboard", createLeaderboardRouter(db));
 
 /**
  * In-memory minter cache, keyed `<token contract>:<minter id>`.

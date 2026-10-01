@@ -357,6 +357,9 @@ jobs:
       - name: TypeScript check (api)
         run: cd api && npx tsc --noEmit
 
+      - name: API query regression tests
+        run: npm test --workspace api
+
 
   # AI code review (Claude + Codex) is delegated to the org-shared reusable
   # workflow so review logic and model config live in one place. This repo

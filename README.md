@@ -155,6 +155,7 @@ Hono-based REST API with WebSocket support:
 | Endpoint | Description |
 |----------|-------------|
 | `GET /tokens` | List tokens with filtering and pagination |
+| `GET /tokens/leaderboard` | Exact GameCore scores ordered before pagination |
 | `GET /tokens/:id` | Token details |
 | `GET /games` | List registered games |
 | `GET /games/:id` | Game details with stats |
@@ -163,6 +164,14 @@ Hono-based REST API with WebSocket support:
 | `GET /minters` | List registered minters |
 | `GET /health` | Health check |
 | `WS /ws` | Real-time event subscriptions |
+
+`GET /tokens/leaderboard` is for schema-1 GameCore tournament entries. Supply
+`game_address`, `minter_address` and decimal `context_id`; use `limit` and `offset`
+for pagination. Positive scores are ordered by score descending (or
+`sort_order=asc`), then mint block ascending, then full numeric token ID ascending.
+The response contains `{ data: [{ tokenId, score, owner, mintBlock }], total, limit,
+offset }`. Scores and token IDs are exact decimal strings. Ordinary `/tokens`
+queries retain their existing ordering and response format.
 
 ## SDK
 
