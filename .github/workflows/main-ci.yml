@@ -260,6 +260,9 @@ jobs:
       - name: TypeScript check (api)
         run: cd api && npx tsc --noEmit
 
+      - name: API query regression tests
+        run: npm test --workspace api
+
   main-ci:
     needs:
       - changes

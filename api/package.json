@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "test": "tsx --test tests/*.test.ts",
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "tsx src/index.ts",
@@ -10,13 +11,14 @@
     "stress-test": "tsx scripts/stress-test.ts"
   },
   "dependencies": {
-    "hono": "^4.6.0",
     "@hono/node-server": "^1.13.0",
     "@hono/node-ws": "^1.0.0",
     "drizzle-orm": "^0.38.0",
+    "hono": "^4.6.0",
     "pg": "^8.13.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@types/node": "^22.0.0",
     "@types/pg": "^8.11.0",
     "@types/ws": "^8.5.0",
